@@ -19,6 +19,9 @@
     * Worker role: an inbound UDP firewall rule for the worker browser (live view), a logon
       task named DotsWorker and a task that keeps the desktop alive when a Remote Desktop
       window closes (-NoAutostart skips tasks and the firewall rule).
+    * -ModelBase sets the model provider the server uses (for example a model proxy that
+      listens on another machine of your tailnet). -TaskPrefix renames the scheduled tasks so
+      a second install in another folder does not replace the first one's tasks.
     * A loopback port proxy to the server, only with -UsePortProxy (older workers that
       cannot use a Tailscale address directly).
 
@@ -39,6 +42,8 @@ param(
   [string]$Ref = 'main',
   [string]$NodeVersion = '24.19.0',
   [string]$Model,
+  [string]$ModelBase,
+  [string]$TaskPrefix = 'Dots',
   [string]$EnrollmentToken,
   [switch]$UsePortProxy,
   [switch]$SkipTailscale,
@@ -185,13 +190,14 @@ if ($wantServer) {
     'set "DOTS_CODEX_CLI=%DOTS_ROOT%\tools\node_modules\@openai\codex\bin\codex.js"'
   )
   if ($Model) { $lines += ('set "DOTS_MODEL={0}"' -f $Model) }
+  if ($ModelBase) { $lines += ('set "DOTS_MODEL_BASE={0}"' -f $ModelBase) }
   $lines += 'cd /d "%DOTS_ROOT%\app"'
   $lines += '"%DOTS_ROOT%\node\node.exe" "%DOTS_ROOT%\app\node_modules\tsx\dist\cli.mjs" scripts\server-stack.ts'
   Set-Content -Path $serverLauncher -Value $lines -Encoding ASCII
   if (-not $NoAutostart) {
-    Step 'Registering the DotsServer task (starts at boot, runs as SYSTEM)'
-    schtasks /Create /TN DotsServer /TR ('"{0}"' -f $serverLauncher) /SC ONSTART /RU SYSTEM /RL HIGHEST /F | Out-Null
-    schtasks /Run /TN DotsServer | Out-Null
+    Step "Registering the $($TaskPrefix)Server task (starts at boot, runs as SYSTEM)"
+    schtasks /Create /TN "$($TaskPrefix)Server" /TR ('"{0}"' -f $serverLauncher) /SC ONSTART /RU SYSTEM /RL HIGHEST /F | Out-Null
+    schtasks /Run /TN "$($TaskPrefix)Server" | Out-Null
   }
   if ($tsExe -and -not $NoAutostart) {
     Step "Forwarding port $ServerPort to the tailnet only"
@@ -224,8 +230,8 @@ if ($wantWorker) {
     New-NetFirewallRule -DisplayName 'Dots worker WebRTC' -Direction Inbound -Action Allow -Protocol UDP -Program $chrome -Profile Any | Out-Null
   }
   if (-not $NoAutostart) {
-    Step 'Registering the DotsWorker logon task'
-    schtasks /Create /TN DotsWorker /TR ('"{0}"' -f $launcher) /SC ONLOGON /RL HIGHEST /F | Out-Null
+    Step "Registering the $($TaskPrefix)Worker logon task"
+    schtasks /Create /TN "$($TaskPrefix)Worker" /TR ('"{0}"' -f $launcher) /SC ONLOGON /RL HIGHEST /F | Out-Null
     # Keeps the desktop alive when a Remote Desktop window is closed.
     & (Join-Path $appDir 'scripts\enable-keep-desktop.ps1') -InstallRoot $root
   }
