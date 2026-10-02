@@ -74,7 +74,11 @@ if ($wantServer) { New-Item -ItemType Directory -Force -Path $serverData | Out-N
 # The install folder holds credentials and the files that SYSTEM/administrator tasks run.
 # Only SYSTEM and Administrators may read or change it. (Do not add /T: it would empty the
 # permissions of every child instead of letting them inherit these.)
-icacls $root /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' /C /Q | Out-Null
+if (Test-Admin) {
+  icacls $root /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' /C /Q | Out-Null
+} else {
+  Write-Warning 'Not running as administrator: the install folder keeps its inherited permissions, so other local users may read it.'
+}
 
 # 1. Private Node.js ----------------------------------------------------------
 $nodeExe = Join-Path $nodeDir 'node.exe'
