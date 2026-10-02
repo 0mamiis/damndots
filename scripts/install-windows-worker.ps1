@@ -154,18 +154,12 @@ $lines += 'cd /d "%DOTS_ROOT%\app"'
 $lines += ('"%DOTS_ROOT%\node\node.exe" "%DOTS_ROOT%\app\node_modules\tsx\dist\cli.mjs" apps\worker\src\index.ts --server http://127.0.0.1:{0} --root "%DOTS_ROOT%\workspace" --name "{1}" %*' -f $LocalPort, $env:COMPUTERNAME)
 Set-Content -Path $launcher -Value $lines -Encoding ASCII
 
-# Keeps the desktop session alive after the Remote Desktop window is closed.
-$keeper = Join-Path $root 'Disconnect-Keep-Desktop.cmd'
-Set-Content -Path $keeper -Encoding ASCII -Value @(
-  '@echo off',
-  'rem Moves this Remote Desktop session to the console so the Dot keeps its screen after you disconnect.',
-  'for /f "skip=1 tokens=3" %%s in (''query user %USERNAME%'') do (%windir%\System32\tscon.exe %%s /dest:console)'
-)
-
+# Keeps the desktop alive when a Remote Desktop window is closed (see enable-keep-desktop.ps1).
 # 6. Autostart ----------------------------------------------------------------
 if (-not $NoAutostart) {
   Step 'Registering the DotsWorker logon task'
   schtasks /Create /TN DotsWorker /TR ('"{0}"' -f $launcher) /SC ONLOGON /RL HIGHEST /F | Out-Null
+  & (Join-Path $appDir 'scripts\enable-keep-desktop.ps1') -InstallRoot $root
 }
 
 Step 'Done.'
