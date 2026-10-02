@@ -67,6 +67,16 @@ node scripts/setup-linux-computer.mjs
 
 The image includes the desktop applications, but excludes build-machine accounts, browser profiles, credentials and work files. Setup generates this installation's SSH keys and synchronizes the worker from your checkout. Microsoft VS Code is downloaded from Microsoft during setup rather than redistributed in the image. The release includes the package inventory, license notices and corresponding-source retrieval information.
 
+### Connect another Windows computer
+
+A Dot can use a different Windows machine, for example a VPS you reach over Remote Desktop. The worker on that machine connects out to your Dots server, so the server never has to be on the public internet. The tested route is Tailscale:
+
+1. On the server PC, join your tailnet and expose the backend port to it only: `tailscale serve --bg --tcp 9340 tcp://127.0.0.1:9340`.
+2. On the other machine, open an elevated PowerShell and run [scripts/install-windows-worker.ps1](scripts/install-windows-worker.ps1) with `-ServerAddress <server tailnet IP>`. It unpacks a private Node.js 24 under `C:\Dots`, installs the worker and Codex CLI, joins the tailnet, adds a loopback port proxy and registers a logon task. An existing Node.js on that machine is not touched.
+3. Create an enrollment code in the dashboard and start the worker once with `C:\Dots\start-worker.cmd --enrollment <code>`. Codes are single use and expire after 10 minutes.
+
+The worker runs in connected PC mode by default and uses the screen of the Windows session it is started in. Closing a Remote Desktop window disconnects that session and stops screen capture; `Disconnect-Keep-Desktop.cmd` in the install folder moves the session to the console instead. With full access enabled the Dot acts with that Windows user's permissions, so use a separate non-administrator user on any machine that hosts other services.
+
 ## Execution access
 
 Dot tasks default to Codex `danger-full-access` with `approvalPolicy: never`, including resumed threads and worker tasks. Commands run with the operating-system permissions of the worker user. Workspace roots identify starting directories and constrain file/output APIs; they are not a shell sandbox in full-access mode.
