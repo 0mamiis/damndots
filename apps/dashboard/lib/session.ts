@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { allowsPlainHttp } from "@dots/contracts/network";
 export const SESSION_COOKIE = "dots_session";
 export const SERVER_COOKIE = "dots_server";
 export function requestProtocol(request: Request) {
@@ -43,7 +44,7 @@ export function validateServer(
   allowed: Set<string> | null = allowedServers(),
 ) {
   const url = new URL(value);
-  const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  const local = allowsPlainHttp(url.hostname);
   if (
     !["http:", "https:"].includes(url.protocol) ||
     url.username ||
@@ -53,7 +54,7 @@ export function validateServer(
     (!local && url.protocol !== "https:")
   )
     throw new Error(
-      "Yerel sunucu için HTTP, uzak sunucu için HTTPS adresi kullanın.",
+      "Yerel sunucu veya Tailscale adresi için HTTP, diğer uzak sunucular için HTTPS adresi kullanın.",
     );
   if (allowed && !allowed.has(url.origin))
     throw new Error("Bu panel yalnızca yapılandırılmış Dots sunucusuna bağlanabilir.");

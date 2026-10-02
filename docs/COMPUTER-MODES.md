@@ -25,3 +25,9 @@ Dot görevleri varsayılan olarak Codex app-server’da `approvalPolicy: never`,
 Tam erişim Windows/Linux kullanıcısının işletim sistemi izinleriyle sınırlıdır; yönetici/root yetkisi üretmez. Çalışma dizinleri görev başlangıcı, dosya araçları ve çıktı toplama için kullanılır; tam erişimli shell’in diğer erişilebilir dosyalara ulaşmasını engelleyen bir sandbox değildir.
 
 Gerçek kullanıcı soruları otomatik uydurulmaz. Proaktif araştırma görevleri salt okunur kalır. Haricî app araçları yalnız önceden tanımlanmış bağlantı kapsamlarıyla çalışır.
+
+## Sunucuya bağlı bilgisayar
+
+Üçüncü mod **Sunucuya bağlı bilgisayar**, bu PC’de worker çalıştırmaz. Aktif backend’e zaten kayıtlı bir bilgisayarı kullanır: örneğin Bilgisayarlar bölümünden bağlanan bir VPS ya da başka bir Windows PC. Hostun ayarlarında **Sunucudaki bilgisayar** listesinden birini seç; boş bırakırsan ilk çevrimiçi bilgisayar seçilir. **Ayarları uygula** seçilen bilgisayarı varsayılan yapar ve bu backend’deki tüm Dot’ların bilgisayarını ona çevirir. Seçilen bilgisayar yoksa ya da hiçbiri çevrimiçi değilse uygulama reddedilir ve aktif host değişmez.
+
+Bu mod hem yerel backend (Dot bu PC’de, bilgisayar uzakta) hem de uzak backend (Dot ve bilgisayar uzakta) ile kullanılabilir. Uzak bilgisayarı bağlamak için [README](../README.md) içindeki “Connect another Windows computer” bölümüne bak. Dashboard’daki **Ağ erişimi** bölümü backend’in Tailscale üzerinden açılıp açılmadığını gösterir ve tek tuşla açar; Bilgisayarlar sayfasındaki kayıt anahtarı, uzak makinede çalıştırılacak komutu bu adresle birlikte üretir.

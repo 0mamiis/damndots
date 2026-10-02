@@ -1,14 +1,15 @@
 import {randomUUID} from 'node:crypto';
+import {allowsPlainHttp} from '@dots/contracts/network';
 import type {RecordStore} from '@dots/contracts';
 import {SecretVault} from './integrations/security.js';
 
-export interface HostOptions {nativeEnabled:boolean;workerEnabled:boolean;linuxEnabled:boolean;gatewayPort:number;workerRoots:string[];computerMode?:'pc'|'linux';}
+export interface HostOptions {nativeEnabled:boolean;workerEnabled:boolean;linuxEnabled:boolean;gatewayPort:number;workerRoots:string[];computerMode?:'pc'|'linux'|'host';hostComputerId?:string|null;}
 interface HostProfile {id:string;name:string;serverUrl:string;local:boolean;encrypted:string;verifiedAt:string|null;lastError:string|null;createdAt:string;updatedAt:string;}
 export interface HostPlan {id:string;revision:string;serverUrl:string;options:HostOptions;client?:any;windows?:any;linux?:any;}
 export function hostOrigin(value:string){
- const u=new URL(value);if(u.username||u.password||u.search||u.hash||u.pathname!=='/'||!['http:','https:'].includes(u.protocol)||u.protocol==='http:'&&!['localhost','127.0.0.1','[::1]'].includes(u.hostname))throw Object.assign(Error('Host adresi yalnız origin olmalı; uzak bağlantılar HTTPS gerektirir.'),{statusCode:400});return u.origin;
+ const u=new URL(value);if(u.username||u.password||u.search||u.hash||u.pathname!=='/'||!['http:','https:'].includes(u.protocol)||u.protocol==='http:'&&!allowsPlainHttp(u.hostname))throw Object.assign(Error('Host adresi yalnız origin olmalı; uzak bağlantılar HTTPS veya Tailscale adresi gerektirir.'),{statusCode:400});return u.origin;
 }
-const emptyOptions:HostOptions={nativeEnabled:true,workerEnabled:true,linuxEnabled:false,gatewayPort:8000,workerRoots:[],computerMode:'pc'};
+const emptyOptions:HostOptions={nativeEnabled:true,workerEnabled:true,linuxEnabled:false,gatewayPort:8000,workerRoots:[],computerMode:'pc',hostComputerId:null};
 /** Local control-plane only. Remote credentials never enter list/status responses. */
 export class HostConnections {
  private mutations:Promise<unknown>=Promise.resolve();
@@ -38,6 +39,7 @@ export class HostConnections {
  }
  private async login(p:HostProfile){const s=await this.request(p,'/api/v1/session',undefined,{token:this.private(p).adminKey});if(typeof s.accessToken!=='string'||!Number.isFinite(Date.parse(s.expiresAt)))throw Object.assign(Error('Host geçerli oturum döndürmedi.'),{statusCode:502});return s;}
  async test(id:string){const p=this.profile(id);try{const health=await this.request(p,'/health');if(health.ok!==true||health.connectionProtocol!==1)throw Error('Host damndots bağlantı protokolünü desteklemiyor. Sunucuyu v0.1 ile güncelleyin.');await this.login(p);this.save({...p,verifiedAt:new Date().toISOString(),lastError:null});return {ok:true,version:health.version,serverUrl:p.serverUrl};}catch(error){const message=(error as Error).message;this.save({...p,lastError:message});throw error;}}
+ async computers(id:string){const p=this.profile(id),s=await this.login(p),r=await this.request(p,'/api/v1/computers',s.accessToken);return {items:(r.items||[]).map((c:any)=>({id:c.id,name:c.name,platform:c.platform,state:c.state,capabilities:c.capabilities||[],roots:c.roots||[],lastSeenAt:c.lastSeenAt||null}))};}
  bootstrap(input:{options:HostOptions;client?:any;windows?:any;linux?:any}){
   const p=this.profile('local'),c=this.private(p);if(c.bootstrapped)return;
   this.save({...p,encrypted:this.vault.seal({...c,...input,bootstrapped:true})});
@@ -54,7 +56,10 @@ export class HostConnections {
     if(!c[kind]){const e=await this.request(p,'/api/v1/computers/enrollment',s.accessToken,{});c[kind]={...await this.request(p,'/worker/register',undefined,{token:e.token,name:kind==='windows'?'Windows computer':'Dot Linux computer',platform:kind==='windows'?'win32':'linux',roots,capabilities:['codex','browser','filesystem',...kind==='linux'?['desktop']:[]]}),server:p.serverUrl};}
     else await this.request(p,'/api/v1/computers/'+c[kind].computerId,s.accessToken,{roots},'PATCH');
    }
-   const selected=options.computerMode==='linux'?c.linux:c.windows;if(selected){await this.request(p,'/api/v1/settings',s.accessToken,{defaultComputerId:selected.computerId},'PATCH');const all=await this.request(p,'/api/v1/dots',s.accessToken);for(const dot of all.items||[])if(!dot.computerId||[c.windows?.computerId,c.linux?.computerId].includes(dot.computerId))await this.request(p,'/api/v1/dots/'+dot.id,s.accessToken,{computerId:selected.computerId},'PATCH');}
+   let selectedId:string|undefined,adoptAll=false;
+   if(options.computerMode==='host'){const known=await this.request(p,'/api/v1/computers',s.accessToken),items:any[]=known.items||[];const chosen=options.hostComputerId?items.find(x=>x.id===options.hostComputerId):items.find(x=>x.state==='online'&&Array.isArray(x.capabilities)&&x.capabilities.includes('codex'));if(!chosen)throw Object.assign(Error(options.hostComputerId?'Seçilen bilgisayar bu sunucuda bulunamadı.':'Bu sunucuya bağlı çevrimiçi bir bilgisayar yok. Önce Bilgisayarlar bölümünden bir bilgisayar bağlayın.'),{statusCode:409});selectedId=chosen.id;adoptAll=true;}
+   else selectedId=(options.computerMode==='linux'?c.linux:c.windows)?.computerId;
+   if(selectedId){await this.request(p,'/api/v1/settings',s.accessToken,{defaultComputerId:selectedId},'PATCH');const all=await this.request(p,'/api/v1/dots',s.accessToken);for(const dot of all.items||[])if(dot.computerId!==selectedId&&(adoptAll||!dot.computerId||[c.windows?.computerId,c.linux?.computerId].includes(dot.computerId)))await this.request(p,'/api/v1/dots/'+dot.id,s.accessToken,{computerId:selectedId},'PATCH');}
    this.save({...p,encrypted:this.vault.seal(c),lastError:null});const revision=randomUUID();this.store.put('host_active',{id:'owner',profileId:id,revision,encryptedPlan:this.vault.seal({serverUrl:p.serverUrl,options,client:c.client,windows:c.windows,linux:c.linux})});return {profile:this.view(this.profile(id)),revision,session:s};
   });this.mutations=operation.catch(()=>{});return operation;
  }

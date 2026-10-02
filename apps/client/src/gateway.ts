@@ -3,6 +3,7 @@ import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { WebSocketServer, WebSocket } from 'ws';
 import {gatewayCertificates} from './certificates.js';
+import {allowsPlainHttp} from '@dots/contracts/network';
 import {readNativeIdentity,nativeIdentityRoute,projectNativeIdentity} from './native-identity.js';
 import {isDotsRoute,isLocalFirstRoute,isStatsigRoute,isAccountCheckRoute,mergeStatsig,enableDotsAccount} from './native-upstream.js';
 interface Tokens {access_token:string;id_token:string;refresh_token:string;}
@@ -13,7 +14,7 @@ export class NativeGateway {
   server:https.Server|undefined;
   private wsServer=new WebSocketServer({noServer:true});
   private refreshPromise:Promise<void>|undefined;
-  constructor(readonly options:GatewayOptions){const u=new URL(options.server);if(u.username||u.password||(!['localhost','127.0.0.1','[::1]'].includes(u.hostname)&&u.protocol!=='https:'))throw new Error('Remote server requires HTTPS or a local SSH tunnel');}
+  constructor(readonly options:GatewayOptions){const u=new URL(options.server);if(u.username||u.password||(u.protocol!=='https:'&&!allowsPlainHttp(u.hostname)))throw new Error('Remote server requires HTTPS, a local SSH tunnel or a Tailscale address');}
   private async save(){await writeFile(join(this.options.dataDir,'client.json'),JSON.stringify(this.state,null,2),{mode:0o600});if(this.options.writeCodexProfile===false)return;const codexHome=(this.options.codexHome??join(this.options.dataDir,'codex-home'));await mkdir(codexHome,{recursive:true});await writeFile(join(codexHome,'auth.json'),JSON.stringify({auth_mode:'chatgpt',OPENAI_API_KEY:null,tokens:{...this.state!.tokens,account_id:'acct_local_orbit'},last_refresh:new Date().toISOString()}),{mode:0o600});
     const configFile=join(codexHome,'config.toml');let config='';try{config=await readFile(configFile,'utf8');}catch{}const port=this.options.port||8000;const lines=[`chatgpt_base_url = "https://localhost:${port}/backend-api"`,`openai_base_url = "https://localhost:${port}/backend-api/codex"`];config=config.replace(/^\s*(?:chatgpt_base_url|openai_base_url)\s*=.*\r?\n/gm,'');await writeFile(configFile,lines.join('\n')+'\n'+config,{mode:0o600});}
   async enroll(){await mkdir(this.options.dataDir,{recursive:true});try{const s=JSON.parse(await readFile(join(this.options.dataDir,'client.json'),'utf8'));if(s.server===this.options.server)this.state=s;}catch{}
@@ -22,7 +23,7 @@ export class NativeGateway {
   private async access(){const claims=JSON.parse(Buffer.from(this.state!.tokens.access_token.split('.')[1],'base64url').toString());if(claims.exp*1000<Date.now()+60000)await this.refresh();return this.state!.tokens.access_token;}
   private async snapshotAccess(state:ClientState,server:string){const c=JSON.parse(Buffer.from(state.tokens.access_token.split('.')[1],'base64url').toString());if(c.exp*1000<Date.now()+60000){const r=await fetch(new URL('/auth/oauth/token',server),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({grant_type:'refresh_token',refresh_token:state.tokens.refresh_token}),redirect:'error'});if(!r.ok)throw Error('Client refresh rejected');state.tokens=await r.json();if(this.state===state)await this.save();}return state.tokens.access_token;}
   async changeConnection(server:string,state:ClientState){
-    const u=new URL(server);if(u.username||u.password||u.search||u.hash||u.pathname!=='/'||!['http:','https:'].includes(u.protocol)||u.protocol==='http:'&&!['localhost','127.0.0.1','[::1]'].includes(u.hostname)||state.server!==u.origin)throw Error('Invalid native connection target');
+    const u=new URL(server);if(u.username||u.password||u.search||u.hash||u.pathname!=='/'||!['http:','https:'].includes(u.protocol)||u.protocol==='http:'&&!allowsPlainHttp(u.hostname)||state.server!==u.origin)throw Error('Invalid native connection target');
     if(!state.clientId||!state.tokens?.access_token||!state.tokens?.refresh_token)throw Error('Native client credentials missing');
     for(const ws of this.wsServer.clients)ws.close(1012,'Dot host changed');
     this.refreshPromise=undefined;this.options.server=u.origin;this.state=structuredClone(state);await this.save();

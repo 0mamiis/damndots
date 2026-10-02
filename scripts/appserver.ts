@@ -17,6 +17,7 @@ async function codexCli():Promise<string>{
   return best?.file||'codex';
 }
 const cli=await codexCli();console.log('Codex CLI: '+cli);
-const child=spawn(cli,['app-server','--listen',process.env.DOTS_APPSERVER_LISTEN||'ws://127.0.0.1:9912'],{env,stdio:'inherit',windowsHide:true});
+const script=/\.(?:c|m)?js$/i.test(cli);
+const child=spawn(script?process.execPath:cli,[...script?[cli]:[],'app-server','--listen',process.env.DOTS_APPSERVER_LISTEN||'ws://127.0.0.1:9912'],{env,stdio:'inherit',windowsHide:true});
 child.on('error',err=>{console.error(err.message);process.exitCode=1;});child.on('exit',code=>{process.exitCode=code||0;});
 for(const sig of ['SIGINT','SIGTERM'] as const)process.on(sig,()=>child.kill());

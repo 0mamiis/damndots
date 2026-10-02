@@ -20,6 +20,7 @@ const allowed = new Set([
   "providers",
   "models",
   "events",
+  "network",
 ]);
 async function proxy(
   request: Request,
