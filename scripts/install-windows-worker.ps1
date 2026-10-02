@@ -54,7 +54,7 @@ foreach ($d in $root, $appDir, $toolsDir, $workspace, $dataDir, $download) { New
 
 # The install folder holds the worker credential and the files a SYSTEM/administrator
 # task runs. Only SYSTEM and Administrators may read or change it.
-icacls $root /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' /T /C /Q | Out-Null
+icacls $root /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' /C /Q | Out-Null
 
 # 1. Private Node.js ----------------------------------------------------------
 $nodeExe = Join-Path $nodeDir 'node.exe'
