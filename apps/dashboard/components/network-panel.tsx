@@ -11,7 +11,7 @@ export interface NetworkStatus {
   peers: { name: string; ip: string; os: string; online: boolean }[];
 }
 
-const INSTALLER = "https://raw.githubusercontent.com/0mamiis/damndots/main/scripts/install-windows-worker.ps1";
+export const INSTALLER = "https://raw.githubusercontent.com/0mamiis/damndots/main/scripts/install-windows-worker.ps1";
 
 /** Tailscale state of the active server and the switch that forwards its port to the tailnet only. */
 export function NetworkPanel() {

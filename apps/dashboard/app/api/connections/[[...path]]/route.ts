@@ -4,7 +4,7 @@ import {SESSION_COOKIE,SERVER_COOKIE,sameOrigin,requestProtocol} from '@/lib/ses
 export const runtime='nodejs';export const dynamic='force-dynamic';
 async function proxy(request:Request,{params}:{params:Promise<{path?:string[]}>}){
  const path=(await params).path||[];
- if(path.length>2||path.some(p=>! /^[A-Za-z0-9-]+$/.test(p))||['runtime-plan','bootstrap','heartbeat','setup-next'].includes(path[0])||path.length===2&&!['activate','test','computers'].includes(path[1]))return Response.json({error:'Geçersiz kontrol yolu.'},{status:404});
+ if(path.length>2||path.some(p=>! /^[A-Za-z0-9-]+$/.test(p))||['runtime-plan','bootstrap','heartbeat','setup-next'].includes(path[0])||path.length===2&&!['activate','test','computers','enrollment','copy-dot'].includes(path[1]))return Response.json({error:'Geçersiz kontrol yolu.'},{status:404});
  if(!sameOrigin(request))return Response.json({error:'İstek kaynağı doğrulanamadı.'},{status:403});
  try{
   const token=await controllerToken();if(!token)return Response.json({error:'Bu PC’nin dashboardunda önce yerel yönetici anahtarıyla giriş yapın.'},{status:401});

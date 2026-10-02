@@ -96,7 +96,10 @@ export async function buildServer(options:{config?:ServerConfig;store?:RecordSto
     admin.post('/connections/:id/test',async req=>connections.test(idOf(req)));
     admin.post('/connections/:id/activate',async req=>connections.activate(idOf(req)));
     admin.get('/connections/runtime-plan',async()=>connections.plan());
+    admin.get('/connections/local-dots',async()=>connections.localDots());
     admin.get('/connections/:id/computers',async req=>connections.computers(idOf(req)));
+    admin.post('/connections/:id/enrollment',async req=>connections.enrollment(idOf(req)));
+    admin.post('/connections/:id/copy-dot',async req=>connections.copyDot(idOf(req),z.object({dotId:z.string().min(1).max(100)}).parse(req.body).dotId));
     admin.get('/network',async()=>network.status());
     admin.post('/network/tailscale',async req=>network.setExposed(z.object({enabled:z.boolean()}).parse(req.body).enabled));
     admin.post('/connections/bootstrap',async req=>{connections.bootstrap(req.body as any);return {ok:true};});

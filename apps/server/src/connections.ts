@@ -39,6 +39,17 @@ export class HostConnections {
  }
  private async login(p:HostProfile){const s=await this.request(p,'/api/v1/session',undefined,{token:this.private(p).adminKey});if(typeof s.accessToken!=='string'||!Number.isFinite(Date.parse(s.expiresAt)))throw Object.assign(Error('Host geçerli oturum döndürmedi.'),{statusCode:502});return s;}
  async test(id:string){const p=this.profile(id);try{const health=await this.request(p,'/health');if(health.ok!==true||health.connectionProtocol!==1)throw Error('Host damndots bağlantı protokolünü desteklemiyor. Sunucuyu v0.1 ile güncelleyin.');await this.login(p);this.save({...p,verifiedAt:new Date().toISOString(),lastError:null});return {ok:true,version:health.version,serverUrl:p.serverUrl};}catch(error){const message=(error as Error).message;this.save({...p,lastError:message});throw error;}}
+ async enrollment(id:string){const p=this.profile(id),s=await this.login(p),e=await this.request(p,'/api/v1/computers/enrollment',s.accessToken,{});if(typeof e.token!=='string')throw Object.assign(Error('Host kayıt anahtarı döndürmedi.'),{statusCode:502});return {token:e.token,expiresAt:e.expiresAt,serverUrl:p.serverUrl};}
+ async localDots(){const p=this.profile('local'),s=await this.login(p),r=await this.request(p,'/api/v1/dots',s.accessToken);return {items:(r.items||[]).map((d:any)=>({id:d.id,name:d.name}))};}
+ /** Copies a Dot's definition (name, model, instructions) to another backend. Avatar and history stay behind. */
+ async copyDot(id:string,dotId:string){
+  if(id==='local')throw Object.assign(Error('Dot zaten yerel hostta.'),{statusCode:400});
+  const local=this.profile('local'),target=this.profile(id),ls=await this.login(local),dot=await this.request(local,'/api/v1/dots/'+encodeURIComponent(dotId),ls.accessToken);
+  const ts=await this.login(target),existing=await this.request(target,'/api/v1/dots',ts.accessToken),same=(existing.items||[]).find((d:any)=>d.name===dot.name);
+  if(same)return {id:same.id,name:same.name,existing:true};
+  const created=await this.request(target,'/api/v1/dots',ts.accessToken,{name:dot.name,model:dot.model??null,reasoningEffort:dot.reasoningEffort??null,serviceTier:dot.serviceTier??null,instructions:dot.instructions??''});
+  return {id:created.id,name:created.name||dot.name,existing:false};
+ }
  async computers(id:string){const p=this.profile(id),s=await this.login(p),r=await this.request(p,'/api/v1/computers',s.accessToken);return {items:(r.items||[]).map((c:any)=>({id:c.id,name:c.name,platform:c.platform,state:c.state,capabilities:c.capabilities||[],roots:c.roots||[],lastSeenAt:c.lastSeenAt||null}))};}
  bootstrap(input:{options:HostOptions;client?:any;windows?:any;linux?:any}){
   const p=this.profile('local'),c=this.private(p);if(c.bootstrapped)return;
