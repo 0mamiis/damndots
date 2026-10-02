@@ -2,13 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {mkdtemp,mkdir,writeFile,readFile,readdir,rm} from 'node:fs/promises';
+import {mkdtemp,mkdir,writeFile,readFile,readdir,rm,realpath} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
 
 test('backup reuse, corruption checks and retention keep the selected recovery snapshot',{skip:process.platform!=='win32'},async()=>{
-  const root=await mkdtemp(join(tmpdir(),'dots-backups-')),ch=join(root,'home'),app=join(root,'app'),backups=join(root,'backups');
+  // Windows runner temp directories can use an 8.3 alias; compare real paths.
+  const root=await realpath(await mkdtemp(join(tmpdir(),'dots-backups-'))),ch=join(root,'home'),app=join(root,'app'),backups=join(root,'backups');
   const script=fileURLToPath(new URL('../../../scripts/main-codex/backup.ps1',import.meta.url));
   await mkdir(ch);await mkdir(app);
   const set=async(model:string)=>{await writeFile(join(ch,'config.toml'),'model = "'+model+'"\n');};

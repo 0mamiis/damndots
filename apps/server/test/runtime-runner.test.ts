@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { WebSocketServer, WebSocket } from 'ws';
-import { mkdtemp, mkdir, writeFile, rm, symlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm, symlink,realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { once } from 'node:events';
@@ -47,7 +47,7 @@ test('real WebSocket contract initializes, streams, handles server approval/dyna
     const result=await runner.run(fixture(folder),hooks(outputs),new AbortController().signal);
     assert.equal(result.text,'Saved [result](outputs/result.md).');assert.deepEqual(approvalDecision,{decision:'accept'});assert.equal(toolResult.success,true);assert.equal(toolResult.contentItems[0].type,'inputText');assert.deepEqual(callArgs,{name:'lookup',args:{query:'real'}});
     assert.equal(threadParams.dynamicTools[0].type,'function');assert.equal(threadParams.model,'gpt-6.1-sol');assert.equal(threadParams.serviceTier,'priority');assert.equal(turnParams.effort,'high');assert.equal(turnParams.serviceTier,'priority');
-    assert.equal(outputs.length,1);assert.equal(outputs[0].size,14);assert.equal(outputs[0].path,join(folder,'outputs','result.md'));
+    assert.equal(outputs.length,1);assert.equal(outputs[0].size,14);assert.equal(outputs[0].path,await realpath(join(folder,'outputs','result.md')));
     assert.deepEqual(server.frames.slice(0,4).map(frame=>frame.method),['initialize','initialized','thread/start','turn/start']);
   } finally {await server.close();await rm(folder,{recursive:true,force:true});}
 });

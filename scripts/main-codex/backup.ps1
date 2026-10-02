@@ -14,6 +14,16 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $root = if ($env:DOTS_BACKUP_ROOT) { $env:DOTS_BACKUP_ROOT } else { Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Codex-Backups' }
+# Existing paths can be supplied through an 8.3 alias on Windows. Normalize before
+# comparing backup provenance so an alias cannot create duplicate recovery copies.
+function Get-CanonicalPath([string]$path) {
+  $full = [IO.Path]::GetFullPath($path)
+  if (Test-Path -LiteralPath $full) { return (Get-Item -LiteralPath $full).FullName }
+  return $full
+}
+$root = Get-CanonicalPath $root
+$CodexHome = Get-CanonicalPath $CodexHome
+$AppData = Get-CanonicalPath $AppData
 $auto = -not $Destination
 if ($auto) { $Destination = Join-Path $root ('main-' + (Get-Date -Format 'yyyyMMdd-HHmmss')) }
 $files = @('config.toml','auth.json','.credentials.json','.codex-global-state.json','opencodex.config.toml','opencodex-catalog.json','opencodex-journal.json','models_cache.json','keybindings.json','installation_id','session_index.jsonl','history.jsonl')
@@ -34,7 +44,7 @@ if ($auto -and -not $PruneOnly) {
   $signature = Get-Signature $current
   foreach ($b in (Get-Backups)) {
     try { $m = Get-Content -LiteralPath (Join-Path $b.FullName 'manifest.json') -Raw | ConvertFrom-Json } catch { continue }
-    if ($m.codexHome -ne $CodexHome) { continue }
+    if ((Get-CanonicalPath $m.codexHome) -ne $CodexHome) { continue }
     if ((Get-Signature $m.files) -eq $signature) {
       $valid = $true
       foreach ($e in $m.files) {
