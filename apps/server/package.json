@@ -1,0 +1,38 @@
+{
+  "name": "@dots/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@dots/contracts": "*",
+    "@fastify/multipart": "^9.2.1",
+    "@fastify/websocket": "^11.2.0",
+    "@modelcontextprotocol/sdk": "^1.20.1",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "cron-parser": "^5.4.0",
+    "fastify": "^5.6.1",
+    "imapflow": "^1.0.195",
+    "jose": "^6.1.0",
+    "mailparser": "^3.7.4",
+    "nodemailer": "^10.0.13",
+    "playwright": "^1.56.0",
+    "rrule": "^2.8.1",
+    "ws": "^8.18.3",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/mailparser": "^3.4.6",
+    "@types/nodemailer": "^7.0.2",
+    "@types/smtp-server": "^3.5.12",
+    "@types/ws": "^8.18.1",
+    "smtp-server": "^3.15.0"
+  },
+  "license": "MIT"
+}

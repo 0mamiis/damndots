@@ -1,0 +1,103 @@
+<!doctype html><meta charset="utf-8"><audio id="sink" autoplay></audio><script>
+// Sesli arama eşi: Codex'in WebRTC aramasını karşılar, konuşmayı bölümlere ayırır (VAD) ve cevap sesini geri çalar.
+const RATE=16000,FRAME=2048,FRAME_MS=FRAME/RATE*1000;
+let pc=null,inCtx=null,outCtx=null,dest=null,playing=null,floor=0.004,speaking=false,pre=[],cur=[],voiced=0,silent=0,loudSum=0,loudN=0,peak=0;
+function b64(bytes){let s='';for(let i=0;i<bytes.length;i+=0x8000)s+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));return btoa(s);}
+function wav(chunks){
+  let n=0;for(const c of chunks)n+=c.length;
+  const out=new DataView(new ArrayBuffer(44+n*2));
+  const w=(o,s)=>{for(let i=0;i<s.length;i++)out.setUint8(o+i,s.charCodeAt(i));};
+  w(0,'RIFF');out.setUint32(4,36+n*2,true);w(8,'WAVEfmt ');out.setUint32(16,16,true);out.setUint16(20,1,true);out.setUint16(22,1,true);
+  out.setUint32(24,RATE,true);out.setUint32(28,RATE*2,true);out.setUint16(32,2,true);out.setUint16(34,16,true);w(36,'data');out.setUint32(40,n*2,true);
+  let o=44;for(const c of chunks)for(let i=0;i<c.length;i++){const v=Math.max(-1,Math.min(1,c[i]));out.setInt16(o,v<0?v*0x8000:v*0x7fff,true);o+=2;}
+  return new Uint8Array(out.buffer);
+}
+function finish(){
+  speaking=false;const chunks=cur;cur=[];
+  const voicedMs=chunks.length*FRAME_MS-silent;silent=0;
+  const mean=loudN?loudSum/loudN:0,top=peak,loudMs=loudN*FRAME_MS;loudSum=0;loudN=0;peak=0;
+  // Very short, weak or flat sounds (breath, cough, keyboard) are not sentences.
+  if(loudMs<380||mean<0.022||top<0.04)return;
+  window.voiceEvent('utterance',b64(wav(chunks)),Math.round(loudMs));
+}
+function analyse(buffer){
+  let sum=0;for(let i=0;i<buffer.length;i++)sum+=buffer[i]*buffer[i];
+  const level=Math.sqrt(sum/buffer.length),loud=level>Math.max(0.018,floor*4);
+  if(!speaking){
+    pre.push(buffer);if(pre.length>6)pre.shift();
+    if(!loud){floor=floor*0.95+level*0.05;voiced=0;return;}
+    if(++voiced>=3){speaking=true;cur=pre;pre=[];silent=0;loudSum=level*voiced;loudN=voiced;peak=level;window.voiceEvent('speech','');}
+    return;
+  }
+  cur.push(buffer);silent=loud?0:silent+FRAME_MS;if(loud){loudSum+=level;loudN++;}if(level>peak)peak=level;
+  if(silent>=750||cur.length*FRAME_MS>=25000)finish();
+}
+function capture(stream){
+  // Uzak WebRTC akışı Web Audio'ya ancak bir medya öğesine bağlıyken güvenilir şekilde ulaşır.
+  const sink=document.getElementById('sink');sink.srcObject=stream;sink.muted=true;sink.play().catch(()=>{});
+  inCtx=new AudioContext({sampleRate:RATE});inCtx.resume().catch(()=>{});
+  const source=inCtx.createMediaStreamSource(stream),processor=inCtx.createScriptProcessor(FRAME,1,1),silence=inCtx.createGain();
+  silence.gain.value=0;source.connect(processor);processor.connect(silence);silence.connect(inCtx.destination);
+  processor.onaudioprocess=e=>analyse(new Float32Array(e.inputBuffer.getChannelData(0)));
+}
+window.answer=async offer=>{
+  pc=new RTCPeerConnection({iceServers:[]});
+  pc.onconnectionstatechange=()=>window.voiceEvent('state',pc.connectionState);
+  pc.ontrack=e=>{if(e.track.kind==='audio'&&!inCtx)capture(e.streams[0]||new MediaStream([e.track]));};
+  await pc.setRemoteDescription({type:'offer',sdp:offer});
+  outCtx=new AudioContext({sampleRate:48000});dest=outCtx.createMediaStreamDestination();
+  if(!pc.getTransceivers().some(t=>t.receiver.track.kind==='audio'))throw new Error('Offer has no audio');
+  // addTrack, akış kimliğini (msid) cevaba yazar; istemciler sesi e.streams[0] üzerinden bağlar.
+  const track=dest.stream.getAudioTracks()[0];track.contentHint='music';
+  const sender=pc.addTrack(track,dest.stream);
+  // Chrome varsayılanı konuşma için ~28 kbps'tir; cevap sesi daha yüksek bit hızıyla gider.
+  try{const params=sender.getParameters();params.encodings=params.encodings&&params.encodings.length?params.encodings:[{}];params.encodings[0].maxBitrate=96000;await sender.setParameters(params);}catch{}
+  const created=await pc.createAnswer();
+  // Opus: mono, 96 kbps'e kadar; aynı ayar mikrofon sesinin daha temiz gelmesini de sağlar.
+  const opus=/a=rtpmap:(\d+) opus\/48000\/2/.exec(created.sdp);
+  const tuned=opus?created.sdp.replace(new RegExp('(a=fmtp:'+opus[1]+' )([^\\r\\n]*)'),(_,head,rest)=>head+rest.replace(/;?(maxaveragebitrate|stereo|sprop-stereo|cbr)=[^;]*/g,'')+';maxaveragebitrate=96000;stereo=0;sprop-stereo=0;cbr=0'):created.sdp;
+  await pc.setLocalDescription({type:'answer',sdp:tuned});
+  // Teklif/cevap tek seferde taşındığı için adaylar cevabın içinde olmalı.
+  await new Promise(resolve=>{
+    if(pc.iceGatheringState==='complete')return resolve();
+    const check=()=>{if(pc.iceGatheringState==='complete'){pc.removeEventListener('icegatheringstatechange',check);resolve();}};
+    pc.addEventListener('icegatheringstatechange',check);setTimeout(resolve,3000);
+  });
+  return pc.localDescription.sdp;
+};
+window.play=async data=>{
+  window.stopPlay();
+  const bytes=Uint8Array.from(atob(data),c=>c.charCodeAt(0));
+  const buffer=await outCtx.decodeAudioData(bytes.buffer);await outCtx.resume();
+  const source=outCtx.createBufferSource();source.buffer=buffer;source.connect(dest);playing=source;
+  await new Promise(resolve=>{source.onended=()=>{if(playing===source)playing=null;resolve();};source.start();});
+};
+window.stopPlay=()=>{const p=playing;playing=null;if(p){try{p.stop();}catch{}}};
+window.isPlaying=()=>playing!==null;
+// The Codex voice service speaks into a second peer. Its incoming audio is relayed straight to the existing Dot call.
+// Only a silent clock goes upstream; the user's microphone stays on the configured transcription path.
+let officialPc=null,officialInput=null,officialGain=null;
+window.officialOffer=async()=>{
+  window.closeOfficial();
+  officialPc=new RTCPeerConnection({iceServers:[]});
+  officialInput=new AudioContext({sampleRate:48000});
+  const silence=officialInput.createMediaStreamDestination(),gain=officialInput.createGain(),osc=officialInput.createOscillator();
+  gain.gain.value=0;osc.connect(gain);gain.connect(silence);osc.start();await officialInput.resume();
+  officialPc.addTrack(silence.stream.getAudioTracks()[0],silence.stream);
+  const dc=officialPc.createDataChannel('oai-events');
+  dc.onmessage=e=>{try{window.officialEvent(JSON.parse(e.data));}catch{}};
+  officialPc.onconnectionstatechange=()=>{if(officialPc&&officialPc.connectionState==='failed')window.officialEvent({type:'transport.failed'});};
+  officialPc.ontrack=e=>{
+    const stream=e.streams[0]||new MediaStream([e.track]),audio=new Audio();audio.srcObject=stream;audio.muted=true;audio.play().catch(()=>{});
+    officialGain=outCtx.createGain();officialGain.gain.value=1;
+    outCtx.createMediaStreamSource(stream).connect(officialGain);officialGain.connect(dest);outCtx.resume().catch(()=>{});
+  };
+  await officialPc.setLocalDescription(await officialPc.createOffer());
+  await new Promise(resolve=>{if(officialPc.iceGatheringState==='complete')return resolve();const check=()=>{if(officialPc&&officialPc.iceGatheringState==='complete'){officialPc.removeEventListener('icegatheringstatechange',check);resolve();}};officialPc.addEventListener('icegatheringstatechange',check);setTimeout(resolve,3000);});
+  return officialPc.localDescription.sdp;
+};
+window.officialAnswer=sdp=>officialPc.setRemoteDescription({type:'answer',sdp});
+window.muteOfficial=muted=>{if(officialGain)officialGain.gain.setValueAtTime(muted?0:1,outCtx.currentTime);};
+window.closeOfficial=()=>{const remote=officialPc;officialPc=null;if(remote)remote.close();if(officialInput){officialInput.close().catch(()=>{});officialInput=null;}if(officialGain){officialGain.disconnect();officialGain=null;}};
+window.stop=()=>{window.stopPlay();window.closeOfficial();try{pc&&pc.close();}catch{}try{inCtx&&inCtx.close();}catch{}try{outCtx&&outCtx.close();}catch{}};
+</script>

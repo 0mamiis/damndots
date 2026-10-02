@@ -1,0 +1,12 @@
+"use client";
+import {useContext,useState} from 'react';import {Button} from '@heroui/react';
+import {ApiContext,Actions,Disclose,Field,Form,FormGrid,Loading,Notice,Section,str,useData} from './ui';
+type Entry={id:string;urls:string[];username:string;hasCredential:boolean};
+export function TransportPanel(){const data=useData<{items:Entry[]}>('computer-transport'),{mutate}=useContext(ApiContext),[error,setError]=useState('');
+ const save=(items:any[])=>mutate('computer-transport','PUT',{items});
+ return <Section title="Computer video bağlantısı" description="Farklı ağlardaki bilgisayarlar için kendi STUN/TURN servisini tanımla. Yerel kullanımda boş kalabilir."><Notice error={data.error||error}/>{data.loading&&!data.data?<Loading/>:<>
+ {data.data?.items.map(item=><Disclose key={item.id} summary={item.urls.join(', ')}><Form submit="Video sunucusunu güncelle" onSubmit={d=>save(data.data!.items.map(e=>e.id===item.id?{id:e.id,urls:str(d,'urls').split(/\r?\n/).map(s=>s.trim()).filter(Boolean),username:str(d,'username'),...str(d,'credential')?{credential:str(d,'credential')}:{}}:e))}><Field label="STUN/TURN adresleri" name="urls" type="textarea" value={item.urls.join('\n')} required/><FormGrid><Field label="TURN kullanıcı adı" name="username" value={item.username}/><Field label="Yeni TURN parolası" name="credential" type="password" description={item.hasCredential?'Kayıtlı parola var; boş bırakırsan korunur.':'Varsa TURN parolasını gir.'}/></FormGrid></Form><Actions><Button size="sm" variant="danger" onPress={async()=>{try{await save(data.data!.items.filter(e=>e.id!==item.id));}catch(e){setError((e as Error).message);}}}>Bu video sunucusunu kaldır</Button></Actions></Disclose>)}
+ <Disclose summary="STUN/TURN ekle"><Form submit="Video sunucusunu ekle" onSubmit={d=>save([...data.data?.items||[],{urls:str(d,'urls').split(/\r?\n/).map(s=>s.trim()).filter(Boolean),username:str(d,'username'),credential:str(d,'credential')}])}><Field label="STUN/TURN adresleri" name="urls" type="textarea" placeholder="turns:turn.example.com:5349" required/><FormGrid><Field label="TURN kullanıcı adı" name="username"/><Field label="TURN parolası" name="credential" type="password"/></FormGrid></Form></Disclose>
+ <p className="mt-3 text-sm text-muted">Parolalar seçili Dot sunucusunda şifrelenir ve liste yanıtında gösterilmez. Değişiklik yeni computer bağlantısında uygulanır; açık paneli kapatıp aç. TURN hizmetinin ağ ve kimlik bilgilerini sen sağlamalısın.</p>
+ </>}</Section>;
+}

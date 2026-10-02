@@ -1,0 +1,34 @@
+{
+  "name": "damndots",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev:server": "npm run dev --workspace @dots/server",
+    "dev:dashboard": "npm run dev --workspace @dots/dashboard",
+    "dev:worker": "tsx apps/worker/src/index.ts",
+    "dev:client": "tsx apps/client/src/index.ts",
+    "dev:appserver": "tsx scripts/appserver.ts",
+    "control": "tsx scripts/control.ts",
+    "test": "npm run test --workspaces --if-present && node --test scripts/test/*.test.mjs",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "start": "node --env-file-if-exists=.env --import tsx scripts/local-stack.ts --worker --client --main-gateway",
+    "release:check": "node scripts/check-release.mjs",
+    "release:source": "node scripts/export-source.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "tsx": "^4.20.6",
+    "@types/node": "^24.7.0"
+  },
+  "license": "MIT",
+  "releaseTag": "v0.1"
+}

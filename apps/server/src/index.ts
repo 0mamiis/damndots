@@ -1,0 +1,11 @@
+import { buildServer } from './app.js';
+import { mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
+const services=await buildServer({logger:true});
+await mkdir(join(services.config.dataDir,'workspaces'),{recursive:true});
+if(!['localhost','127.0.0.1','::1'].includes(services.config.host)&&!services.config.tlsCert&&process.env.DOTS_TRUST_PROXY!=='1')throw new Error('Remote listener requires TLS or an explicitly configured trusted reverse proxy');
+services.runtime.start();
+services.integrations.start();
+await services.app.listen({host:services.config.host,port:services.config.port});
+console.log(`Dots server ready. Admin key is stored in ${join(services.config.dataDir,'admin.key')}`);
+for(const sig of ['SIGINT','SIGTERM'] as const)process.once(sig,async()=>{await services.app.close();process.exit(0);});

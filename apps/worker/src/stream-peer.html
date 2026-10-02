@@ -1,0 +1,55 @@
+<!doctype html><meta charset="utf-8"><canvas id="c" width="1280" height="800"></canvas><script>
+const canvas=document.getElementById('c'),g=canvas.getContext('2d');
+let bitmap=null,blank=true,cursor=null,pc=null,dc=null,control=false,videoTrack=null,media=null;
+function arrow(x,y){g.save();g.translate(x,y);g.beginPath();g.moveTo(0,0);g.lineTo(0,18);g.lineTo(5,14);g.lineTo(9,22);g.lineTo(12,20);g.lineTo(8,13);g.lineTo(14,13);g.closePath();g.fillStyle='#fff';g.strokeStyle='#111';g.lineWidth=1.5;g.fill();g.stroke();g.restore();}
+function paint(){
+  g.fillStyle='#101622';g.fillRect(0,0,1280,800);
+  if(blank||!bitmap){
+    g.textAlign='center';g.fillStyle='#e5ebf7';g.font='600 32px system-ui,sans-serif';g.fillText('Dot’un tarayıcısı hazır',640,372);
+    g.fillStyle='#abbad2';g.font='20px system-ui,sans-serif';g.fillText('Henüz açık bir sayfa yok. Dot bir site açtığında burada görünür.',640,418);
+  }else g.drawImage(bitmap,0,0,1280,800);
+  if(control&&cursor)arrow(cursor.x,cursor.y);
+  if(videoTrack&&videoTrack.requestFrame)videoTrack.requestFrame();
+}
+window.frame=async(data,isBlank)=>{
+  blank=isBlank;
+  if(!isBlank&&data){const bytes=Uint8Array.fromBase64?Uint8Array.fromBase64(data):Uint8Array.from(atob(data),c=>c.charCodeAt(0));const next=await createImageBitmap(new Blob([bytes],{type:'image/jpeg'}));if(bitmap&&bitmap.close)bitmap.close();bitmap=next;}
+  paint();
+};
+window.setCursor=(x,y,active)=>{cursor={x:x,y:y};control=active;paint();};
+window.answer=async(offer,iceServers=[])=>{
+  pc=new RTCPeerConnection({iceServers});
+  pc.onconnectionstatechange=()=>{window.peerEvent('state',pc.connectionState);if(pc.connectionState==='connected')paint();};
+  pc.ondatachannel=e=>{
+    dc=e.channel;dc.binaryType='arraybuffer';
+    dc.onopen=()=>window.peerEvent('open','');
+    dc.onclose=()=>window.peerEvent('close','');
+    dc.onmessage=m=>{
+      if(typeof m.data==='string')window.peerEvent('text',m.data);
+      else{let s='';const b=new Uint8Array(m.data);for(let i=0;i<b.length;i++)s+=String.fromCharCode(b[i]);window.peerEvent('binary',btoa(s));}
+    };
+  };
+  await pc.setRemoteDescription({type:'offer',sdp:offer});
+  paint();
+  // Capture the newly painted frame immediately, without a second independent FPS clock.
+  media=canvas.captureStream(0);videoTrack=media.getVideoTracks()[0];
+  // Fare koordinatları videonun gerçek piksel boyutuna göre gelir; çözünürlük 1280x800'de sabit kalmalı.
+  videoTrack.contentHint='detail';
+  const sender=pc.addTrack(videoTrack,media);
+  const video=pc.getTransceivers().find(t=>t.sender===sender);
+  if(video)video.direction='sendonly';
+  try{const parameters=sender.getParameters();parameters.degradationPreference='maintain-resolution';parameters.encodings=parameters.encodings&&parameters.encodings.length?parameters.encodings:[{}];parameters.encodings[0].scaleResolutionDownBy=1;parameters.encodings[0].maxFramerate=30;parameters.encodings[0].maxBitrate=6000000;await sender.setParameters(parameters);}catch(e){}
+  paint();
+  await pc.setLocalDescription(await pc.createAnswer());
+  await new Promise(done=>{
+    if(pc.iceGatheringState==='complete')return done();
+    const check=()=>{if(pc.iceGatheringState==='complete'){pc.removeEventListener('icegatheringstatechange',check);done();}};
+    pc.addEventListener('icegatheringstatechange',check);setTimeout(done,iceServers.length?10000:4000);
+  });
+  return pc.localDescription.sdp;
+};
+window.sendText=text=>{if(dc&&dc.readyState==='open')dc.send(text);};
+window.stop=()=>{try{if(dc)dc.close();if(pc)pc.close();if(media)media.getTracks().forEach(t=>t.stop());if(bitmap)bitmap.close();}catch(e){}videoTrack=null;media=null;bitmap=null;};
+// Keep an idle browser-only view available for a reconnect without encoding duplicates at 10 FPS.
+setInterval(paint,1000);
+</script>

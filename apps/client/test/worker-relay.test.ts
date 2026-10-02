@@ -1,0 +1,6 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {createServer} from 'node:http';
+import {WorkerRelay} from '../src/worker-relay.js';
+test('loopback worker relay forwards bytes and bearer tokens to the selected host and refuses admin paths',async()=>{
+ const seen:any[]=[];const server=createServer((req,res)=>{let text='';req.on('data',b=>text+=b);req.on('end',()=>{seen.push({url:req.url,token:req.headers.authorization,text});res.setHeader('content-type','application/json');res.end(JSON.stringify({ok:true}));});});await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+(server.address() as any).port;
+ const relay=new WorkerRelay(origin,0);try{const port=await relay.start();const r=await fetch('http://127.0.0.1:'+port+'/worker/heartbeat',{method:'POST',headers:{authorization:'Bearer controlled-worker','content-type':'application/json'},body:'{"activeJobIds":[]}'});assert.equal(r.status,200);assert.deepEqual(seen,[{url:'/worker/heartbeat',token:'Bearer controlled-worker',text:'{"activeJobIds":[]}'}]);assert.equal((await fetch('http://127.0.0.1:'+port+'/api/v1/session')).status,404);assert.throws(()=>relay.setTarget('http://remote.example'));assert.throws(()=>relay.setTarget('https://user:password@example.com'));}finally{await relay.close();await new Promise<void>(r=>server.close(()=>r()));}
+});

@@ -1,0 +1,27 @@
+name: Bug report
+description: Report a reproducible problem without private account data.
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Dots version / commit
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: OS, Node version, Codex desktop version
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps, expected result, actual result
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted error log
+      description: Remove tokens, account details, private paths and conversations. Never upload your .data directory.
+      render: text

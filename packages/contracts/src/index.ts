@@ -1,0 +1,26 @@
+export type TaskStatus = 'queued' | 'running' | 'waiting_approval' | 'paused' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+export type ConnectorKind = 'slack' | 'teams' | 'email' | 'mcp' | 'webhook' | 'github';
+export interface Dot { id:string; name:string; paused:boolean; rootThreadId:string|null; messagingRoomId:string; model:string|null; reasoningEffort:string|null; serviceTier:string|null; computerId:string|null; instructions:string; avatarUrl:string|null; avatarManifest:Record<string,unknown>|null; createdAt:string; updatedAt:string; }
+export interface Attachment {id:string; name:string; mimeType:string; size:number; path?:string;}
+export interface Message {id:string; dotId:string; role:'user'|'assistant'|'system'; text:string; attachments:Attachment[]; taskId:string|null; channel:string; requestId:string|null; createdAt:string;}
+export interface Task {id:string; dotId:string; parentTaskId:string|null; title:string; input:string; status:TaskStatus; threadId:string|null; turnId:string|null; computerId:string|null; model:string|null; reasoningEffort:string|null; serviceTier:string|null; cwd:string|null; result:string|null; error:string|null; createdAt:string; updatedAt:string; startedAt:string|null; completedAt:string|null; source:'chat'|'schedule'|'delegation'|'manual'|'channel'|'proactive'; attachments:Attachment[];}
+export interface Activity {id:string; dotId:string; taskId:string|null; type:string; message:string; data:Record<string,unknown>; createdAt:string;}
+export interface Output {id:string; dotId:string; taskId:string; name:string; mimeType:string; size:number; path:string; computerId:string|null; createdAt:string;}
+export interface Memory {id:string; dotId:string; title:string; content:string; tags:string[]; createdAt:string; updatedAt:string;}
+export interface Schedule {id:string; dotId:string; title:string; prompt:string; enabled:boolean; kind:'interval'|'once'|'cron'|'rrule'; intervalSeconds:number|null; cron:string|null;rrule?:string; timezone:string; nextRunAt:string|null; lastRunAt:string|null; computerId:string|null; proactive:boolean; createdAt:string; updatedAt:string;}
+export interface Approval {id:string; dotId:string; taskId:string; kind:string; title:string; detail:string; request:Record<string,unknown>; status:'pending'|'approved'|'denied'|'expired'; createdAt:string; resolvedAt:string|null; resolution?:Record<string,unknown>;}
+export interface Connector {id:string; kind:ConnectorKind; name:string; enabled:boolean; state:'configured'|'connected'|'error'|'needs_configuration'; scopes:string[]; config:Record<string,unknown>; lastError:string|null; createdAt:string; updatedAt:string;}
+export interface Computer {id:string; name:string; platform:string; capabilities:string[]; roots:string[]; state:'online'|'offline'; lastSeenAt:string; createdAt:string;}
+export interface Settings {appServerUrl:string; model:string|null; reasoningEffort:string; serviceTier:string|null; activeProviderId?:string|null; maxParallelTasks:number; proactiveEnabled:boolean; autoApproveExecution?:boolean; defaultComputerId?:string|null; dataDirectory?:string;}
+export interface Overview {dots:Dot[]; tasks:Task[]; activity:Activity[]; outputs:Output[]; computers:Computer[]; pendingApprovals:number; settings:Settings;}
+export interface ApiList<T> {items:T[]; cursor:string|null;}
+export interface RuntimeEvent {id:string; type:string; dotId:string|null; taskId:string|null; data:Record<string,unknown>; createdAt:string;}
+export interface SubmitMessage {text:string; attachments?:Attachment[]; requestId?:string; channel?:string; computerId?:string|null;}
+export interface CreateTask {dotId:string; title?:string; input:string; parentTaskId?:string|null;threadId?:string|null; computerId?:string|null; model?:string|null; reasoningEffort?:string|null; serviceTier?:string|null; cwd?:string|null; source?:Task['source']; attachments?:Attachment[];}
+export interface RunInput {task:Task; dot:Dot; memories:Memory[];fullAccess?:boolean;}
+export interface RunnerHooks {onThread:(threadId:string)=>void; onTurn:(turnId:string)=>void; onDelta:(text:string)=>void; onActivity:(type:string,message:string,data?:Record<string,unknown>)=>void; onOutput:(output:Omit<Output,'id'|'dotId'|'taskId'|'createdAt'>)=>void; onApproval:(request:Omit<Approval,'id'|'dotId'|'taskId'|'createdAt'|'resolvedAt'|'status'>)=>Promise<boolean>;onUserInput?:(request:Omit<Approval,'id'|'dotId'|'taskId'|'createdAt'|'resolvedAt'|'status'>)=>Promise<Record<string,unknown>|null>;}
+export interface RunResult {text:string; threadId:string; turnId:string|null;}
+export interface TaskRunner {run(input:RunInput,hooks:RunnerHooks,signal:AbortSignal):Promise<RunResult>;}
+export interface RecordStore {get<T>(namespace:string,id:string):T|undefined; list<T>(namespace:string):T[]; put<T extends {id:string}>(namespace:string,value:T):T; delete(namespace:string,id:string):boolean; transaction<T>(fn:()=>T):T;}
+export interface ToolDefinition {name:string; description:string; inputSchema:Record<string,unknown>; connectorId?:string;}
+export interface ReplyOutbox {id:string;connectorId:string;taskId:string;status:'pending'|'approval_required'|'sending'|'sent'|'failed'|'delivery_unknown';attempts:number;lastError:string|null;createdAt:string;updatedAt:string;}

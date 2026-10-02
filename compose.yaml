@@ -1,0 +1,33 @@
+services:
+  server:
+    build:
+      context: .
+      target: server
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9340:9340"
+      - "127.0.0.1:4320:4320"
+    volumes:
+      - dots-data:/data
+    environment:
+      DOTS_APPSERVER_URL: ws://127.0.0.1:9912
+      DOTS_MODEL_BASE: ${DOTS_MODEL_BASE:-http://host.docker.internal:10100/v1}
+      DOTS_MODEL: ${DOTS_MODEL:-gpt-6.1-sol}
+      DOTS_MODEL_API_KEY: ${DOTS_MODEL_API_KEY:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  dashboard:
+    build:
+      context: .
+      target: dashboard
+    restart: unless-stopped
+    # Share the server network namespace so the BFF can use genuine loopback HTTP.
+    network_mode: service:server
+    environment:
+      DOTS_DASHBOARD_HOST: 0.0.0.0
+      DOTS_DASHBOARD_PORT: 4320
+      DOTS_SERVER_URL: http://127.0.0.1:9340
+    depends_on:
+      - server
+volumes:
+  dots-data:

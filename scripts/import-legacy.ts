@@ -1,0 +1,3 @@
+import {readFile} from 'node:fs/promises';
+const base=process.env.DOTS_SERVER_URL||'http://127.0.0.1:9340',key=(await readFile('apps/server/.data/server/admin.key','utf8')).trim(),s=await(await fetch(base+'/api/v1/session',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token:key})})).json();
+const directory=process.argv[2];if(!directory)throw new Error('Explicit legacy directory required');const r=await fetch(base+'/api/v1/migration/legacy',{method:'POST',headers:{authorization:'Bearer '+s.accessToken,'content-type':'application/json'},body:JSON.stringify({directory})});console.log(r.status,await r.text());
