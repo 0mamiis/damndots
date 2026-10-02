@@ -31,3 +31,37 @@ test('profile and chat room describe a changed or removed icon identically, so t
     const after=await room();assert.equal(after.avatar_type,'default');assert.equal(after.avatar_url,null);assert.equal(after.avatar_manifest,null);
   } finally {await f.cleanup();}
 });
+
+test('copied native profiles resolve cached Dot, room and root IDs without changing an unrelated Dot',async()=>{
+ const f=await fixture({run:async()=>{throw new Error('No task expected');}});
+ try{
+  const native=f.auth.nativeTokens('copy-client').access_token,headers={authorization:'Bearer '+native};
+  const dot=(await f.request('POST','/dots',{name:'Null',avatarUrl:'file-service://file_abcd',avatarManifest:{pet_id:'null-signal'}})).json();
+  const other=(await f.request('POST','/dots',{name:'Other'})).json();
+  const link=await f.request('POST','/dots/'+dot.id+'/native-aliases',{dotId:'old-dot',threadId:'old-root',roomId:'old-room'});
+  assert.equal(link.statusCode,200);
+  const profile=await f.app.inject({method:'GET',url:'/backend-api/tbo/old-dot',headers});
+  assert.equal(profile.statusCode,200);assert.equal(profile.json().id,dot.id);assert.equal(profile.json().avatar_type,'codex-pet');
+  const room=await f.app.inject({method:'GET',url:'/backend-api/messaging/rooms/old-room',headers});
+  assert.equal(room.statusCode,200);assert.equal(room.json().id,dot.messagingRoomId);assert.equal(room.json().aeon_id,dot.id);
+  const root=await f.app.inject({method:'GET',url:'/backend-api/tbo/by-thread/old-root',headers});
+  assert.equal(root.statusCode,200);assert.equal(root.json().id,dot.id);
+  assert.equal((await f.app.inject({method:'GET',url:'/backend-api/tbo/old-dot'})).statusCode,401);
+  assert.equal((await f.request('POST','/dots/'+dot.id+'/native-aliases',{dotId:other.id})).statusCode,409);
+  assert.equal((await f.request('POST','/dots/'+other.id+'/native-aliases',{dotId:'old-dot',roomId:'unused-room'})).statusCode,409);
+  assert.equal(f.store.get('native_room_aliases','unused-room'),undefined,'failed alias registration is atomic');
+ }finally{await f.cleanup();}
+});
+test('avatar export serves only assets explicitly referenced by the Dot and requires admin authentication',async()=>{
+ const f=await fixture({run:async()=>{throw new Error('No task expected');}});
+ try{
+  const dot=(await f.request('POST','/dots',{name:'Null'})).json();
+  const bytes=Buffer.from([137,80,78,71]),asset=await f.blobs.put(bytes,'avatar.png','image/png');
+  const foreign=await f.blobs.put(Buffer.from('private'),'other.txt','text/plain');
+  await f.request('PATCH','/dots/'+dot.id,{avatarUrl:'file-service://'+asset.id,avatarManifest:{snapshot:{asset_pointer:'file-service://'+asset.id}}});
+  const r=await f.request('GET','/dots/'+dot.id+'/avatar-assets/'+asset.id);
+  assert.equal(r.statusCode,200);assert.deepEqual(r.rawPayload,bytes);
+  assert.equal((await f.request('GET','/dots/'+dot.id+'/avatar-assets/'+foreign.id)).statusCode,404);
+  assert.equal((await f.request('GET','/dots/'+dot.id+'/avatar-assets/'+asset.id,undefined,'wrong')).statusCode,401);
+ }finally{await f.cleanup();}
+});

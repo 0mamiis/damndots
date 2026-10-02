@@ -10,6 +10,8 @@ import { zstdDecompressSync, gunzipSync, brotliDecompressSync, inflateSync } fro
 import type { Settings, RecordStore, TaskRunner, RuntimeEvent, RunInput, RunnerHooks } from '@dots/contracts';
 import { loadConfig, type ServerConfig } from './config.js';
 import { SqliteStore } from './storage.js';
+import {registerNativeAliases} from './native-aliases.js';
+import {avatarFilePointers} from './avatar-copy.js';
 import { AuthService, bearer } from './auth.js';
 import { OrbitRuntime, AppServerRunner } from './runtime/index.js';
 import { IntegrationService } from './integrations/index.js';
@@ -120,6 +122,12 @@ export async function buildServer(options:{config?:ServerConfig;store?:RecordSto
     admin.post('/dots/:id/pause',async req=>runtime.pauseDot(idOf(req)));admin.post('/dots/:id/resume',async req=>runtime.resumeDot(idOf(req)));
     admin.get('/dots/:id/messages',async req=>list(runtime.listMessages(idOf(req))));
     admin.post('/dots/:id/messages',async req=>{const p=z.object({text:z.string().trim().min(1).max(200000),requestId:z.string().max(200).optional(),channel:z.string().optional(),computerId:z.string().nullable().optional(),attachments:taskSchema.shape.attachments}).parse(req.body);return runtime.submitMessage(idOf(req),{...p,attachments:p.attachments?.map(a=>blobs.forDot(a.id,idOf(req)))});});
+    admin.post('/dots/:id/native-aliases',async req=>registerNativeAliases(store,runtime.getDot(idOf(req)),z.object({dotId:z.string().min(1).max(100).optional(),threadId:z.string().min(1).max(100).optional(),roomId:z.string().min(1).max(100).optional()}).parse(req.body)));
+    admin.get('/dots/:id/avatar-assets/:fileId',async(req,reply)=>{
+      const fileId=(req.params as any).fileId,dot=runtime.getDot(idOf(req));
+      if(!avatarFilePointers(dot).includes('file-service://'+fileId))return reply.code(404).send({error:'Avatar asset not found'});
+      const asset=blobs.get(fileId);return reply.type(asset.mimeType).header('cache-control','no-store').send(await blobs.read(fileId));
+    });
     admin.post('/dots/:id/attachments',async req=>{runtime.getDot(idOf(req));const part=await req.file();if(!part)throw Object.assign(new Error('File required'),{statusCode:400});return blobs.put(await part.toBuffer(),part.filename,part.mimetype,idOf(req));});
     admin.get('/tasks',async req=>list(runtime.listTasks(filter(req) as any)));
     admin.post('/tasks',async req=>{const p=taskSchema.parse(req.body);tierFor(p.model??runtime.getDot(p.dotId).model,p.serviceTier,!!p.serviceTier);return runtime.createTask({...p,attachments:p.attachments?.map(a=>blobs.forDot(a.id,p.dotId))});});
