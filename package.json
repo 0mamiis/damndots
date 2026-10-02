@@ -27,7 +27,7 @@
   "devDependencies": {
     "typescript": "^5.9.3",
     "tsx": "^4.20.6",
-    "@types/node": "^24.7.0"
+    "@types/node": "^26.6.3"
   },
   "license": "MIT",
   "releaseTag": "v0.1"
