@@ -24,11 +24,38 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 New-Item -ItemType Directory -Force -Path $InstallRoot | Out-Null
 $handler = Join-Path $InstallRoot 'keep-desktop.ps1'
 Set-Content -Path $handler -Encoding ASCII -Value @'
-Start-Sleep -Seconds 2
 $e = Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-TerminalServices-LocalSessionManager/Operational'; Id = 24; StartTime = (Get-Date).AddSeconds(-30) } -MaxEvents 1 -ErrorAction SilentlyContinue
 if (-not $e) { exit 0 }
 $id = ([xml]$e.ToXml()).Event.UserData.EventXML.SessionID
-if ($id -match '^\d+$' -and [int]$id -gt 0) { & "$env:windir\System32\tscon.exe" $id /dest:console }
+if ($id -notmatch '^\d+$' -or [int]$id -le 0) { exit 0 }
+# An old disconnect event must never pull an active/reconnected RDP session back to
+# the console. Wait for reconnection to settle, then check the current WTS state.
+Start-Sleep -Seconds 15
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class DotsSessionState {
+  [DllImport("wtsapi32.dll", SetLastError=true)]
+  static extern bool WTSQuerySessionInformation(IntPtr server, int id, int infoClass, out IntPtr buffer, out int bytes);
+  [DllImport("wtsapi32.dll")]
+  static extern void WTSFreeMemory(IntPtr buffer);
+  public static int Read(int id) {
+    IntPtr buffer; int bytes;
+    if (!WTSQuerySessionInformation(IntPtr.Zero, id, 8, out buffer, out bytes)) return -1;
+    try { return bytes >= 4 ? Marshal.ReadInt32(buffer) : -1; }
+    finally { WTSFreeMemory(buffer); }
+  }
+}
+"@
+if ([DotsSessionState]::Read([int]$id) -ne 4) { exit 0 } # WTSDisconnected
+# A reconnect or a newer disconnect means this invocation is stale. Another event
+# task may handle the newer disconnect; this invocation must leave the session alone.
+$newer = Get-WinEvent -FilterHashtable @{ LogName = 'Microsoft-Windows-TerminalServices-LocalSessionManager/Operational'; Id = 21,23,24,25; StartTime = $e.TimeCreated } -MaxEvents 200 -ErrorAction SilentlyContinue |
+  Where-Object { $_.RecordId -gt $e.RecordId -and ([xml]$_.ToXml()).Event.UserData.EventXML.SessionID -eq $id }
+if ($newer) { exit 0 }
+if ([DotsSessionState]::Read([int]$id) -eq 4) {
+  & "$env:windir\System32\tscon.exe" $id /dest:console
+}
 '@
 
 $xml = @"
@@ -42,7 +69,7 @@ $xml = @"
   </Triggers>
   <Principals><Principal id="Author"><UserId>S-1-5-18</UserId><RunLevel>HighestAvailable</RunLevel></Principal></Principals>
   <Settings>
-    <MultipleInstancesPolicy>Parallel</MultipleInstancesPolicy>
+    <MultipleInstancesPolicy>Queue</MultipleInstancesPolicy>
     <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
     <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
     <ExecutionTimeLimit>PT2M</ExecutionTimeLimit>
@@ -57,9 +84,8 @@ Remove-Item $xmlPath -Force
 Write-Host 'Registered the DotsKeepDesktop task. Closing a Remote Desktop window now keeps the desktop alive for the Dot.'
 
 if ($Now) {
-  $line = (qwinsta | Select-String 'rdp-tcp#\d+' | Select-Object -First 1)
-  if (-not $line) { Write-Host 'No active Remote Desktop session found.'; return }
-  $id = ($line.Line -split '\s+' | Where-Object { $_ -match '^\d+$' } | Select-Object -First 1)
+  $id = [Diagnostics.Process]::GetCurrentProcess().SessionId
+  if ($id -le 0) { throw '-Now must be run inside the interactive session to transfer.' }
   Write-Host "Moving session $id to the console; this Remote Desktop window will disconnect."
   & "$env:windir\System32\tscon.exe" $id /dest:console
 }
