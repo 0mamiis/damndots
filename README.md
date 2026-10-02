@@ -34,13 +34,13 @@ Open [the dashboard](http://127.0.0.1:4320). Its login key is generated in `apps
 
 Once the services are ready, open Codex from your original shortcut. If Codex was already running during initial setup, close and reopen it once. `Start-Dots.cmd` does not open another Codex window or replace your shortcuts.
 
-The dashboard currently uses Turkish labels. **Sunucular** manages host profiles and computer mode. **Ayarlar** manages model and execution settings. A host change is refused while tasks are running, and it does not move conversations between backends. Each backend keeps its own data.
+The dashboard UI currently uses Turkish labels. Use its host-management section to configure backend connections and computer mode, and its settings section to select the model and execution policy. A host change is refused while tasks are running, and it does not move conversations between backends. Each backend keeps its own data.
 
 ## Pick a computer
 
-**Bağlanan PC** uses the connected Windows user's real primary screen. It streams a scaled 1280×800 view to Codex and controls native applications through Windows input. **Take over** blocks agent input; **Return control** gives it back. The Windows session must be unlocked. Secure UAC and login screens are not controlled.
+**Connected PC mode** uses the connected Windows user's real primary screen. It streams a scaled 1280×800 view to Codex and controls native applications through Windows input. **Take over** blocks agent input; **Return control** gives it back. The Windows session must be unlocked. Secure UAC and login screens are not controlled.
 
-**Ayrı Linux ortamı** uses WSL2. Enable WSL2 in Windows first, then use the dashboard's **Linux bilgisayarı kur** form. It can download Debian 13 or import your own Debian 13 rootfs from a local `.tar`, `.tar.gz`, `.tgz` or `.wsl` file with its SHA256. It refuses to overwrite an existing distribution. ISO installers are not supported.
+**Separate Linux mode** uses WSL2. Enable WSL2 in Windows first, then use the Linux setup form in the dashboard's host-management section. It can download Debian 13 or import your own Debian 13 rootfs from a local `.tar`, `.tar.gz`, `.tgz` or `.wsl` file with its SHA256. It refuses to overwrite an existing distribution. ISO installers are not supported.
 
 Linux setup installs a browser, terminal, file manager and desktop applications including Blender. It uses software rendering and takes several GB of disk space. See [computer modes](docs/COMPUTER-MODES.md) and [Linux setup](docs/LINUX-COMPUTER.md).
 
