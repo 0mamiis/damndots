@@ -154,6 +154,13 @@ $lines += 'cd /d "%DOTS_ROOT%\app"'
 $lines += ('"%DOTS_ROOT%\node\node.exe" "%DOTS_ROOT%\app\node_modules\tsx\dist\cli.mjs" apps\worker\src\index.ts --server http://127.0.0.1:{0} --root "%DOTS_ROOT%\workspace" --name "{1}" %*' -f $LocalPort, $env:COMPUTERNAME)
 Set-Content -Path $launcher -Value $lines -Encoding ASCII
 
+# The live computer view is a WebRTC stream answered by this browser. Without an
+# inbound UDP rule for it, the Windows firewall drops the viewer's connection.
+if ($chrome -and -not $NoAutostart) {
+  Remove-NetFirewallRule -DisplayName 'Dots worker WebRTC' -ErrorAction SilentlyContinue
+  New-NetFirewallRule -DisplayName 'Dots worker WebRTC' -Direction Inbound -Action Allow -Protocol UDP -Program $chrome -Profile Any | Out-Null
+}
+
 # Keeps the desktop alive when a Remote Desktop window is closed (see enable-keep-desktop.ps1).
 # 6. Autostart ----------------------------------------------------------------
 if (-not $NoAutostart) {
