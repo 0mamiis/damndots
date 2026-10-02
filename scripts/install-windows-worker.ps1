@@ -45,6 +45,7 @@ param(
   [string]$ModelBase,
   [string]$TaskPrefix = 'Dots',
   [string]$EnrollmentToken,
+  [switch]$AutoEnroll,
   [switch]$UsePortProxy,
   [switch]$SkipTailscale,
   [switch]$NoAutostart
@@ -237,6 +238,23 @@ if ($wantWorker) {
   }
 }
 
+# With -Role Both the server and its computer are the same machine, so the machine can enroll
+# itself: it reads its own admin key file, asks its own server for a single-use code and starts
+# the worker with it. Nothing is printed or sent anywhere.
+if ($Role -eq 'Both' -and -not $NoAutostart -and -not $EnrollmentToken -or $AutoEnroll) {
+  Step 'Waiting for the server, then registering this machine as its computer'
+  $up = $false
+  for ($i = 0; $i -lt 120 -and -not $up; $i++) {
+    try { $up = [bool](Invoke-RestMethod "http://127.0.0.1:$ServerPort/health" -TimeoutSec 2).ok } catch { Start-Sleep -Seconds 1 }
+  }
+  if (-not $up) { throw "The server did not answer on port $ServerPort. Check the DotsServer task and $(Join-Path $serverData '*')." }
+  $adminKey = (Get-Content (Join-Path $serverData 'admin.key') -Raw).Trim()
+  $session = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$ServerPort/api/v1/session" -ContentType 'application/json' -Body (@{ token = $adminKey } | ConvertTo-Json)
+  $enrollment = Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$ServerPort/api/v1/computers/enrollment" -Headers @{ authorization = "Bearer $($session.accessToken)" } -ContentType 'application/json' -Body '{}'
+  $EnrollmentToken = $enrollment.token
+  $adminKey = $null
+}
+
 Step 'Done.'
 if ($wantServer) {
   Write-Host "Server admin key file: $(Join-Path $serverData 'admin.key')  (read it on this machine only; do not paste it into chats)"
@@ -247,8 +265,8 @@ if ($wantServer) {
 }
 if ($wantWorker) {
   if ($EnrollmentToken) {
-    Write-Host 'Starting the worker with the one-time enrollment code...'
-    & $launcher --enrollment $EnrollmentToken
+    Write-Host 'Starting the worker with the one-time enrollment code (it keeps running after this window closes)...'
+    Start-Process -FilePath cmd.exe -ArgumentList '/c', ('"{0}" --enrollment {1}' -f $launcher, $EnrollmentToken) -WindowStyle Hidden
   } else {
     Write-Host 'Next: create an enrollment code in the Dots dashboard (Computers) and run:'
     Write-Host "  $launcher --enrollment <code>"
