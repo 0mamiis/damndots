@@ -9,7 +9,7 @@ Self-hosted Dots for the Codex desktop app. Run the backend on your PC or a serv
 - The original Windows Codex app, with its existing account and history. The launcher starts services; you open Codex yourself.
 - A HeroUI dashboard for model providers, Dots, tasks, outputs, memory, schedules, connections and voice settings.
 - Responses and Chat Completions providers, model discovery, reasoning settings and optional priority mode where supported.
-- Host profiles with encrypted credentials, connection tests and switching between a local backend and an HTTPS backend.
+- Host profiles with encrypted credentials, connection tests and switching between a local backend and a remote one over HTTPS or Tailscale. The computer can be this PC, a WSL Linux desktop or any computer registered on the backend.
 - Computer control using the connected Windows PC's real desktop, or a separate Debian desktop in WSL2. PC mode is the default.
 - Persistent tasks, cancellation, delegation, worker enrollment and revocation.
 - A voice pipeline using speech recognition, the selected Dot model and speech synthesis. The installed Codex voice can be used when the account and service support it.
@@ -35,6 +35,19 @@ Open [the dashboard](http://127.0.0.1:4320). Its login key is generated in `apps
 Once the services are ready, open Codex from your original shortcut. If Codex was already running during initial setup, close and reopen it once. `Start-Dots.cmd` does not open another Codex window or replace your shortcuts.
 
 The dashboard UI currently uses Turkish labels. Use its host-management section to configure backend connections and computer mode, and its settings section to select the model and execution policy. A host change is refused while tasks are running, and it does not move conversations between backends. Each backend keeps its own data.
+
+## Where things run
+
+Two choices are independent: where the **Dot** (the backend that holds its history, schedules and model access) runs, and which **computer** it controls.
+
+| Dot runs on | Computer | How |
+| --- | --- | --- |
+| This PC | This PC | The default. Nothing to set up. |
+| This PC | Another PC or a VPS | Install a worker on that machine (below), then set this host's computer to **Server computer**. |
+| A VPS or another PC | This PC | Add the remote backend under **Servers** and use it. Leave the computer on **Connected PC**. |
+| A VPS or another PC | A computer on that backend | Add the remote backend, attach a worker to it, and set the computer to **Server computer**. This PC only runs the local Codex proxy. |
+
+The local proxy that connects the Codex app to the active backend always runs on this PC; it is what makes the **Your dot** tab talk to your backend instead of OpenAI. The dashboard's **Servers** page shows the active layout, lists the computers registered on a backend, and shows whether the backend is reachable over Tailscale.
 
 ## Pick a computer
 
@@ -69,13 +82,24 @@ The image includes the desktop applications, but excludes build-machine accounts
 
 ### Connect another Windows computer
 
-A Dot can use a different Windows machine, for example a VPS you reach over Remote Desktop. The worker on that machine connects out to your Dots server, so the server never has to be on the public internet. The tested route is Tailscale:
+A Dot can use a different Windows machine, for example a VPS you reach over Remote Desktop. The worker connects out to the Dots backend, so the backend never has to be on the public internet. Plain HTTP is accepted for loopback and for Tailscale addresses, because Tailscale already encrypts that traffic; every other remote address must use HTTPS.
 
-1. On the server PC, join your tailnet and expose the backend port to it only: `tailscale serve --bg --tcp 9340 tcp://127.0.0.1:9340`.
-2. On the other machine, open an elevated PowerShell and run [scripts/install-windows-worker.ps1](scripts/install-windows-worker.ps1) with `-ServerAddress <server tailnet IP>`. It unpacks a private Node.js 24 under `C:\Dots`, installs the worker and Codex CLI, joins the tailnet, adds a loopback port proxy and registers a logon task. An existing Node.js on that machine is not touched.
-3. Create an enrollment code in the dashboard and start the worker once with `C:\Dots\start-worker.cmd --enrollment <code>`. Codes are single use and expire after 10 minutes.
+1. Make the backend reachable on your tailnet. In the dashboard open **Servers → Network access** and press **Open to tailnet**, or run `tailscale serve --bg --tcp 9340 tcp://127.0.0.1:9340`. The port is forwarded to the tailnet only, never to the internet.
+2. On the other machine, open an elevated PowerShell and run [scripts/install-windows-worker.ps1](scripts/install-windows-worker.ps1) with `-ServerAddress <tailnet IP>`. It unpacks a private Node.js 24 under `C:\Dots`, installs the worker and Codex CLI, joins the tailnet and registers a logon task. An existing Node.js on that machine is not touched. The dashboard shows this exact command, with the address filled in, next to a new enrollment code on the **Computers** page.
+3. Start the worker once with `C:\Dots\start-worker.cmd --enrollment <code>`. Codes are single use and expire after 10 minutes.
 
 The worker runs in connected PC mode by default and uses the screen of the Windows session it is started in. A Remote Desktop session loses its display when its window is minimized or closed, which breaks screen capture. The installer registers a `DotsKeepDesktop` task that moves a disconnected session to the console, so close the Remote Desktop window with X instead of minimizing it. [scripts/enable-keep-desktop.ps1](scripts/enable-keep-desktop.ps1) registers the task on an existing install (`-Now` also moves the current session). With full access enabled the Dot acts with that Windows user's permissions, so use a separate non-administrator user on any machine that hosts other services.
+
+### Run the backend on a Windows VPS
+
+The same installer can host the backend itself:
+
+```powershell
+.\install-windows-worker.ps1 -Role Server   # headless backend, started at boot, forwarded to the tailnet
+.\install-windows-worker.ps1 -Role Both     # backend plus a worker, so the Dot runs on and controls this machine
+```
+
+The backend runs from `C:\Dots\server-data` as a `DotsServer` task. It has no dashboard of its own: add it from the dashboard on your PC under **Servers → Add host** using `http://<tailnet IP>:9340` and the admin key from `C:\Dots\server-data\admin.key`. Read that file on the VPS and keep it out of chats and screenshots. The install folder is readable only by SYSTEM and Administrators. Configure a model provider on the new backend; it cannot reach a provider that only listens on your PC's loopback unless that provider is also exposed to the tailnet.
 
 ## Execution access
 

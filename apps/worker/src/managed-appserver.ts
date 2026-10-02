@@ -4,6 +4,7 @@ import { constants } from 'node:fs';
 import { delimiter, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
+import {allowsPlainHttp} from '@dots/contracts/network';
 
 export interface ManagedAppServerOptions {
   server:string;
@@ -25,7 +26,7 @@ function required(value:string|undefined,name:string):string {
 function loopback(host:string):boolean{return ['127.0.0.1','localhost','[::1]'].includes(host);}
 function serverBase(value:string):string {
   const url=new URL(required(value,'worker server'));
-  if(url.username||url.password||url.search||url.hash||!['http:','https:'].includes(url.protocol)||url.protocol==='http:'&&!loopback(url.hostname))throw new Error('Worker server requires HTTPS or loopback HTTP, without URL credentials');
+  if(url.username||url.password||url.search||url.hash||!['http:','https:'].includes(url.protocol)||url.protocol==='http:'&&!allowsPlainHttp(url.hostname))throw new Error('Worker server requires HTTPS, loopback HTTP or a Tailscale address, without URL credentials');
   return url.href.replace(/\/$/,'');
 }
 function suppliedUrl(value:string):string {

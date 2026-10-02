@@ -1,4 +1,5 @@
 "use client";
+import { RemoteInstall } from "./network-panel";
 import Image from "next/image";
 import { Button } from "@heroui/react";
 import { useContext, useEffect, useRef, useState } from "react";
@@ -155,6 +156,7 @@ export function ComputerPanel() {
               Kayıt anahtarının son kullanımı: {time(enrollment.expiresAt)}
             </p>
             <Code>{enrollment.command}</Code>
+            <RemoteInstall token={enrollment.token} />
             <Notice error={copyError} />
             <Actions>
               <Button
@@ -830,6 +832,7 @@ export function LegacyClientPairingPanel() {
             bilgisayarında kullan.
           </p>
           <Code>{enrollment.command}</Code>
+            <RemoteInstall token={enrollment.token} />
           <Notice error={copyError} />
           <Actions>
             <Button

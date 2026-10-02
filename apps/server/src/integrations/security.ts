@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { allowsPlainHttp } from '@dots/contracts/network';
 
 export class IntegrationError extends Error {
   constructor(message:string, public statusCode=400) { super(message); }
@@ -16,7 +17,7 @@ export function endpoint(value:unknown):string {
   try { url=new URL(raw); } catch { throw new IntegrationError('Invalid URL'); }
   if (url.username || url.password || !['http:','https:'].includes(url.protocol)) throw new IntegrationError('URL requires HTTP(S) without embedded credentials');
   for(const key of url.searchParams.keys())if(/token|secret|password|api.?key|authorization|credential/i.test(key))throw new IntegrationError('Provider URL credentials must be supplied as separate secrets or headers');
-  if (url.protocol==='http:' && !['127.0.0.1','localhost','[::1]'].includes(url.hostname)) throw new IntegrationError('Remote provider URLs require HTTPS');
+  if (url.protocol==='http:' && !allowsPlainHttp(url.hostname)) throw new IntegrationError('Remote provider URLs require HTTPS or a Tailscale address');
   return url.toString();
 }
 export class SecretVault {

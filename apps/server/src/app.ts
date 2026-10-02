@@ -26,6 +26,7 @@ import {SecretVault} from './integrations/security.js';
 import {gatewayKey} from './config.js';
 import {RpcClient} from './runtime/index.js';
 import {HostConnections} from './connections.js';
+import {NetworkService} from './network.js';
 import {ComputerTransport} from './computer-transport.js';
 import {ComputerSetup} from './computer-setup.js';
 /** Codex istek gövdesini zstd ile sıkıştırıp gönderir; JSON ayrıştırmadan önce açılır. */
@@ -41,7 +42,7 @@ const filter=(req:any)=>({dotId:typeof req.query.dotId==='string'?req.query.dotI
 const list=<T>(items:T[])=>({items,cursor:null});
 export async function buildServer(options:{config?:ServerConfig;store?:RecordStore;runner?:TaskRunner;logger?:boolean}={}){
   const config=options.config||loadConfig(),store=options.store||new SqliteStore(join(config.dataDir,'dots.sqlite'));
-  const connections=new HostConnections(store,new SecretVault(config.signingKey),{url:'http://127.0.0.1:'+config.port,adminKey:config.adminKey});
+  const network=new NetworkService({host:config.host,port:config.port}),connections=new HostConnections(store,new SecretVault(config.signingKey),{url:'http://127.0.0.1:'+config.port,adminKey:config.adminKey});
   const computerTransport=new ComputerTransport(store,new SecretVault(config.signingKey));
   const computerSetup=new ComputerSetup(store);
   await mkdir(join(config.dataDir,'workspaces'),{recursive:true});
@@ -90,11 +91,14 @@ export async function buildServer(options:{config?:ServerConfig;store?:RecordSto
     admin.post('/connections/setup-next',async()=>computerSetup.next());
     admin.post('/connections/setup/:id',async req=>computerSetup.finish(idOf(req),z.object({status:z.enum(['completed','failed']),error:z.string().max(2000).nullable()}).parse(req.body)));
     admin.post('/connections',async req=>connections.create(z.object({name:z.string().trim().min(1).max(120),serverUrl:z.string().max(2000),adminKey:z.string().min(1).max(4096)}).parse(req.body)));
-    admin.patch('/connections/:id',async req=>connections.update(idOf(req),z.object({name:z.string().trim().min(1).max(120).optional(),adminKey:z.string().min(1).max(4096).optional(),options:z.object({nativeEnabled:z.boolean().optional(),workerEnabled:z.boolean().optional(),linuxEnabled:z.boolean().optional(),gatewayPort:z.number().int().optional(),workerRoots:z.array(z.string().max(2000)).max(32).optional(),computerMode:z.enum(['pc','linux']).optional()}).optional()}).parse(req.body)));
+    admin.patch('/connections/:id',async req=>connections.update(idOf(req),z.object({name:z.string().trim().min(1).max(120).optional(),adminKey:z.string().min(1).max(4096).optional(),options:z.object({nativeEnabled:z.boolean().optional(),workerEnabled:z.boolean().optional(),linuxEnabled:z.boolean().optional(),gatewayPort:z.number().int().optional(),workerRoots:z.array(z.string().max(2000)).max(32).optional(),computerMode:z.enum(['pc','linux','host']).optional(),hostComputerId:z.string().max(100).nullable().optional()}).optional()}).parse(req.body)));
     admin.delete('/connections/:id',async req=>connections.remove(idOf(req)));
     admin.post('/connections/:id/test',async req=>connections.test(idOf(req)));
     admin.post('/connections/:id/activate',async req=>connections.activate(idOf(req)));
     admin.get('/connections/runtime-plan',async()=>connections.plan());
+    admin.get('/connections/:id/computers',async req=>connections.computers(idOf(req)));
+    admin.get('/network',async()=>network.status());
+    admin.post('/network/tailscale',async req=>network.setExposed(z.object({enabled:z.boolean()}).parse(req.body).enabled));
     admin.post('/connections/bootstrap',async req=>{connections.bootstrap(req.body as any);return {ok:true};});
     admin.post('/connections/heartbeat',async req=>connections.heartbeat(z.object({profileId:z.string(),revision:z.string(),nativeReady:z.boolean(),workerReady:z.boolean(),linuxReady:z.boolean(),error:z.string().nullable()}).parse(req.body)));
     admin.patch('/settings',async req=>{const patch=z.object({appServerUrl:z.string().url().optional(),model:z.string().nullable().optional(),reasoningEffort:z.string().optional(),serviceTier:z.string().nullable().optional(),activeProviderId:z.string().nullable().optional(),maxParallelTasks:z.number().int().min(1).max(32).optional(),proactiveEnabled:z.boolean().optional(),autoApproveExecution:z.boolean().optional(),defaultComputerId:z.string().nullable().optional()}).parse(req.body);if(patch.activeProviderId)providers.get(patch.activeProviderId);if(patch.defaultComputerId)workers.get(patch.defaultComputerId);const next:any={...settings(),...patch};next.serviceTier=tierFor(next.model,next.serviceTier,!!patch.serviceTier);store.put('settings',next);if(patch.autoApproveExecution!==undefined)runtime.applyExecutionApprovalSetting();external.publish('settings.updated',{});return next;});

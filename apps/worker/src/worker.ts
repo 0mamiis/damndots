@@ -1,4 +1,5 @@
 import { hostname, platform } from 'node:os';
+import {allowsPlainHttp} from '@dots/contracts/network';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type { RunInput, RunnerHooks, ToolDefinition } from '@dots/contracts';
@@ -27,7 +28,7 @@ export class ComputerWorker {
   readonly browser:BrowserExecutor;
   readonly stream:BrowserStream;
   constructor(readonly options:WorkerOptions){
-    const url=new URL(options.server);if(url.username||url.password||(!['localhost','127.0.0.1','[::1]'].includes(url.hostname)&&url.protocol!=='https:'))throw new Error('Remote server must use HTTPS or a loopback SSH tunnel');
+    const url=new URL(options.server);if(url.username||url.password||(url.protocol!=='https:'&&!allowsPlainHttp(url.hostname)))throw new Error('Remote server must use HTTPS, a loopback SSH tunnel or a Tailscale address');
     this.filesystem=new WorkspaceFilesystem(options.roots.map(r=>resolve(r)));
     if(options.desktop)this.desktop=this.linux=new LinuxDesktop(join(options.dataDir,'desktop'),options.roots[0]);
     else if(process.platform==='win32'&&options.computerMode!=='browser')this.desktop=new WindowsDesktop(join(options.dataDir,'desktop'),options.roots[0]);

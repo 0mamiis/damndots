@@ -1,11 +1,12 @@
 import {createServer,type Server} from 'node:http';
 import {Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
+import {allowsPlainHttp} from '@dots/contracts/network';
 /** Only worker routes cross this loopback relay. The selected host still authenticates every worker token. */
 export class WorkerRelay {
  private server?:Server;
  constructor(private target:string,private port=9352){}
- setTarget(value:string){const u=new URL(value);if(u.username||u.password||!['http:','https:'].includes(u.protocol)||u.protocol==='http:'&&!['localhost','127.0.0.1','[::1]'].includes(u.hostname))throw Error('Worker relay target requires HTTPS or loopback HTTP.');this.target=u.origin;}
+ setTarget(value:string){const u=new URL(value);if(u.username||u.password||!['http:','https:'].includes(u.protocol)||u.protocol==='http:'&&!allowsPlainHttp(u.hostname))throw Error('Worker relay target requires HTTPS, loopback HTTP or a Tailscale address.');this.target=u.origin;}
  async start(){this.setTarget(this.target);this.server=createServer((req,res)=>{void(async()=>{
   const u=new URL(req.url||'/','http://localhost');if(u.pathname!=='/health'&&!u.pathname.startsWith('/worker/')){res.writeHead(404).end();return;}
   const target=this.target,headers=new Headers();for(const [key,value] of Object.entries(req.headers))if(value&&!['host','connection','content-length','transfer-encoding','cookie','proxy-authorization'].includes(key))headers.set(key,Array.isArray(value)?value.join(','):value);
