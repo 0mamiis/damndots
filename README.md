@@ -44,6 +44,29 @@ The dashboard UI currently uses Turkish labels. Use its host-management section 
 
 Linux setup installs a browser, terminal, file manager and desktop applications including Blender. It uses software rendering and takes several GB of disk space. See [computer modes](docs/COMPUTER-MODES.md) and [Linux setup](docs/LINUX-COMPUTER.md).
 
+### Download the prepared Linux image
+
+The [Linux v0.1 release](https://github.com/0mamiis/damndots/releases/tag/linux-v0.1) provides the prepared Debian 13 desktop as a compressed WSL2 rootfs. The download is **3.64 GB (3.39 GiB)**, split into two parts below GitHub's per-file limit. The package manifest lists the exact size and SHA256 for each part and the assembled image. After import, the desktop uses roughly 13 GB of disk space before additional user data; the download size is not the installed size.
+
+From a current checkout, download and verify it with:
+
+```powershell
+node scripts/download-linux-image.mjs
+```
+
+The command downloads both parts, checks their hashes, joins them and verifies the combined archive. In the dashboard's custom Linux image form, enter the resulting file path and SHA256 printed by the command. Choose a new WSL distribution name; existing distributions are never overwritten.
+
+For command-line installation, keep the same checkout and set:
+
+```powershell
+$env:DOTS_LINUX_DISTRO = 'Damndots-Computer'
+$env:DOTS_LINUX_IMAGE = (Resolve-Path '.data/linux-computer/ready-image/damndots-linux-v0.1.tar.gz').Path
+$env:DOTS_LINUX_IMAGE_SHA256 = (Get-Content '.data/linux-computer/ready-image/manifest.json' -Raw | ConvertFrom-Json).sha256
+node scripts/setup-linux-computer.mjs
+```
+
+The image includes the desktop applications, but excludes build-machine accounts, browser profiles, credentials and work files. Setup generates this installation's SSH keys and synchronizes the worker from your checkout. Microsoft VS Code is downloaded from Microsoft during setup rather than redistributed in the image. The release includes the package inventory, license notices and corresponding-source retrieval information.
+
 ## Execution access
 
 Dot tasks default to Codex `danger-full-access` with `approvalPolicy: never`, including resumed threads and worker tasks. Commands run with the operating-system permissions of the worker user. Workspace roots identify starting directories and constrain file/output APIs; they are not a shell sandbox in full-access mode.
