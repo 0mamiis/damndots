@@ -1,10 +1,10 @@
 "use client";
 import {useEffect,useState} from 'react';
 import {Button} from '@heroui/react';
-import {Actions,Check,Disclose,Field,Form,FormGrid,Loading,Notice,PageHeading,Section,Status,str,time,SelectField} from './ui';
+import {Actions,Check,Code,Disclose,Field,Form,FormGrid,Loading,Notice,PageHeading,Section,Status,str,time,SelectField} from './ui';
 import {TransportPanel} from './transport-panel';
 import {ComputerSetupPanel} from './computer-setup-panel';
-import {NetworkPanel} from './network-panel';
+import {NetworkPanel,INSTALLER} from './network-panel';
 type Options={nativeEnabled:boolean;workerEnabled:boolean;linuxEnabled:boolean;gatewayPort:number;workerRoots:string[];computerMode?:'pc'|'linux'|'host';hostComputerId?:string|null};
 type HostComputer={id:string;name:string;platform:string;state:string;capabilities:string[]};
 type Host={id:string;name:string;serverUrl:string;local:boolean;hasKey:boolean;options:Options;verifiedAt:string|null;lastError:string|null};
@@ -39,6 +39,7 @@ export function ConnectionPanel(){
     <Check name="nativeEnabled" label="Ana Codex proxy’sini çalıştır" checked={host.options.nativeEnabled}/>
     <p className="text-sm text-muted">Gateway portunu değiştirirsen Codex’i kendin kapatıp yeniden aç. Linux worker için WSL bilgisayarının önceden kurulmuş olması gerekir.</p>
    </Form></Disclose>
+   {!host.local&&<HostTools host={host}/>}
    {!host.local&&state.activeId!==host.id&&<Disclose summary="Host kaydını kaldır"><Button size="sm" variant="danger" onPress={()=>void action(host.id,'delete')}>Bu hostu sil</Button></Disclose>}
   </Section>)}
   {state&&<Section title="Host ekle" description="Uzak damndots sunucusunun HTTPS veya Tailscale (http://100.x.y.z:9340) adresini ve yönetici anahtarını gir. Anahtar bu PC’nin backend’inde şifrelenerek saklanır."><Form submit="Hostu kaydet" onSubmit={async d=>{await request('','POST',{name:str(d,'name'),serverUrl:str(d,'serverUrl'),adminKey:str(d,'adminKey')});await refresh();}}><FormGrid><Field name="name" label="Host adı" required/><Field name="serverUrl" label="Backend adresi" placeholder="https://dots.example.com veya http://100.64.0.10:9340" required/></FormGrid><Field name="adminKey" label="Host yönetici anahtarı" type="password" required/></Form></Section>}
@@ -72,3 +73,26 @@ function HostComputerSelect({host}:{host:Host}){
   {error&&<p className="text-sm text-muted">Bilgisayar listesi alınamadı: {error}</p>}
  </>;
 }
+
+function HostTools({host}:{host:Host}){
+ const [enrollment,setEnrollment]=useState<{token:string;expiresAt:string}>(),[dots,setDots]=useState<{id:string;name:string}[]>([]),[dotId,setDotId]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
+ useEffect(()=>{let live=true;fetch('/api/connections/local-dots').then(async r=>{const v=await r.json();if(r.ok&&live){setDots(v.items||[]);setDotId(v.items?.[0]?.id||'');}}).catch(()=>{});return()=>{live=false;};},[]);
+ const call=async(path:string,body?:unknown)=>{const r=await fetch('/api/connections/'+host.id+path,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body||{})});const v=await r.json();if(!r.ok)throw Error(v.error||'İşlem başarısız.');return v;};
+ const run=async(task:()=>Promise<void>)=>{setBusy(true);setError('');setNotice('');try{await task();}catch(e){setError((e as Error).message);}finally{setBusy(false);}};
+ let address=host.serverUrl;try{const u=new URL(host.serverUrl);address=u.protocol==='https:'?u.origin:u.hostname+' -ServerPort '+(u.port||'80');}catch{}
+ const install='irm '+INSTALLER+' -OutFile $env:TEMP\\install-dots-worker.ps1; powershell -NoProfile -ExecutionPolicy Bypass -File $env:TEMP\\install-dots-worker.ps1 -ServerAddress '+address;
+ return <>
+  <Disclose summary="Bu sunucuya bilgisayar bağla"><div className="flex flex-col gap-3">
+   <p className="text-sm text-muted">Bağlanacak Windows PC veya VPS’te yönetici PowerShell aç ve sırayla çalıştır. Kayıt anahtarı tek kullanımlıktır ve 10 dakika geçerlidir.</p>
+   <Actions><Button size="sm" isDisabled={busy} onPress={()=>void run(async()=>{setEnrollment(await call('/enrollment'));})}>Kayıt anahtarı oluştur</Button></Actions>
+   {enrollment&&<><Code>{install}</Code><Code>{'C:\\Dots\\start-worker.cmd --enrollment '+enrollment.token}</Code><p className="text-xs text-muted">Son kullanım: {time(enrollment.expiresAt)}</p></>}
+  </div></Disclose>
+  <Disclose summary="Bir Dot’u bu sunucuya kopyala"><div className="flex flex-col gap-3">
+   <p className="text-sm text-muted">Dot’un adı, modeli ve talimatları bu sunucuda yeni bir Dot olarak oluşturulur. Avatar ve sohbet geçmişi taşınmaz. Aynı adlı Dot varsa dokunulmaz.</p>
+   {dots.length>0?<SelectField label="Bu PC’deki Dot" value={dotId} onChange={setDotId} options={dots.map(d=>({value:d.id,label:d.name}))}/>:<p className="text-sm text-muted">Bu PC’de kopyalanacak Dot bulunamadı.</p>}
+   <Actions><Button size="sm" isDisabled={busy||!dotId} onPress={()=>void run(async()=>{const v=await call('/copy-dot',{dotId});setNotice(v.existing?'Bu sunucuda “'+v.name+'” zaten var; değiştirilmedi.':'“'+v.name+'” bu sunucuya kopyalandı.');})}>Kopyala</Button></Actions>
+  </div></Disclose>
+  <Notice error={error}/>{notice&&<p role="status" className="text-sm text-success">{notice}</p>}
+ </>;
+}
+

@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {HostConnections,hostOrigin} from '../src/connections.js';
 import {SecretVault} from '../src/integrations/security.js';import {SqliteStore} from '../src/storage.js';
-function fixture(online=true){const store=new SqliteStore(':memory:'),calls:any[]=[];let registrations=0,blocked=false;
+function fixture(online=true,remoteDots:any[]|null=null){const store=new SqliteStore(':memory:'),calls:any[]=[];let registrations=0,blocked=false;
  const fetcher:typeof fetch=async(url,init)=>{assert.equal(init?.redirect,'error');const u=new URL(String(url)),body=init?.body?JSON.parse(String(init.body)):null;calls.push({origin:u.origin,path:u.pathname,body,method:init?.method});let value:any;
   if(u.pathname==='/health')value={ok:true,connectionProtocol:1,version:'0.1.0'};
   else if(u.pathname==='/api/v1/session')value={accessToken:'controlled-session',expiresAt:new Date(Date.now()+86400000).toISOString()};
@@ -10,7 +10,10 @@ function fixture(online=true){const store=new SqliteStore(':memory:'),calls:any[
   else if(u.pathname==='/client/enroll')value={clientId:'client-'+(++registrations),tokens:{access_token:'controlled-access',refresh_token:'controlled-refresh'}};
   else if(u.pathname==='/worker/register')value={computerId:'pc-'+(++registrations),token:'controlled-worker'};
   else if(u.pathname==='/api/v1/computers'&&init?.method!=='PATCH')value={items:[{id:'vps-1',name:'VPS',platform:'win32',state:online?'online':'offline',capabilities:['codex','browser'],roots:[],token:'must-not-leak'},{id:'vps-2',name:'Spare',platform:'win32',state:'offline',capabilities:['codex'],roots:[]}]};
-  else if(u.pathname==='/api/v1/dots'&&(init?.method||'GET')==='GET')value={items:[{id:'dot-1',computerId:'old-pc'},{id:'dot-2',computerId:null}]};
+  else if(u.pathname==='/api/v1/dots/dot-1')value={id:'dot-1',name:'Null',model:'m',reasoningEffort:'high',serviceTier:null,instructions:'be kind',avatarUrl:'file-service://secret',computerId:'old-pc'};
+  else if(u.pathname==='/api/v1/dots'&&init?.method==='POST')value={id:'remote-dot',name:body.name};
+  else if(u.pathname==='/api/v1/dots'&&u.origin==='http://127.0.0.1:9340')value={items:[{id:'dot-1',name:'Null'},{id:'dot-2',name:'Other'}]};
+  else if(u.pathname==='/api/v1/dots'&&(init?.method||'GET')==='GET')value={items:remoteDots??[{id:'dot-1',computerId:'old-pc'},{id:'dot-2',computerId:null}]};
   else value={ok:true};return new Response(JSON.stringify(value),{status:200,headers:{'content-type':'application/json'}});
  };
  const service=new HostConnections(store,new SecretVault(Buffer.alloc(32,9)),{url:'http://127.0.0.1:9340',adminKey:'controlled-local-key'},fetcher);
@@ -50,6 +53,25 @@ test('host computer mode honors an explicit choice and refuses a missing or unav
 test('host computer mode without any online computer is rejected before the active backend changes',async()=>{
  const f=fixture(false);try{const p=f.service.create({name:'VPS',serverUrl:'https://dots.example.com',adminKey:'controlled-key'});
   f.service.update(p.id,{options:{computerMode:'host'}});await assert.rejects(f.service.activate(p.id),/çevrimiçi bir bilgisayar yok/);assert.equal(f.service.status().activeId,'local');
+ }finally{f.store.close();}
+});
+
+
+
+test('a host can issue a computer enrollment and receive a copy of a local Dot definition without its avatar or history',async()=>{
+ const f=fixture();try{const p=f.service.create({name:'VPS',serverUrl:'https://dots.example.com',adminKey:'controlled-key'});
+  const e=await f.service.enrollment(p.id);assert.equal(e.token,'controlled-enrollment');assert.equal(e.serverUrl,'https://dots.example.com');
+  assert.deepEqual((await f.service.localDots()).items,[{id:'dot-1',name:'Null'},{id:'dot-2',name:'Other'}]);
+  const copy=await f.service.copyDot(p.id,'dot-1');assert.deepEqual(copy,{id:'remote-dot',name:'Null',existing:false});
+  const created=f.calls.find(c=>c.origin==='https://dots.example.com'&&c.path==='/api/v1/dots'&&c.method==='POST');assert.deepEqual(created!.body,{name:'Null',model:'m',reasoningEffort:'high',serviceTier:null,instructions:'be kind'});
+  assert(!JSON.stringify(created).includes('avatar'));
+  await assert.rejects(f.service.copyDot('local','dot-1'),/zaten yerel/);
+ }finally{f.store.close();}
+});
+test('copying a Dot never overwrites a Dot with the same name on the target backend',async()=>{
+ const f=fixture(true,[{id:'remote-existing',name:'Null',computerId:null}]);try{const p=f.service.create({name:'VPS',serverUrl:'https://dots.example.com',adminKey:'controlled-key'});
+  const copy=await f.service.copyDot(p.id,'dot-1');assert.deepEqual(copy,{id:'remote-existing',name:'Null',existing:true});
+  assert(!f.calls.some(c=>c.origin==='https://dots.example.com'&&c.path==='/api/v1/dots'&&c.method==='POST'));
  }finally{f.store.close();}
 });
 
