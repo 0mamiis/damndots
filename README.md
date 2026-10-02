@@ -101,7 +101,7 @@ The same installer can host the backend itself:
 
 The backend runs from `C:\Dots\server-data` as a `DotsServer` task. It has no dashboard of its own: add it from the dashboard on your PC under **Servers → Add host** using `http://<tailnet IP>:9340` and the admin key from `C:\Dots\server-data\admin.key`. Read that file on the VPS and keep it out of chats and screenshots. The install folder is readable only by SYSTEM and Administrators. Configure a model provider on the new backend; it cannot reach a provider that only listens on your PC's loopback unless that provider is also exposed to the tailnet.
 
-Once the host is added, its card on **Servers** can issue a computer enrollment code together with the install command for the machine to attach (run it on the VPS itself for a Dot that runs on and controls the VPS), and can copy a Dot's name, model and instructions to the new backend. Avatars and chat history are not copied. Then press **Use this host** with the computer mode set to **Sunucuya bağlı bilgisayar** (server computer).
+Once the host is added, its card on **Servers** can issue a computer enrollment code together with the install command for the machine to attach (run it on the VPS itself for a Dot that runs on and controls the VPS), and can copy a Dot's name, model, instructions and avatar files to the new backend. Cached profile, room and root identifiers remain linked to the copied Dot. Chat history is not copied. Existing profile settings are preserved; a missing avatar from an earlier copy can be restored. Then press **Use this host** with the computer mode set to **Sunucuya bağlı bilgisayar** (server computer).
 
 ## Execution access
 

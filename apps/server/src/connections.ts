@@ -2,6 +2,7 @@ import {randomUUID} from 'node:crypto';
 import {allowsPlainHttp} from '@dots/contracts/network';
 import type {RecordStore} from '@dots/contracts';
 import {SecretVault} from './integrations/security.js';
+import {avatarFilePointers,rewriteAvatarPointers} from './avatar-copy.js';
 
 export interface HostOptions {nativeEnabled:boolean;workerEnabled:boolean;linuxEnabled:boolean;gatewayPort:number;workerRoots:string[];computerMode?:'pc'|'linux'|'host';hostComputerId?:string|null;}
 interface HostProfile {id:string;name:string;serverUrl:string;local:boolean;encrypted:string;verifiedAt:string|null;lastError:string|null;createdAt:string;updatedAt:string;}
@@ -41,14 +42,30 @@ export class HostConnections {
  async test(id:string){const p=this.profile(id);try{const health=await this.request(p,'/health');if(health.ok!==true||health.connectionProtocol!==1)throw Error('Host damndots bağlantı protokolünü desteklemiyor. Sunucuyu v0.1 ile güncelleyin.');await this.login(p);this.save({...p,verifiedAt:new Date().toISOString(),lastError:null});return {ok:true,version:health.version,serverUrl:p.serverUrl};}catch(error){const message=(error as Error).message;this.save({...p,lastError:message});throw error;}}
  async enrollment(id:string){const p=this.profile(id),s=await this.login(p),e=await this.request(p,'/api/v1/computers/enrollment',s.accessToken,{});if(typeof e.token!=='string')throw Object.assign(Error('Host kayıt anahtarı döndürmedi.'),{statusCode:502});return {token:e.token,expiresAt:e.expiresAt,serverUrl:p.serverUrl};}
  async localDots(){const p=this.profile('local'),s=await this.login(p),r=await this.request(p,'/api/v1/dots',s.accessToken);return {items:(r.items||[]).map((d:any)=>({id:d.id,name:d.name}))};}
- /** Copies a Dot's definition (name, model, instructions) to another backend. Avatar and history stay behind. */
+ /** Copy the profile plus its avatar files, and link old native IDs explicitly. Conversation history stays behind. */
  async copyDot(id:string,dotId:string){
   if(id==='local')throw Object.assign(Error('Dot zaten yerel hostta.'),{statusCode:400});
   const local=this.profile('local'),target=this.profile(id),ls=await this.login(local),dot=await this.request(local,'/api/v1/dots/'+encodeURIComponent(dotId),ls.accessToken);
   const ts=await this.login(target),existing=await this.request(target,'/api/v1/dots',ts.accessToken),same=(existing.items||[]).find((d:any)=>d.name===dot.name);
-  if(same)return {id:same.id,name:same.name,existing:true};
-  const created=await this.request(target,'/api/v1/dots',ts.accessToken,{name:dot.name,model:dot.model??null,reasoningEffort:dot.reasoningEffort??null,serviceTier:dot.serviceTier??null,instructions:dot.instructions??''});
-  return {id:created.id,name:created.name||dot.name,existing:false};
+  const created=same||await this.request(target,'/api/v1/dots',ts.accessToken,{name:dot.name,model:dot.model??null,reasoningEffort:dot.reasoningEffort??null,serviceTier:dot.serviceTier??null,instructions:dot.instructions??''});
+  // Existing customization wins. A previous definition-only copy can recover its missing icon.
+  if(!created.avatarUrl&&!created.avatarManifest&&(dot.avatarUrl||dot.avatarManifest)){
+   const pointers=new Map<string,string>();
+   for(const pointer of avatarFilePointers(dot)){
+    const fileId=pointer.slice('file-service://'.length);
+    const response=await this.fetcher(local.serverUrl+'/api/v1/dots/'+encodeURIComponent(dotId)+'/avatar-assets/'+encodeURIComponent(fileId),{headers:{authorization:'Bearer '+ls.accessToken},redirect:'error',signal:AbortSignal.timeout(15000)});
+    if(!response.ok)throw Object.assign(Error('Dot avatar dosyası okunamadı ('+response.status+').'),{statusCode:502});
+    const bytes=await response.arrayBuffer();if(bytes.byteLength>32*1024*1024)throw Object.assign(Error('Dot avatar dosyası çok büyük.'),{statusCode:413});
+    const form=new FormData();form.append('file',new Blob([bytes],{type:response.headers.get('content-type')||'image/png'}),'avatar.png');
+    const uploaded=await this.fetcher(target.serverUrl+'/api/v1/dots/'+encodeURIComponent(created.id)+'/attachments',{method:'POST',headers:{authorization:'Bearer '+ts.accessToken},body:form,redirect:'error',signal:AbortSignal.timeout(15000)});
+    if(!uploaded.ok)throw Object.assign(Error('Dot avatar dosyası yüklenemedi ('+uploaded.status+').'),{statusCode:502});
+    const asset=await uploaded.json();if(typeof asset.id!=='string'||!/^file_[a-f0-9]+$/.test(asset.id))throw Object.assign(Error('Host geçerli avatar dosyası döndürmedi.'),{statusCode:502});
+    pointers.set(pointer,'file-service://'+asset.id);
+   }
+   await this.request(target,'/api/v1/dots/'+created.id,ts.accessToken,{avatarUrl:rewriteAvatarPointers(dot.avatarUrl,pointers),avatarManifest:rewriteAvatarPointers(dot.avatarManifest,pointers)},'PATCH');
+  }
+  await this.request(target,'/api/v1/dots/'+created.id+'/native-aliases',ts.accessToken,{dotId:dot.id,...dot.rootThreadId?{threadId:dot.rootThreadId}:{},...dot.messagingRoomId?{roomId:dot.messagingRoomId}:{}});
+  return {id:created.id,name:created.name||dot.name,existing:!!same};
  }
  async computers(id:string){const p=this.profile(id),s=await this.login(p),r=await this.request(p,'/api/v1/computers',s.accessToken);return {items:(r.items||[]).map((c:any)=>({id:c.id,name:c.name,platform:c.platform,state:c.state,capabilities:c.capabilities||[],roots:c.roots||[],lastSeenAt:c.lastSeenAt||null}))};}
  bootstrap(input:{options:HostOptions;client?:any;windows?:any;linux?:any}){

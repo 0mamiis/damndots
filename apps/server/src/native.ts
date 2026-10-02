@@ -29,6 +29,7 @@ import type {ProviderService} from './providers.js';
 import {nativeAutomation,registerNativeAutomations} from './native-automations.js';
 import {routeNativeRpc} from './rpc-routing.js';
 import {selectNativePrimary,setNativePrimary,visibleNativeDots,type NativePrimary} from './native-selection.js';
+import {resolveNativeAlias} from './native-aliases.js';
 export interface NativeContext {config:ServerConfig;providers:ProviderService;store:RecordStore;runtime:OrbitRuntime;auth:AuthService;blobs:BlobStore;workers:WorkerBroker;integrations:IntegrationService;external:ExternalEvents;}
 const primary=(ctx:NativeContext)=>selectNativePrimary(ctx.store,ctx.runtime.listDots());
 /** Profil ve sohbet odası aynı ikon bilgisini taşımalı; uygulama oda verisiyle profil önbelleğini günceller. */
@@ -60,7 +61,12 @@ export async function registerNative(app:FastifyInstance,ctx:NativeContext){
   });
   const requireNative=async(req:any,reply:any)=>{const p=req.url.split('?')[0];let c=auth.verify(bearer(req.headers.authorization),['native']);if(c?.refresh)c=undefined;
     if(!c&&p.includes('/files/content/')){const token=req.query.t;const file=auth.verify(token,['file']);if(file?.fileId===req.params.id)c=file;}
-    if(!c)return reply.code(401).send({detail:'unauthorized'});req.nativeClientId=c.sub;};
+    if(!c)return reply.code(401).send({detail:'unauthorized'});req.nativeClientId=c.sub;
+    const route=req.routeOptions.url||'';
+    if(req.params?.id&&(route.startsWith('/backend-api/tbo/:id')||route.startsWith('/backend-api/cloud-aeons/:id'))){
+      const alias=resolveNativeAlias(store,'native_dot_aliases',req.params.id);if(alias)req.params.id=alias.id;
+    }
+  };
   const requireWs=async(req:any,reply:any)=>{const c=auth.verify(bearer(req.headers.authorization),['native'])||(req.url.startsWith('/native/pubsub')?auth.verify(req.query.t,['pubsub']):undefined);if(!c||c.refresh)return reply.code(401).send({error:'Native authentication required'});};
   app.get('/native/pubsub',{websocket:true,preValidation:requireWs},ws=>{const c={ws,topics:new Set<string>()};sockets.add(c);ws.on('message',bytes=>{let arr:any;try{arr=JSON.parse(bytes.toString());}catch{return;}if(!Array.isArray(arr))return;const replies=[];for(const item of arr.slice(0,100)){const cmd=item.command;if(!cmd)continue;if(cmd.type==='subscribe'){c.topics.add(cmd.topic_id);replies.push({id:item.id,reply:{type:'subscribe',topic_id:cmd.topic_id,recovered:false,last_offset:String(offset)}});}else{if(cmd.type==='unsubscribe')c.topics.delete(cmd.topic_id);replies.push({id:item.id,reply:{}});}}ws.send(JSON.stringify(replies));});ws.on('close',()=>sockets.delete(c));});
   app.get('/native/app-server',{websocket:true,preValidation:requireWs},(socket,req)=>{
@@ -141,7 +147,7 @@ export async function registerNative(app:FastifyInstance,ctx:NativeContext){
     api.get('/tbo/:id/activity/stream',async(req,reply)=>{const dotId=(req.params as any).id;reply.hijack();reply.raw.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache','connection':'keep-alive'});reply.raw.write('event: snapshot\ndata: '+JSON.stringify({data:nativeActivity(ctx,dotId),next_cursor:null})+'\n\n');const off=runtime.subscribe(e=>{if(e.dotId===dotId&&e.type==='task.updated')reply.raw.write('event: snapshot\ndata: '+JSON.stringify({data:nativeActivity(ctx,dotId),next_cursor:null})+'\n\n');});const timer=setInterval(()=>reply.raw.write(': heartbeat\n\n'),15000);reply.raw.on('close',()=>{off();clearInterval(timer);});});
     api.get('/tbo/:id/automations',async req=>({items:runtime.listSchedules((req.params as any).id).map(s=>nativeAutomation(ctx,s)),cursor:null}));
     api.get('/celsius/ws/user',async req=>({websocket_url:'wss://ws.chatgpt.com/celsius/ws?t='+auth.issue('pubsub',(req as any).nativeClientId,600)}));
-    const room=(id:string)=>{const d=runtime.listDots().find(d=>d.messagingRoomId===id);if(!d)throw Object.assign(new Error('Room not found'),{statusCode:404});return d;};
+    const room=(id:string)=>{const d=runtime.listDots().find(d=>d.messagingRoomId===id)||resolveNativeAlias(store,'native_room_aliases',id);if(!d)throw Object.assign(new Error('Room not found'),{statusCode:404});return d;};
     api.get('/messaging/rooms/:id',async req=>{const d=room((req.params as any).id),members=[{id:'member_user_'+d.id,account_user_id:'user_local_orbit',name:'You',username:'you',avatar_url:null,avatar_file_id:null},{id:'member_aeon_'+d.id,account_user_id:'aeonuser_'+d.id,aeon_id:d.id,name:d.name,username:'dot',...avatarFields(d),avatar_file_id:null}];return {id:d.messagingRoomId,type:'DM',app_source:'chatgpt:messaging',aeon_id:d.id,members,member_profile_snapshots:members.map(m=>({account_user_id:m.account_user_id,name:m.name,username:m.username})),latest_messages:runtime.listMessages(d.id).slice(-20).map(m=>nativeMessage(m,d)),last_read_at:null,read_receipts:[],created_at:d.createdAt,updated_at:d.updatedAt};});
     api.get('/messaging/rooms/:id/messages',async req=>{const d=room((req.params as any).id);return {items:runtime.listMessages(d.id).map(m=>nativeMessage(m,d,runtime.listOutputs({dotId:d.id}))),prev_cursor:null,next_cursor:null};});
     api.post('/messaging/rooms/:id/files',async req=>{const d=room((req.params as any).id),part=await req.file();if(!part)throw Object.assign(new Error('File required'),{statusCode:400});const a=await blobs.put(await part.toBuffer(),part.filename,part.mimetype,d.id);return nativeAttachment(a);});

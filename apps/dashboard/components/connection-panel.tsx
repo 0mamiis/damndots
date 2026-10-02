@@ -88,7 +88,7 @@ function HostTools({host}:{host:Host}){
    {enrollment&&<><Code>{install}</Code><Code>{'C:\\Dots\\start-worker.cmd --enrollment '+enrollment.token}</Code><p className="text-xs text-muted">Son kullanım: {time(enrollment.expiresAt)}</p></>}
   </div></Disclose>
   <Disclose summary="Bir Dot’u bu sunucuya kopyala"><div className="flex flex-col gap-3">
-   <p className="text-sm text-muted">Dot’un adı, modeli ve talimatları bu sunucuda yeni bir Dot olarak oluşturulur. Avatar ve sohbet geçmişi taşınmaz. Aynı adlı Dot varsa dokunulmaz.</p>
+   <p className="text-sm text-muted">Dot’un adı, modeli, talimatları ve avatarı bu sunucuya kopyalanır. Sohbet geçmişi taşınmaz. Aynı adlı Dot’un ayarları korunur; önceki kopyada eksik kalan avatar tamamlanır.</p>
    {dots.length>0?<SelectField label="Bu PC’deki Dot" value={dotId} onChange={setDotId} options={dots.map(d=>({value:d.id,label:d.name}))}/>:<p className="text-sm text-muted">Bu PC’de kopyalanacak Dot bulunamadı.</p>}
    <Actions><Button size="sm" isDisabled={busy||!dotId} onPress={()=>void run(async()=>{const v=await call('/copy-dot',{dotId});setNotice(v.existing?'Bu sunucuda “'+v.name+'” zaten var; değiştirilmedi.':'“'+v.name+'” bu sunucuya kopyalandı.');})}>Kopyala</Button></Actions>
   </div></Disclose>
