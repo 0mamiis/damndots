@@ -1,5 +1,13 @@
 # Kabul ve doğrulama kapsamı
 
+## v0.2 Codex sohbet koordinasyonu
+
+2026-10-03'te Windows MSIX 26.930.3930.0 / CLI 0.160.0 üzerinde PC ve Windows backend için gerçek sohbet açma, takip mesajı, yanıt okuma ve Dot gönderen kimliği kontrol edildi. Başlatan istemci bağlantısı kesildikten sonra backend görevinin tamamlandığı doğrulandı.
+
+Yeni yayın kaynakları kişisel adres/SSH adı içermez. Ana Codex sohbetleri Dot izin bağlamını kullanır; kısıtlı mod testleri tam erişime yükseltilmediğini, sonraki izin isteğinin reddedilebildiğini ve aktif sohbete güvenli olmayan steering yapılmadığını doğrular. Yerel Codex gönderimi kısıtlı modda açık dispatch onayı ister. Gönderen kimliği gerçek Dot kaydından gelir.
+
+Windows/Linux GitHub CI sonuçları ilgili PR ve release notlarında belirtilir. Linux'taki otomatik protokol testleri, Linux'ta gerçek native relay veya bütün masaüstü sürümlerinin doğrulandığı anlamına gelmez. Köprüleri kaldırma ve kurulum seçenekleri için [sohbet yönetimi belgesi](DOT-CODEX-CHAT-MANAGEMENT.md) geçerlidir.
+
 ## Yerel kaynak kontrolleri
 
 2026-10-02'de Node.js 24 ile temiz kaynak paketinde Windows'ta **137 test geçti, 1 test atlandı**: client 13, dashboard 6, server 104, worker 12, kaynak paketi 2. Debian'da **136 test geçti, 2 test atlandı**; Windows'a özel yedekleme testi bu platformda çalışmaz. Her iki platformda da resmî Codex bilgisayar istemcisi testi özel istemci dosyaları verilmediği için açıkça atlanır; bu dosyalar dağıtılmaz.

@@ -5,12 +5,18 @@ import type { WorkerBroker } from './workers.js';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import {dotBrowserSession} from './browser-session.js';
 import type {BlobStore} from './blobs.js';
+import {MainCodex,MAIN_CODEX_TOOL_NAMES} from './main-codex.js';
+import {LocalCodex,LOCAL_CODEX_TOOL_NAMES} from './local-codex.js';
+import {codexSender} from './codex-sender.js';
 export const toolContext=new AsyncLocalStorage<RunInput>();
 const schema=(properties:Record<string,unknown>,required:string[]=[])=>({type:'object',properties,required,additionalProperties:false});
 const str={type:'string'};
 export class DotTools {
-  static VERSION=5;
-  constructor(private runtime:()=>OrbitRuntime,private integrations:()=>IntegrationService,private workers:WorkerBroker,private store:RecordStore,private blobs?:BlobStore){}
+  static VERSION=8;
+  private codex:MainCodex;
+  private localCodex=new LocalCodex();
+  constructor(private runtime:()=>OrbitRuntime,private integrations:()=>IntegrationService,private workers:WorkerBroker,private store:RecordStore,private blobs?:BlobStore){this.codex=new MainCodex(undefined,store);}
+  close(){this.codex.close();}
   async list(input:RunInput):Promise<ToolDefinition[]>{
     const tools:ToolDefinition[]=[
       {name:'dot_memory_list',description:'Read the dot’s persistent notes.',inputSchema:schema({})},
@@ -24,6 +30,8 @@ export class DotTools {
       {name:'dot_computers_list',description:'List actual connected computers and supported operations.',inputSchema:schema({})},
       {name:'dot_browser_action',description:'Use this Dot’s browser, shared with its computer panel. Omit sessionId to reuse the current session. Respects user takeover. Start with open before other actions.',inputSchema:schema({computerId:str,sessionId:str,action:{type:'string',enum:['open','navigate','click','type','press','screenshot','close']},url:str,x:{type:'number'},y:{type:'number'},text:str,key:str},['computerId','action'])},
       {name:'dot_desktop_action',description:'Control the selected computer’s actual desktop: connected PC or isolated Linux. Screenshot coordinates cover the complete scaled 1280x800 primary display. Use list for environment/apps, launch for an app, screenshot/click/type/press for native desktop control. Respects user takeover. In PC mode this controls the owner’s real screen.',inputSchema:schema({computerId:str,action:{type:'string',enum:['list','launch','screenshot','click','type','press']},app:str,x:{type:'number'},y:{type:'number'},button:{type:'number'},text:str,key:str},['computerId','action'])},
+      ...this.codex.definitions(),
+      ...this.localCodex.definitions(),
     ];
     this.store.put('task_tools',{id:input.task.id,tools});return tools;
   }
@@ -31,6 +39,14 @@ export class DotTools {
     signal.throwIfAborted();const runtime=this.runtime(),dotId=input.dot.id;
     if(input.task.source==='proactive'&&!['dot_memory_list','dot_memory_save','dot_tasks_list','dot_computers_list','dot_apps_list','dot_app_call'].includes(name))throw new Error('Proactive research may only read sources and save private notes');
     return toolContext.run(input,async()=>{
+      if(MAIN_CODEX_TOOL_NAMES.has(name))return this.codex.call(name,args,signal,codexSender(this.store,input),{fullAccess:input.fullAccess===true,onApproval:request=>runtime.requestApproval(input.task.id,request),onUserInput:request=>runtime.requestUserInput(input.task.id,request)});
+      if(LOCAL_CODEX_TOOL_NAMES.has(name)){
+        if(['local_codex_thread_start','local_codex_thread_send'].includes(name)&&input.fullAccess!==true){
+          const approved=await runtime.requestApproval(input.task.id,{kind:'codex_chat_dispatch',title:'Send this request to local Codex?',detail:'The target chat follows the Codex desktop permission setting. '+JSON.stringify(args),request:{tool:name,arguments:args}});
+          if(!approved)throw new Error('Local Codex dispatch was not approved');
+        }
+        return this.localCodex.call(name,args,signal,codexSender(this.store,input));
+      }
       switch(name){
         case'dot_memory_list':return runtime.listMemories(dotId);
         case'dot_memory_save':return runtime.createMemory({dotId,title:args.title,content:args.content,tags:args.tags||[]});

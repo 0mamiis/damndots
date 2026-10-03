@@ -19,7 +19,7 @@ GitHub Actions Windows ve Ubuntu'da aynı kontrolleri yapacak biçimde hazırlan
 
 `release:check` dağıtılacak kaynakları tarar. Repo bir Git checkout'ıysa indekste/commit'te bulunan dosyaları da kontrol eder; `.gitignore` daha önce takip edilen sırları kaldırmaz. Eski commit geçmişini otomatik taramaz. Daha önce bir sır yayınlandıysa sadece silmek yetmez: ilgili anahtarı iptal edin ve geçmişi ayrıca inceleyin.
 
-`release:source` `.data/releases/damndots-v0.1-source.zip` ve yanında dosya hashlerini içeren `manifest.json` üretir. Tek dosya adı güncellenir; tarihli kopyalar birikmez. Paket otomatik olarak GitHub'a yüklenmez.
+`release:source` paket metadata'sındaki `releaseTag` ile adlandırılmış kaynak ZIP'i ve dosya hashlerini içeren `manifest.json` üretir. v0.2.0 için yol `.data/releases/damndots-v0.2.0-source.zip` olur. Paket otomatik olarak GitHub'a yüklenmez. Yeni bir sürüm için yeni tag ve paket kullanın; önceki tag'in ZIP içeriğini değiştirmeyin.
 
 ## İlk repo
 

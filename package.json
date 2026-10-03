@@ -1,7 +1,7 @@
 {
   "name": "damndots",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "workspaces": [
     "apps/*",
@@ -30,5 +30,5 @@
     "@types/node": "^24.7.0"
   },
   "license": "MIT",
-  "releaseTag": "v0.1"
+  "releaseTag": "v0.2.0"
 }
