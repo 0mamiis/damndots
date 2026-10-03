@@ -50,4 +50,3 @@ export class NativeThreadRegistry {
   this.pending.set(id,pending);return pending;
  }
 }
-

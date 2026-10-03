@@ -58,4 +58,3 @@ test('concurrent requests for a proven alias share one ownership lookup',async()
  assert.deepEqual(await Promise.all([registry.owns('alias'),registry.owns('alias')]),[true,true]);
  assert.equal(calls,1);
 });
-
