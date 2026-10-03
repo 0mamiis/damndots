@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { access, chmod, mkdir, readdir, realpath, rename, stat, writeFile } from 'node:fs/promises';
-import { constants } from 'node:fs';
+import { constants, existsSync } from 'node:fs';
 import { delimiter, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -84,8 +84,9 @@ async function resolveCli(configured:string|undefined,env:NodeJS.ProcessEnv):Pro
 /** Codex uygulaması CLI'yi kendi klasörüne kurar; kullanıcının PATH'inde olmayabilir. */
 async function installedCodex(env:NodeJS.ProcessEnv):Promise<string|undefined> {
   const base=env.LOCALAPPDATA?join(env.LOCALAPPDATA,'OpenAI','Codex','bin'):undefined;if(!base)return;
-  let best:{file:string;time:number}|undefined;
-  try{for(const name of await readdir(base)){const file=join(base,name,process.platform==='win32'?'codex.exe':'codex');try{const time=(await stat(file)).mtimeMs;if(!best||time>best.time)best={file,time};}catch{}}}catch{}
+  const isWin=process.platform==='win32';
+  let best:{file:string;time:number;hasHost:boolean}|undefined;
+  try{for(const name of await readdir(base)){const file=join(base,name,isWin?'codex.exe':'codex'),host=join(base,name,isWin?'codex-code-mode-host.exe':'codex-code-mode-host');try{if(existsSync(file)){const hasHost=!isWin||existsSync(host),time=(await stat(file)).mtimeMs;if(!best||(hasHost&&!best.hasHost)||((hasHost===best.hasHost)&&time>best.time))best={file,time,hasHost};}}catch{}}}catch{}
   return best?.file;
 }
 function configText(base:string,model:string):string {

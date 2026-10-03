@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { resolve, join } from 'node:path';
+import { existsSync } from 'node:fs';
 import { mkdir, writeFile, readdir, stat } from 'node:fs/promises';
 import { appServerProvider } from './appserver-config.js';
 const dir=resolve(process.env.DOTS_CODEX_HOME||'.data/appserver');await mkdir(dir,{recursive:true});
@@ -12,8 +13,9 @@ const env={...process.env,CODEX_HOME:dir,...gatewaySecret?{DOTS_MODEL_API_KEY:ga
 async function codexCli():Promise<string>{
   if(process.env.DOTS_CODEX_CLI)return process.env.DOTS_CODEX_CLI;
   const base=process.env.LOCALAPPDATA?join(process.env.LOCALAPPDATA,'OpenAI','Codex','bin'):undefined;
-  let best:{file:string;time:number}|undefined;
-  if(base)try{for(const name of await readdir(base)){const file=join(base,name,process.platform==='win32'?'codex.exe':'codex');try{const time=(await stat(file)).mtimeMs;if(!best||time>best.time)best={file,time};}catch{}}}catch{}
+  const isWin=process.platform==='win32';
+  let best:{file:string;time:number;hasHost:boolean}|undefined;
+  if(base)try{for(const name of await readdir(base)){const file=join(base,name,isWin?'codex.exe':'codex'),host=join(base,name,isWin?'codex-code-mode-host.exe':'codex-code-mode-host');try{if(existsSync(file)){const hasHost=!isWin||existsSync(host),time=(await stat(file)).mtimeMs;if(!best||(hasHost&&!best.hasHost)||((hasHost===best.hasHost)&&time>best.time))best={file,time,hasHost};}}catch{}}}catch{}
   return best?.file||'codex';
 }
 const cli=await codexCli();console.log('Codex CLI: '+cli);

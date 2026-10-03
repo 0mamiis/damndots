@@ -1,12 +1,51 @@
 // The original CLI owns normal chats. Only Dot-owned read/resume requests use the Dots backend.
 import {spawn} from 'node:child_process';
 import {readFile} from 'node:fs/promises';
+import {existsSync, readdirSync, statSync, writeFileSync} from 'node:fs';
+import {join, dirname} from 'node:path';
 import {createInterface} from 'node:readline';
 import https from 'node:https';
 import {WebSocket} from 'ws';
-const manifest=JSON.parse(await readFile(process.argv[2],'utf8')),args=process.argv.slice(3);
-const env={...process.env};delete env.CODEX_CLI_PATH;
-const cli=spawn(manifest.realCli,args,{env,stdio:['pipe','pipe','pipe'],windowsHide:true});
+import {NativeThreadRegistry} from './native-thread-router.mjs';
+
+function resolveRealCli(manifestPath, manifest) {
+ const currentPath = manifest.realCli;
+ const isWin = process.platform === 'win32';
+ const hostBin = isWin ? 'codex-code-mode-host.exe' : 'codex-code-mode-host';
+ const cliBin = isWin ? 'codex.exe' : 'codex';
+ const base = process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, 'OpenAI', 'Codex', 'bin') : undefined;
+ let best = undefined;
+ if (base && existsSync(base)) {
+  try {
+   for (const name of readdirSync(base)) {
+    const file = join(base, name, cliBin);
+    const host = join(base, name, hostBin);
+    if (existsSync(file) && (!isWin || existsSync(host))) {
+     try {
+      const time = statSync(file).mtimeMs;
+      if (!best || time > best.time) best = { file, time };
+     } catch {}
+    }
+   }
+  } catch {}
+ }
+ const currentValid = currentPath && existsSync(currentPath) && (!isWin || existsSync(join(dirname(currentPath), hostBin)));
+ const target = best ? best.file : currentPath;
+ if (target && target !== currentPath) {
+  manifest.realCli = target;
+  try {
+   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), { mode: 0o600 });
+  } catch {}
+  return target;
+ }
+ return currentValid ? currentPath : (target || currentPath);
+}
+
+const manifestPath = process.argv[2];
+const manifest = JSON.parse(await readFile(manifestPath, 'utf8')), args = process.argv.slice(3);
+const realCli = resolveRealCli(manifestPath, manifest);
+const env = {...process.env}; delete env.CODEX_CLI_PATH;
+const cli = spawn(realCli, args, {env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true});
 cli.stderr.pipe(process.stderr);
 // The real account reports chatgpt.com as its workspace backend, so the desktop app would send account, feature-flag and plugin
 // requests straight there and bypass the Dots gateway. Pointing that origin at the gateway keeps one routing point;
@@ -24,16 +63,17 @@ createInterface({input:cli.stdout,terminal:false}).on('line',line=>{
  if(line.includes('workspaceRouting')){try{const message=JSON.parse(line);if(routeThroughGateway(message)){process.stdout.write(JSON.stringify(message)+'\n');return;}}catch{}}
  process.stdout.write(line+'\n');
 });
-const ca=await readFile(manifest.certificate),dotThreads=new Set(),pending=new Map();
-let refreshed=0,remote,connecting,counter=0;
+const ca=await readFile(manifest.certificate),pending=new Map();
+let remote,connecting,counter=0;
 const emit=value=>process.stdout.write(JSON.stringify(value)+'\n');
-const get=path=>new Promise((resolve,reject)=>{https.get(manifest.gateway+path,{ca},res=>{let text='';res.on('data',b=>text+=b);res.on('end',()=>res.statusCode===200?resolve(JSON.parse(text)):reject(Error('Dot lookup failed')));}).on('error',reject);});
-async function refreshThreads(){
- if(Date.now()-refreshed<5000)return;
- const data=await get('/backend-api/tbo');
- for(const dot of data.items||[]){if(dot.root_thread_id)dotThreads.add(dot.root_thread_id);if(dot.active_root_thread_id)dotThreads.add(dot.active_root_thread_id);}
- refreshed=Date.now();
-}
+const get=path=>new Promise((resolve,reject)=>{
+ const req=https.get(manifest.gateway+path,{ca},res=>{let text='';res.on('data',b=>text+=b);res.on('end',()=>{
+  if(res.statusCode!==200){reject(Object.assign(Error('Dot lookup failed'),{statusCode:res.statusCode}));return;}
+  try{resolve(JSON.parse(text));}catch(error){reject(error);}
+ });});
+ req.setTimeout(8000,()=>req.destroy(Error('Dot lookup timed out')));req.on('error',reject);
+});
+const dotThreads=new NativeThreadRegistry(get);
 const allowed=new Set(['thread/read','thread/resume','thread/turns/list','thread/items/list','thread/name/set','thread/archive','thread/unarchive','turn/interrupt']);
 async function connection(){
  if(remote?.readyState===WebSocket.OPEN)return remote;
@@ -56,8 +96,10 @@ async function connection(){
 async function route(line){
  let message;try{message=JSON.parse(line);}catch{cli.stdin.write(line+'\n');return;}
  if(message.id!==undefined&&allowed.has(message.method)&&typeof message.params?.threadId==='string'){
-  try{await refreshThreads();}catch{}
-  if(dotThreads.has(message.params.threadId)){
+  let owned=false;
+  try{owned=await dotThreads.owns(message.params.threadId);}
+  catch(error){process.stderr.write('Dot ownership lookup: '+String(error.message)+'\n');}
+  if(owned){
    try{const socket=await connection(),id='dots_bridge_'+(++counter);const timeout=setTimeout(()=>{pending.delete(id);emit({id:message.id,error:{code:-32603,message:'Dot RPC request timed out'}});},30000);pending.set(id,{id:message.id,timeout});const params=message.method==='thread/resume'?{threadId:message.params.threadId}:message.params;socket.send(JSON.stringify({...message,id,params}));}
    catch(error){process.stderr.write('Dot RPC: '+String(error.message)+'\n');emit({id:message.id,error:{code:-32603,message:'Dot backend is unavailable'}});}
    return;

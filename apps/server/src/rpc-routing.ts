@@ -1,4 +1,4 @@
-import type { RecordStore, RunnerHooks, Task } from '@dots/contracts';
+import type { Dot, RecordStore, RunnerHooks, Task } from '@dots/contracts';
 
 export interface NativeRpcRequest {method:string;params?:Record<string,unknown>;}
 export interface RpcWorkerExecutor {
@@ -75,5 +75,15 @@ export async function routeNativeRpc(request:NativeRpcRequest,options:NativeRpcR
   if(!computerId) return {handled:false};
   signal?.throwIfAborted();
   const result=await options.workers.execute(computerId,'rpc',{request:{method:request.method,params:structuredClone(params)}},undefined,signal);
+  // Worker-created/migrated Dot roots may predate threadSource metadata.
+  // Project their proven Dot identity so the native delegation renderer uses the Dot's name/avatar.
+  // Keep ordinary delegated task DTOs and all real history/status fields untouched.
+  const task=owner?options.store.get<Task>('tasks',owner.taskId):undefined;
+  const dot=owner?options.store.get<Dot>('dots',owner.dotId):undefined;
+  const root=dot&&(dot.rootThreadId===threadId||task?.source==='chat'||task?.source==='channel');
+  if(root&&(request.method==='thread/read'||request.method==='thread/resume')&&result&&typeof result==='object'){
+    const data=result as {thread?:{id?:string;[key:string]:unknown};[key:string]:unknown};
+    if(data.thread?.id===threadId)return {handled:true,result:{...data,thread:{...data.thread,threadSource:'aeon',name:dot.name}}};
+  }
   return {handled:true,result};
 }
