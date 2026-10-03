@@ -60,3 +60,30 @@ test('missing thread ids pass through and dispatched params are insulated from a
     const params={threadId:'worker-thread',nested:{changed:false}};await routeNativeRpc({method:'thread/read',params},{store,workers});assert.equal(params.nested.changed,false);
   } finally {store.close();}
 });
+
+test('native delegation gets the proven Dot identity for current and historical chat roots only',async()=>{
+  const {store,runtime,dot,add}=fixture();
+  add('current-root','worker-a');
+  const past=add('past-root','worker-a');store.put('tasks',{...past,source:'chat'});
+  add('project-task','worker-a');
+  store.put('dots',{...runtime.getDot(dot.id),name:'Null',rootThreadId:'current-root'});
+  const actuals:any[]=[];
+  const workers:RpcWorkerExecutor={async execute(computerId,kind,payload){
+    const threadId=(payload.request as any).params.threadId;
+    const actual={thread:{id:threadId,name:'Actual task title',threadSource:null,status:{type:'idle'},turns:[{id:'actual-turn'}]}};
+    actuals.push(actual);return actual;
+  }};
+  try{
+    for(const id of ['current-root','past-root']){
+      const r=await routeNativeRpc({method:'thread/read',params:{threadId:id}},{store,workers});
+      assert.equal(r.handled,true);if(!r.handled)throw Error('Not routed');
+      const thread=(r.result as any).thread;
+      assert.equal(thread.name,'Null');assert.equal(thread.threadSource,'aeon');
+      assert.deepEqual(thread.turns,[{id:'actual-turn'}]);assert.equal(actuals.at(-1).thread.name,'Actual task title');
+    }
+    const ordinary=await routeNativeRpc({method:'thread/read',params:{threadId:'project-task'}},{store,workers});
+    if(!ordinary.handled)throw Error('Not routed');
+    assert.equal((ordinary.result as any).thread.threadSource,null);
+    assert.equal((ordinary.result as any).thread.name,'Actual task title');
+  }finally{store.close();}
+});

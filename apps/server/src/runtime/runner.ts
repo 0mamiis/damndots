@@ -244,6 +244,7 @@ export class AppServerRunner implements TaskRunner {
       }
       const fullAccess=input.fullAccess===true&&!proactive;
       const threadParams:Record<string,unknown>={model,cwd,approvalPolicy:proactive||fullAccess?'never':this.options.approvalPolicy??'on-request',sandbox:proactive?'read-only':fullAccess?'danger-full-access':this.options.sandbox??'workspace-write',serviceTier,config:effort?{model_reasoning_effort:effort}:{},developerInstructions:input.dot.instructions||undefined};
+      if(!threadId&&(input.task.source==='chat'||input.task.source==='channel')&&!input.task.parentTaskId)threadParams.threadSource='aeon';
       if(tools.length&&!threadId) threadParams.dynamicTools=tools.map(tool=>({type:'function',name:tool.name,description:tool.description,inputSchema:tool.inputSchema}));
       if(threadId) threadParams.threadId=threadId;
       const thread=await client.request(threadId?'thread/resume':'thread/start',threadParams);

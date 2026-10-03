@@ -27,16 +27,16 @@ let switching=false,targetRevision=target?.revision;
 const targetWatch=setInterval(()=>{if(switching)return;switching=true;void readFile(join(data,'connection-target.json'),'utf8').then(JSON.parse).then(async next=>{if(next.revision===targetRevision)return;await gateway.changeConnection(next.serverUrl,next.client);targetRevision=next.revision;console.log('Native Dot host updated: '+next.serverUrl);}).catch(()=>{}).finally(()=>{switching=false;});},1000);
 const certificate=join(data,'certs/ca.pem'),run=promisify(execFile);
 const cliDirectory=join(process.env.LOCALAPPDATA||join(homedir(),'AppData/Local'),'OpenAI/Codex/bin');
-const candidates=[];for(const name of await readdir(cliDirectory)){const file=join(cliDirectory,name,'codex.exe');try{candidates.push({file,time:(await stat(file)).mtimeMs});}catch{}}
-candidates.sort((a,b)=>b.time-a.time);if(!candidates[0])throw new Error('Kurulu Codex CLI bulunamadi.');
+const candidates=[];for(const name of await readdir(cliDirectory)){const file=join(cliDirectory,name,'codex.exe'),host=join(cliDirectory,name,'codex-code-mode-host.exe');try{if(existsSync(file)){candidates.push({file,hasHost:existsSync(host),time:(await stat(file)).mtimeMs});}}catch{}}
+candidates.sort((a,b)=>(b.hasHost===a.hasHost?b.time-a.time:(b.hasHost?1:-1)));if(!candidates[0])throw new Error('Kurulu Codex CLI bulunamadi.');
 await writeFile(join(data,'cli-bridge.json'),JSON.stringify({realCli:candidates[0].file,node:process.execPath,script:join(root,'scripts/native-cli-bridge.mjs'),gateway:'https://localhost:'+port,certificate},null,2),{mode:0o600});
 if(!check)await run('certutil.exe',['-user','-addstore','Root',certificate],{windowsHide:true,maxBuffer:4000});
 // Same environment as a normal launch except desktop API traffic. The app keeps its own CODEX_HOME, SQLite state,
 // real login and OpenCodex model routing; the gateway sends everything except Dot-owned routes to the real service.
+// CODEX_CLI_PATH selects the local bridge; cloud threads still need the native WebSocket transport.
 const environment={
  CODEX_API_BASE_URL:'https://localhost:'+port+'/backend-api',
  CODEX_CLI_PATH:join(data,'native-cli.exe'),
- CODEX_APP_SERVER_FORCE_CLI:'1',
  NODE_EXTRA_CA_CERTS:certificate
 };
 await writeFile(join(data,'environment.json'),JSON.stringify({environment},null,2),{mode:0o600});
