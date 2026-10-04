@@ -33,6 +33,8 @@ Copy-Item .env.example .env
 
 Open [the dashboard](http://127.0.0.1:4320). Its login key is generated in `apps/server/.data/server/admin.key`. Add a provider URL and API key, test the API format, fetch or enter a model, and activate the provider.
 
+Model lists refresh automatically every 30 seconds while the panel is visible, and when you return to it. Providers share one in-flight discovery request; failed discovery retains the last successful list and retries after 30 seconds. Manually entered models are preserved. **Modelleri çek** still refreshes immediately.
+
 Once the services are ready, open Codex from your original shortcut. If Codex was already running during initial setup, close and reopen it once. `Start-Dots.cmd` does not open another Codex window or replace your shortcuts.
 
 The dashboard UI currently uses Turkish labels. Use its host-management section to configure backend connections and computer mode, and its settings section to select the model and execution policy. A host change is refused while tasks are running, and it does not move conversations between backends. Each backend keeps its own data.

@@ -37,9 +37,12 @@ const cleanBase = (url: string) => endpoint(url).replace(/\/+$/, '');
 const now = () => new Date().toISOString();
 const short = (value: unknown) => String(value instanceof Error ? value.message : value).replace(/\s+/g, ' ').slice(0, 300);
 
-export interface ProviderOptions { vault: SecretVault; fallback: { baseUrl: string; apiKey: string }; activeId: () => string | null; fetch?: typeof fetch; }
+export const MODEL_REFRESH_MS = 30000;
+export interface ProviderOptions { vault: SecretVault; fallback: { baseUrl: string; apiKey: string }; activeId: () => string | null; fetch?: typeof fetch; clock?: () => number; }
 export class ProviderService {
   private fetcher: typeof fetch;
+  private refreshing = new Map<string, Promise<PublicProvider>>();
+  private attemptedAt = new Map<string, number>();
   constructor(private store: RecordStore, private options: ProviderOptions) { this.fetcher = options.fetch ?? fetch; }
   private builtin(): StoredProvider {
     const saved = this.store.get<StoredProvider>('providers', DEFAULT_PROVIDER_ID);
@@ -61,6 +64,19 @@ export class ProviderService {
     return [this.builtin(), ...custom].map(p => this.view(p));
   }
   get(id: string): PublicProvider { return this.view(this.raw(id)); }
+  async listFresh(): Promise<PublicProvider[]> {
+    return Promise.all(this.list().map(p => this.fresh(p.id)));
+  }
+  private async fresh(id: string): Promise<PublicProvider> {
+    const p = this.get(id), time = (this.options.clock ?? Date.now)();
+    const fetchedAt = p.modelsFetchedAt ? Date.parse(p.modelsFetchedAt) : NaN;
+    const attemptedAt = this.attemptedAt.get(id);
+    const last = Math.max(Number.isFinite(fetchedAt) ? fetchedAt : -Infinity, attemptedAt ?? -Infinity);
+    if (this.refreshing.has(id) || time - last >= MODEL_REFRESH_MS) {
+      try { return await this.refreshModels(id); } catch { /* Keep the last good catalog and expose lastError. */ }
+    }
+    return this.get(id);
+  }
   activeId(): string { const id = this.options.activeId(); return id && (id === DEFAULT_PROVIDER_ID || this.store.get('providers', id)) ? id : DEFAULT_PROVIDER_ID; }
   resolve(id?: string): ResolvedProvider {
     const p = this.raw(id ?? this.activeId());
@@ -79,6 +95,7 @@ export class ProviderService {
     if (patch.baseUrl !== undefined) next.baseUrl = cleanBase(patch.baseUrl);
     if (patch.apiFormat !== undefined) next.apiFormat = patch.apiFormat;
     if (patch.apiKey !== undefined && patch.apiKey !== '[redacted]') next.sealedKey = patch.apiKey ? this.options.vault.seal({ apiKey: patch.apiKey }) : null;
+    if (next.baseUrl !== p.baseUrl || next.sealedKey !== p.sealedKey) { next.modelsFetchedAt = null; this.attemptedAt.delete(id); }
     if (patch.manualModels) { const fetched = next.models.filter(m => !m.manual); const ids = new Set(fetched.map(m => m.id)); next.models = [...fetched, ...patch.manualModels.filter(m => !ids.has(m)).map(manualModel)]; }
     this.store.put('providers', next);
     return this.view(next);
@@ -93,6 +110,14 @@ export class ProviderService {
     return this.fetcher(url, { ...init, headers, redirect: 'error', signal: AbortSignal.timeout(timeout) });
   }
   async refreshModels(id: string): Promise<PublicProvider> {
+    const pending = this.refreshing.get(id);
+    if (pending) return pending;
+    this.attemptedAt.set(id, (this.options.clock ?? Date.now)());
+    const work = this.fetchModels(id).finally(() => this.refreshing.delete(id));
+    this.refreshing.set(id, work);
+    return work;
+  }
+  private async fetchModels(id: string): Promise<PublicProvider> {
     const p = this.raw(id), key = this.key(p);
     let base = p.baseUrl.replace(/\/+$/, ''), json: any, failure = '';
     for (const candidate of [base, base.endsWith('/v1') ? '' : base + '/v1'].filter(Boolean)) {
@@ -104,6 +129,7 @@ export class ProviderService {
       } catch (error) { failure = 'Sağlayıcıya ulaşılamadı: ' + short(error); }
     }
     const saved = this.store.get<StoredProvider>('providers', id);
+    if (id !== DEFAULT_PROVIDER_ID && (!saved || saved.baseUrl !== p.baseUrl || saved.sealedKey !== p.sealedKey)) return this.get(id);
     const target = saved ?? p;
     if (json === undefined) {
       this.store.put('providers', { ...target, lastError: failure || 'Model listesi alınamadı' });
@@ -111,14 +137,13 @@ export class ProviderService {
     }
     const fetched = parseModels(json), ids = new Set(fetched.map(m => m.id));
     const manual = target.models.filter(m => m.manual && !ids.has(m.id));
-    const next: StoredProvider = { ...target, baseUrl: id === DEFAULT_PROVIDER_ID ? target.baseUrl : base, models: [...fetched, ...manual], modelsFetchedAt: now(), lastError: null, updatedAt: now() };
+    const next: StoredProvider = { ...target, baseUrl: id === DEFAULT_PROVIDER_ID ? target.baseUrl : base, models: [...fetched, ...manual], modelsFetchedAt: new Date((this.options.clock ?? Date.now)()).toISOString(), lastError: null, updatedAt: now() };
     this.store.put('providers', next);
     return this.view(id === DEFAULT_PROVIDER_ID ? { ...next, baseUrl: this.options.fallback.baseUrl } : next);
   }
   async models(id?: string): Promise<{ providerId: string; models: ModelInfo[] }> {
     const pid = id ?? this.activeId();
-    let p = this.get(pid);
-    if (!p.models.length && !p.modelsFetchedAt) { try { p = await this.refreshModels(pid); } catch { /* lastError sağlayıcı kaydında kalır */ } }
+    const p = await this.fresh(pid);
     return { providerId: pid, models: p.models };
   }
   /** Her iki API biçimini küçük bir istekle dener; hangisinin çalıştığını raporlar. */

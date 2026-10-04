@@ -58,7 +58,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return text ? (JSON.parse(text) as T) : (undefined as T);
 }
 
-export function useData<T>(path: string | null) {
+export function useData<T>(path: string | null, refreshMs = 0) {
   const { revision } = useContext(ApiContext);
   const [data, setData] = useState<T>();
   const [error, setError] = useState("");
@@ -70,9 +70,14 @@ export function useData<T>(path: string | null) {
       setLoading(false);
       return;
     }
-    setLoading(true);
-    setError("");
-    api<T>(path)
+    let pending = false;
+    const controller = new AbortController();
+    const refresh = () => {
+      if (!current || pending) return;
+      pending = true;
+      setLoading(true);
+      setError("");
+      api<T>(path, { signal: controller.signal })
       .then((value) => {
         if (current) setData(value);
       })
@@ -80,12 +85,27 @@ export function useData<T>(path: string | null) {
         if (current) setError(e.message);
       })
       .finally(() => {
+        pending = false;
         if (current) setLoading(false);
       });
+    };
+    const refreshVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    refresh();
+    const timer = refreshMs > 0 ? window.setInterval(refreshVisible, refreshMs) : undefined;
+    if (refreshMs > 0) {
+      window.addEventListener("focus", refreshVisible);
+      document.addEventListener("visibilitychange", refreshVisible);
+    }
     return () => {
       current = false;
+      controller.abort();
+      if (timer !== undefined) window.clearInterval(timer);
+      window.removeEventListener("focus", refreshVisible);
+      document.removeEventListener("visibilitychange", refreshVisible);
     };
-  }, [path, revision]);
+  }, [path, revision, refreshMs]);
   return { data, error, loading };
 }
 
