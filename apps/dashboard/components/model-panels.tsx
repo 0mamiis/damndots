@@ -82,7 +82,7 @@ export function ModelPicker({
   inherit?: boolean;
   blankLabel?: string;
 }) {
-  const catalog = useData<{ providerId: string; models: ModelInfo[] }>("models");
+  const catalog = useData<{ providerId: string; models: ModelInfo[] }>("models", 30000);
   const settings = useData<Settings>(inherit ? "settings" : null);
   const models = catalog.data?.models ?? [];
   const [selected, setSelected] = useState(model ?? "");
@@ -505,7 +505,7 @@ function ProviderFields({
 
 export function ProvidersPanel() {
   const providers = useData<{ items: ProviderView[]; activeProviderId: string }>(
-    "providers",
+    "providers", 30000,
   );
   const settings = useData<Settings>("settings");
   const { mutate } = useContext(ApiContext);
@@ -514,7 +514,7 @@ export function ProvidersPanel() {
     <>
       <Section
         title="Model sağlayıcıları"
-        description="Kendi API adresini ve anahtarını ekle; modeller otomatik çekilir. Hem Responses hem Chat Completions sağlayıcıları çalışır."
+        description="Kendi API adresini ve anahtarını ekle; model listesi 30 saniyede bir otomatik yenilenir. Hem Responses hem Chat Completions sağlayıcıları çalışır."
         action={
           <Button onPress={() => setAdding(!adding)}>
             {adding ? <CloseIcon /> : <PlusIcon />}
