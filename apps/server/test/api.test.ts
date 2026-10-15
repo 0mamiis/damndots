@@ -132,3 +132,12 @@ test('attachment-only messages work through dashboard and native chat without in
     for(const input of seen)assert.equal(input.task.attachments[0].id,image.id);
   }finally{await f.cleanup();}
 });
+
+test('malformed native request bodies get client errors or harmless replies instead of server errors',async()=>{
+ const f=await fixture({run:async()=>{throw new Error('No task expected');}});try{
+  const headers={authorization:'Bearer '+f.auth.nativeTokens('malformed').access_token,'content-type':'application/json'};
+  assert.equal((await f.app.inject({method:'POST',url:'/auth/oauth/revoke',headers:{'content-type':'application/json'},payload:{token:{}}})).statusCode,200);
+  assert.equal((await f.app.inject({method:'POST',url:'/backend-api/wham/statsig/bootstrap',headers,payload:'null'})).statusCode,200);
+  assert.equal((await f.app.inject({method:'POST',url:'/backend-api/tbo',headers,payload:'[]'})).statusCode,400);
+ }finally{await f.cleanup();}
+});
