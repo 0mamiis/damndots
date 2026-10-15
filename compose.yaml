@@ -12,7 +12,7 @@ services:
     environment:
       DOTS_APPSERVER_URL: ws://127.0.0.1:9912
       DOTS_MODEL_BASE: ${DOTS_MODEL_BASE:-http://host.docker.internal:10100/v1}
-      DOTS_MODEL: ${DOTS_MODEL:-gpt-6.1-sol}
+      DOTS_MODEL: ${DOTS_MODEL:-}
       DOTS_MODEL_API_KEY: ${DOTS_MODEL_API_KEY:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
