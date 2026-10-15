@@ -11,7 +11,7 @@ test("a configured server is the only address the dashboard will call", () => {
   assert.deepEqual([...(allowed ?? [])], ["https://dots.example.com"]);
   assert.equal(validateServer("https://dots.example.com", allowed), "https://dots.example.com");
   for (const other of ["http://127.0.0.1:9340", "https://169.254.169.254", "https://internal.example.com"])
-    assert.throws(() => validateServer(other, allowed), /yapılandırılmış/);
+    assert.throws(() => validateServer(other, allowed), /configured/);
 });
 test("several servers can be allowed", () => {
   const allowed = allowedServers({ DOTS_ALLOWED_SERVERS: "http://127.0.0.1:9340, https://a.example.com" });

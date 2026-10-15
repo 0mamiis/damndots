@@ -73,7 +73,21 @@ const get=path=>new Promise((resolve,reject)=>{
  });});
  req.setTimeout(8000,()=>req.destroy(Error('Dot lookup timed out')));req.on('error',reject);
 });
-const dotThreads=new NativeThreadRegistry(get);
+const dotThreads=new NativeThreadRegistry(get,{persistFile:join(dirname(manifestPath),'dot-threads.json')});
+const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+// The desktop reopens the Dot thread right after launch, while the gateway or Dot backend may still be starting.
+async function ownsWithRetry(id){
+ for(let attempt=0;;attempt++){
+  try{return await dotThreads.owns(id);}
+  catch(error){if(attempt>=3)throw error;await sleep(1500);}
+ }
+}
+async function connectWithRetry(){
+ for(let attempt=0;;attempt++){
+  try{return await connection();}
+  catch(error){if(attempt>=7)throw error;await sleep(1500);}
+ }
+}
 const allowed=new Set(['thread/read','thread/resume','thread/turns/list','thread/items/list','thread/name/set','thread/archive','thread/unarchive','turn/interrupt']);
 async function connection(){
  if(remote?.readyState===WebSocket.OPEN)return remote;
@@ -97,10 +111,10 @@ async function route(line){
  let message;try{message=JSON.parse(line);}catch{cli.stdin.write(line+'\n');return;}
  if(message.id!==undefined&&allowed.has(message.method)&&typeof message.params?.threadId==='string'){
   let owned=false;
-  try{owned=await dotThreads.owns(message.params.threadId);}
+  try{owned=await ownsWithRetry(message.params.threadId);}
   catch(error){process.stderr.write('Dot ownership lookup: '+String(error.message)+'\n');}
   if(owned){
-   try{const socket=await connection(),id='dots_bridge_'+(++counter);const timeout=setTimeout(()=>{pending.delete(id);emit({id:message.id,error:{code:-32603,message:'Dot RPC request timed out'}});},30000);pending.set(id,{id:message.id,timeout});const params=message.method==='thread/resume'?{threadId:message.params.threadId}:message.params;socket.send(JSON.stringify({...message,id,params}));}
+   try{const socket=await connectWithRetry(),id='dots_bridge_'+(++counter);const timeout=setTimeout(()=>{pending.delete(id);emit({id:message.id,error:{code:-32603,message:'Dot RPC request timed out'}});},30000);pending.set(id,{id:message.id,timeout});const params=message.method==='thread/resume'?{threadId:message.params.threadId}:message.params;socket.send(JSON.stringify({...message,id,params}));}
    catch(error){process.stderr.write('Dot RPC: '+String(error.message)+'\n');emit({id:message.id,error:{code:-32603,message:'Dot backend is unavailable'}});}
    return;
   }

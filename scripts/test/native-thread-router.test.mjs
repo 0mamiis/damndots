@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {NativeThreadRegistry} from '../native-thread-router.mjs';
 
 test('cached old root still routes to Dots after a root migration and desktop restart',async()=>{
@@ -49,6 +52,21 @@ test('ordinary local chat stays local and transient outages are not cached as ne
  assert.equal(lookups,4);
 });
 
+test('proven Dot threads survive a restart even when the backend is unreachable at launch',async()=>{
+ const dir=mkdtempSync(join(tmpdir(),'dots-router-')),file=join(dir,'dot-threads.json');
+ try{
+  const first=new NativeThreadRegistry(async path=>{
+   if(path==='/backend-api/tbo')return {items:[{id:'null',root_thread_id:'root'}]};
+   return {items:[{thread_id:'root'},{thread_id:'older'}]};
+  },{persistFile:file});
+  await first.refresh();
+  const second=new NativeThreadRegistry(async()=>{throw Object.assign(Error('Gateway starting'),{statusCode:502});},{persistFile:file});
+  assert.equal(await second.owns('older'),true);
+  assert.equal(second.has('root'),true);
+  await assert.rejects(second.owns('unknown-chat'),/Gateway starting/);
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
+
 test('concurrent requests for a proven alias share one ownership lookup',async()=>{
  let calls=0;
  const registry=new NativeThreadRegistry(async path=>{
@@ -58,3 +76,4 @@ test('concurrent requests for a proven alias share one ownership lookup',async()
  assert.deepEqual(await Promise.all([registry.owns('alias'),registry.owns('alias')]),[true,true]);
  assert.equal(calls,1);
 });
+

@@ -29,7 +29,7 @@ test('activation registers credentials once, snapshots applied options and keeps
  const f=fixture();try{const p=f.service.create({name:'VPS',serverUrl:'https://dots.example.com',adminKey:'controlled-key'});f.service.update(p.id,{options:{workerRoots:['C:/Work'],linuxEnabled:true}});await f.service.activate(p.id);const plan=f.service.plan();assert.equal(plan.serverUrl,p.serverUrl);assert(plan.client&&plan.windows&&plan.linux);assert.equal(f.calls.filter(c=>c.path==='/worker/register').length,2);assert(!JSON.stringify(f.service.status()).includes('controlled-worker'));assert(!JSON.stringify(f.store.get('host_active','owner')).includes('controlled-worker'));f.service.update(p.id,{options:{gatewayPort:8010}});assert.equal(f.service.plan().options.gatewayPort,8000);await f.service.activate(p.id);assert.equal(f.service.plan().options.gatewayPort,8010);assert.equal(f.calls.filter(c=>c.path==='/worker/register').length,2);assert.throws(()=>f.service.remove(p.id));await f.service.activate('local');assert.equal(f.service.plan().id,'local');assert.equal(f.service.remove(p.id).deleted,true);}finally{f.store.close();}
 });
 test('a host switch refuses to interrupt active work',async()=>{
- const f=fixture();try{const p=f.service.create({name:'VPS',serverUrl:'https://dots.example.com',adminKey:'controlled-key'});f.service.update(p.id,{options:{workerRoots:['C:/Work']}});f.block();await assert.rejects(f.service.activate(p.id),/çalışan görevleri/);assert.equal(f.service.status().activeId,'local');assert.equal(f.calls.filter(c=>c.path==='/client/enroll').length,0);}finally{f.store.close();}
+ const f=fixture();try{const p=f.service.create({name:'VPS',serverUrl:'https://dots.example.com',adminKey:'controlled-key'});f.service.update(p.id,{options:{workerRoots:['C:/Work']}});f.block();await assert.rejects(f.service.activate(p.id),/running tasks/);assert.equal(f.service.status().activeId,'local');assert.equal(f.calls.filter(c=>c.path==='/client/enroll').length,0);}finally{f.store.close();}
 });
 test('computer mode changes select PC by default and Linux explicitly, with a default computer on the active backend',async()=>{
  const f=fixture();try{assert.equal(f.service.plan().options.computerMode,'pc');f.service.update('local',{options:{computerMode:'linux'}});const linux=f.service.list()[0].options;assert.equal(linux.linuxEnabled,true);assert.equal(linux.workerEnabled,false);await f.service.activate('local');const selected=f.service.plan().linux.computerId;assert(f.calls.some(c=>c.path==='/api/v1/settings'&&c.body.defaultComputerId===selected));f.service.update('local',{options:{computerMode:'pc'}});await f.service.activate('local');assert.equal(f.service.plan().options.computerMode,'pc');assert.equal(f.service.plan().options.workerEnabled,true);}finally{f.store.close();}
@@ -48,13 +48,13 @@ test('host computer mode uses a computer that is already registered on the backe
 test('host computer mode honors an explicit choice and refuses a missing or unavailable computer',async()=>{
  const f=fixture();try{const p=f.service.create({name:'VPS',serverUrl:'https://dots.example.com',adminKey:'controlled-key'});
   f.service.update(p.id,{options:{computerMode:'host',hostComputerId:'vps-2'}});await f.service.activate(p.id);assert(f.calls.some(c=>c.path==='/api/v1/settings'&&c.body.defaultComputerId==='vps-2'));
-  f.service.update(p.id,{options:{hostComputerId:'gone'}});await assert.rejects(f.service.activate(p.id),/bulunamadı/);
+  f.service.update(p.id,{options:{hostComputerId:'gone'}});await assert.rejects(f.service.activate(p.id),/not found/);
   assert.equal(f.service.status().activeId,p.id);
  }finally{f.store.close();}
 });
 test('host computer mode without any online computer is rejected before the active backend changes',async()=>{
  const f=fixture(false);try{const p=f.service.create({name:'VPS',serverUrl:'https://dots.example.com',adminKey:'controlled-key'});
-  f.service.update(p.id,{options:{computerMode:'host'}});await assert.rejects(f.service.activate(p.id),/çevrimiçi bir bilgisayar yok/);assert.equal(f.service.status().activeId,'local');
+  f.service.update(p.id,{options:{computerMode:'host'}});await assert.rejects(f.service.activate(p.id),/No online computer/);assert.equal(f.service.status().activeId,'local');
  }finally{f.store.close();}
 });
 
@@ -72,7 +72,7 @@ test('a host can issue a computer enrollment and receive a copy of a local Dot d
   assert.equal(f.calls.filter(c=>c.path.endsWith('/attachments')).length,1);
   const alias=f.calls.find(c=>c.path==='/api/v1/dots/remote-dot/native-aliases');
   assert.deepEqual(alias!.body,{dotId:'dot-1',threadId:'source-root',roomId:'source-room'});
-  await assert.rejects(f.service.copyDot('local','dot-1'),/zaten yerel/);
+  await assert.rejects(f.service.copyDot('local','dot-1'),/already on the local host/);
  }finally{f.store.close();}
 });
 test('copying a Dot never overwrites a Dot with the same name on the target backend',async()=>{

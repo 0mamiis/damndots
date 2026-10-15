@@ -6,12 +6,12 @@ export default function ErrorPage({ reset }: { error: Error; reset: () => void }
       <Alert status="danger">
         <Alert.Indicator />
         <Alert.Content>
-          <Alert.Title>Çalışma alanı açılamadı</Alert.Title>
-          <Alert.Description>Sunucu bağlantısını kontrol edin ve yeniden deneyin.</Alert.Description>
+          <Alert.Title>Workspace could not be opened</Alert.Title>
+          <Alert.Description>Check the server connection and try again.</Alert.Description>
         </Alert.Content>
       </Alert>
       <div>
-        <Button onPress={reset}>Yeniden dene</Button>
+        <Button onPress={reset}>Try again</Button>
       </div>
     </main>
   );

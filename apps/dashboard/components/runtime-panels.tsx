@@ -56,7 +56,7 @@ export function DotSelect({
       required
       disabled={disabled}
       defaultValue={value ?? dots[0]?.id}
-      placeholder="Dot seçin"
+      placeholder="Select a Dot"
       options={dots.map((dot) => ({ value: dot.id, label: dot.name }))}
     />
   );
@@ -70,14 +70,14 @@ export function ComputerSelect({
 }) {
   return (
     <SelectField
-      label="Bilgisayar"
+      label="Computer"
       name="computerId"
       defaultValue={value ?? ""}
       options={[
-        { value: "", label: "Sunucunun varsayılan çalışma ortamı" },
+        { value: "", label: "The server’s default working environment" },
         ...computers.map((c) => ({
           value: c.id,
-          label: `${c.name} · ${c.state === "online" ? "çevrimiçi" : "çevrimdışı"}`,
+          label: `${c.name} · ${c.state === "online" ? "online" : "offline"}`,
         })),
       ]}
     />
@@ -93,21 +93,21 @@ export function DotPanel() {
   return (
     <>
       <PageHeading
-        eyebrow="Kalıcı yardımcıların"
-        title="Dot’lar"
-        description="Her Dot’un kendi sohbeti, hafızası ve çalışma biçimi var."
+        eyebrow="Your persistent helpers"
+        title="Dots"
+        description="Every Dot has its own chat, memory and way of working."
         action={
           <Button onPress={() => setCreating(!creating)}>
             {creating ? <CloseIcon /> : <PlusIcon />}
-            {creating ? "Kapat" : "Dot oluştur"}
+            {creating ? "Close" : "Create Dot"}
           </Button>
         }
       />
       <Notice error={error} />
       {creating && (
-        <Section title="Yeni Dot">
+        <Section title="New Dot">
           <Form
-            submit="Dot oluştur"
+            submit="Create Dot"
             onDone={() => setCreating(false)}
             onSubmit={(d) =>
               mutate("dots", "POST", {
@@ -121,17 +121,17 @@ export function DotPanel() {
             }
           >
             <FormGrid>
-              <Field label="Ad" name="name" required />
+              <Field label="Name" name="name" required />
               <ComputerSelect computers={computers.data?.items ?? []} />
             </FormGrid>
             <FormGrid>
-              <ModelPicker inherit blankLabel="Sunucunun varsayılan modeli" />
+              <ModelPicker inherit blankLabel="The server’s default model" />
             </FormGrid>
             <Field
-              label="Çalışma talimatları"
+              label="Working instructions"
               name="instructions"
               type="textarea"
-              placeholder="Dot’un neye odaklanmasını istersin?"
+              placeholder="What should your Dot focus on?"
             />
           </Form>
         </Section>
@@ -139,7 +139,7 @@ export function DotPanel() {
       {loading && !data ? (
         <Loading />
       ) : !data?.items.length ? (
-        <Empty>Henüz Dot yok. İlk Dot’unu oluşturarak başla.</Empty>
+        <Empty>There are no Dots yet. Start by creating your first Dot.</Empty>
       ) : (
         <>
           <Tabs
@@ -147,11 +147,11 @@ export function DotPanel() {
             onSelectionChange={(key) => setSelected(String(key))}
           >
             <Tabs.ListContainer>
-              <Tabs.List aria-label="Dot’lar">
+              <Tabs.List aria-label="Dots">
                 {data.items.map((dot) => (
                   <Tabs.Tab key={dot.id} id={dot.id}>
                     {dot.name}
-                    {dot.paused ? " · duraklatıldı" : ""}
+                    {dot.paused ? " · paused" : ""}
                     <Tabs.Indicator />
                   </Tabs.Tab>
                 ))}
@@ -194,8 +194,8 @@ function DotDetail({ dot, computers }: { dot: Dot; computers: Computer[] }) {
       title={dot.name}
       description={
         dot.paused
-          ? "Dot duraklatıldı; mesajlar sırada korunur."
-          : "Bir mesaj gönder; Dot onu görev olarak çalıştırsın."
+          ? "The Dot is paused; messages are kept in the queue."
+          : "Send a message; the Dot will run it as a task."
       }
       action={
         <Actions>
@@ -204,10 +204,10 @@ function DotDetail({ dot, computers }: { dot: Dot; computers: Computer[] }) {
             variant="ghost"
             onPress={() => setProfile(!profile)}
           >
-            Profili düzenle
+            Edit profile
           </Button>
           <Action path={`dots/${dot.id}/${dot.paused ? "resume" : "pause"}`}>
-            {dot.paused ? "Devam ettir" : "Duraklat"}
+            {dot.paused ? "Resume" : "Pause"}
           </Action>
         </Actions>
       }
@@ -230,7 +230,7 @@ function DotDetail({ dot, computers }: { dot: Dot; computers: Computer[] }) {
           }
         >
           <FormGrid>
-            <Field label="Ad" name="name" value={dot.name} required />
+            <Field label="Name" name="name" value={dot.name} required />
             <ComputerSelect computers={computers} value={dot.computerId} />
           </FormGrid>
           <FormGrid>
@@ -242,21 +242,21 @@ function DotDetail({ dot, computers }: { dot: Dot; computers: Computer[] }) {
             />
           </FormGrid>
           <Field
-            label="Talimatlar"
+            label="Instructions"
             name="instructions"
             type="textarea"
             value={dot.instructions}
           />
-          <Disclose summary="Avatar ayarları">
+          <Disclose summary="Avatar settings">
             <FormGrid>
               <Field
-                label="Avatar adresi"
+                label="Avatar address"
                 name="avatarUrl"
                 value={dot.avatarUrl}
                 placeholder="https://…"
               />
               <Field
-                label="Avatar manifesti (JSON)"
+                label="Avatar manifest (JSON)"
                 name="avatarManifest"
                 type="textarea"
                 value={
@@ -264,14 +264,14 @@ function DotDetail({ dot, computers }: { dot: Dot; computers: Computer[] }) {
                     ? JSON.stringify(dot.avatarManifest, null, 2)
                     : ""
                 }
-                description="Mevcut animasyon manifestini girin veya boş bırakın."
+                description="Enter the current animation manifest or leave it empty."
               />
             </FormGrid>
           </Disclose>
-          <Disclose summary="Dot’u kaldır">
-            <p className="text-sm text-muted">Bu işlem Dot profilini kaldırır.</p>
+          <Disclose summary="Remove the Dot">
+            <p className="text-sm text-muted">This removes the Dot’s profile.</p>
             <Action path={`dots/${dot.id}`} method="DELETE" variant="danger">
-              Dot’u sil
+              Delete the Dot
             </Action>
           </Disclose>
         </Form>
@@ -280,15 +280,14 @@ function DotDetail({ dot, computers }: { dot: Dot; computers: Computer[] }) {
       <div
         className="flex max-h-[28rem] min-h-40 flex-col gap-3 overflow-y-auto rounded-2xl bg-surface-secondary/50 p-4"
         role="log"
-        aria-label="Sohbet"
+        aria-label="Chat"
         tabIndex={0}
       >
         {messages.loading && !messages.data ? (
           <Loading />
         ) : !messages.data?.items.length ? (
           <Empty>
-            İlk mesajını gönder. Sonuçlar ve görevlerin durumu bu sohbette
-            görünür.
+            Send your first message. Results and task status appear in this chat.
           </Empty>
         ) : (
           oldest(messages.data.items).map((message) => {
@@ -301,10 +300,10 @@ function DotDetail({ dot, computers }: { dot: Dot; computers: Computer[] }) {
                 <div className="flex items-center justify-between gap-4 text-xs text-muted">
                   <strong className="text-foreground">
                     {mine
-                      ? "Sen"
+                      ? "You"
                       : message.role === "assistant"
                         ? dot.name
-                        : "Sistem"}
+                        : "System"}
                   </strong>
                   <time>{time(message.createdAt)}</time>
                 </div>
@@ -331,7 +330,7 @@ function DotDetail({ dot, computers }: { dot: Dot; computers: Computer[] }) {
                           });
                           if (!response.ok) {
                             const body = await response.json();
-                            throw new Error(body.error ?? "Ses oluşturulamadı.");
+                            throw new Error(body.error ?? "Audio could not be generated.");
                           }
                           const url = URL.createObjectURL(await response.blob());
                           const audio = new Audio(url);
@@ -341,14 +340,14 @@ function DotDetail({ dot, computers }: { dot: Dot; computers: Computer[] }) {
                           setSpeechError(
                             error instanceof Error
                               ? error.message
-                              : "Ses oluşturulamadı.",
+                              : "Audio could not be generated.",
                           );
                         } finally {
                           setSpeakingId("");
                         }
                       }}
                     >
-                      Sesli dinle
+                      Listen aloud
                     </Button>
                   </div>
                 )}
@@ -361,12 +360,12 @@ function DotDetail({ dot, computers }: { dot: Dot; computers: Computer[] }) {
       <Notice error={speechError} />
       <Form
         key={`compose-${dot.id}`}
-        submit="Mesaj gönder"
+        submit="Send message"
         disabled={uploading}
         onDone={() => setAttachments([])}
         onSubmit={async (d) => {
           if (uploading)
-            throw new Error("Dosya yüklemesi tamamlandıktan sonra mesaj gönderin.");
+            throw new Error("Send the message after the file upload finishes.");
           await mutate(`dots/${dot.id}/messages`, "POST", {
             text: str(d, "text"),
             attachments,
@@ -385,13 +384,13 @@ function DotDetail({ dot, computers }: { dot: Dot; computers: Computer[] }) {
           }}
         >
           <ControlledField
-            label="Mesajın"
+            label="Your message"
             name="text"
             rows={3}
             required
             value={text}
             onChange={setText}
-            placeholder="Dot’una bir görev ver veya birlikte düşün… (Ctrl+Enter ile gönder)"
+            placeholder="Give your Dot a task or think together… (send with Ctrl+Enter)"
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -402,7 +401,7 @@ function DotDetail({ dot, computers }: { dot: Dot; computers: Computer[] }) {
             onPress={() => file.current?.click()}
           >
             <PaperclipIcon />
-            {uploading ? "Dosya yükleniyor…" : "Dosya ekle"}
+            {uploading ? "Uploading file…" : "Attach file"}
           </Button>
           <input
             ref={file}
@@ -424,7 +423,7 @@ function DotDetail({ dot, computers }: { dot: Dot; computers: Computer[] }) {
                 )) as Attachment;
                 setAttachments((current) => [...current, value]);
               } catch (e) {
-                setUploadError(e instanceof Error ? e.message : "Yükleme başarısız.");
+                setUploadError(e instanceof Error ? e.message : "Upload failed.");
               } finally {
                 setUploading(false);
                 event.target.value = "";
@@ -437,7 +436,7 @@ function DotDetail({ dot, computers }: { dot: Dot; computers: Computer[] }) {
               <button
                 type="button"
                 className="ms-1 rounded-full p-0.5 hover:bg-default"
-                aria-label={`${a.name} ekini kaldır`}
+                aria-label={`${a.name} — remove attachment`}
                 onClick={() =>
                   setAttachments((items) => items.filter((x) => x.id !== a.id))
                 }
@@ -453,14 +452,14 @@ function DotDetail({ dot, computers }: { dot: Dot; computers: Computer[] }) {
   );
 }
 const taskStatuses: Record<string, string> = {
-  queued: "Sırada",
-  running: "Çalışıyor",
-  waiting_approval: "Onay bekliyor",
-  paused: "Duraklatıldı",
-  completed: "Tamamlandı",
-  failed: "Başarısız",
-  cancelled: "İptal edildi",
-  interrupted: "Kesildi",
+  queued: "Queued",
+  running: "Running",
+  waiting_approval: "Waiting for approval",
+  paused: "Paused",
+  completed: "Completed",
+  failed: "Failed",
+  cancelled: "Cancelled",
+  interrupted: "Interrupted",
 };
 export function TaskPanel() {
   const dots = useData<ApiList<Dot>>("dots");
@@ -476,20 +475,20 @@ export function TaskPanel() {
   return (
     <>
       <PageHeading
-        eyebrow="İşin akışı"
-        title="Görevler"
-        description="Sıraya al, durumu izle ve gerektiğinde yönünü değiştir."
+        eyebrow="Task flow"
+        title="Tasks"
+        description="Queue work, follow its status and redirect it when needed."
         action={
           <Button onPress={() => setCreating(!creating)}>
             {creating ? <CloseIcon /> : <PlusIcon />}
-            {creating ? "Kapat" : "Görev oluştur"}
+            {creating ? "Close" : "Create task"}
           </Button>
         }
       />
       {creating && (
-        <Section title="Yeni görev">
+        <Section title="New task">
           <Form
-            submit="Görevi sıraya al"
+            submit="Queue the task"
             onDone={() => setCreating(false)}
             onSubmit={(d) =>
               mutate("tasks", "POST", {
@@ -511,17 +510,17 @@ export function TaskPanel() {
           >
             <FormGrid>
               <DotSelect dots={dots.data?.items ?? []} />
-              <Field label="Başlık" name="title" />
+              <Field label="Title" name="title" />
               <ComputerSelect computers={computers.data?.items ?? []} />
             </FormGrid>
-            <Field label="Görev" name="input" type="textarea" required />
-            <Disclose summary="Bu görevin çalışma ayarları">
+            <Field label="Task" name="input" type="textarea" required />
+            <Disclose summary="Working settings for this task">
               <FormGrid>
-                <ModelPicker inherit blankLabel="Dot’un varsayılan modeli" />
+                <ModelPicker inherit blankLabel="The Dot’s default model" />
                 <Field
-                  label="Çalışma dizini"
+                  label="Working directory"
                   name="cwd"
-                  description="Bilgisayarın izin verilen çalışma köklerinden bir dizin."
+                  description="A directory under one of the computer’s allowed working roots."
                 />
               </FormGrid>
             </Disclose>
@@ -530,11 +529,11 @@ export function TaskPanel() {
       )}
       <div className="grid gap-3 sm:grid-cols-2">
         <SelectField
-          label="Durum"
+          label="Status"
           value={filter}
           onChange={setFilter}
           options={[
-            { value: "", label: "Tüm durumlar" },
+            { value: "", label: "All statuses" },
             ...Object.entries(taskStatuses).map(([value, label]) => ({
               value,
               label,
@@ -546,7 +545,7 @@ export function TaskPanel() {
           value={dotFilter}
           onChange={setDotFilter}
           options={[
-            { value: "", label: "Tüm Dot’lar" },
+            { value: "", label: "All Dots" },
             ...(dots.data?.items ?? []).map((dot) => ({
               value: dot.id,
               label: dot.name,
@@ -558,7 +557,7 @@ export function TaskPanel() {
       {tasks.loading && !tasks.data ? (
         <Loading />
       ) : !tasks.data?.items.length ? (
-        <Empty>Bu filtrelerde görev yok.</Empty>
+        <Empty>No tasks match these filters.</Empty>
       ) : (
         <div className="flex flex-col gap-3">
           {newest(tasks.data.items).map((task) => (
@@ -588,13 +587,13 @@ export function TaskPanel() {
                       task.status,
                     ) && (
                       <Action path={`tasks/${task.id}/cancel`} variant="ghost">
-                        İptal
+                        Cancel
                       </Action>
                     )}
                     {["failed", "cancelled", "interrupted"].includes(
                       task.status,
                     ) && (
-                      <Action path={`tasks/${task.id}/retry`}>Yeniden dene</Action>
+                      <Action path={`tasks/${task.id}/retry`}>Try again</Action>
                     )}
                   </Actions>
                 </div>
@@ -633,26 +632,26 @@ function TaskDetail({
   return (
     <div className="flex flex-col gap-4 border-t border-border pt-4">
       <dl className="grid gap-3 text-sm sm:grid-cols-2">
-        <Fact label="Görev kimliği">{task.id}</Fact>
-        <Fact label="Üst görev">{task.parentTaskId ?? "Yok"}</Fact>
-        <Fact label="Model / düşünme">
-          {task.model ?? "Varsayılan"} / {task.reasoningEffort ?? "Varsayılan"}
+        <Fact label="Task ID">{task.id}</Fact>
+        <Fact label="Parent task">{task.parentTaskId ?? "None"}</Fact>
+        <Fact label="Model / thinking">
+          {task.model ?? "Default"} / {task.reasoningEffort ?? "Default"}
         </Fact>
-        <Fact label="Çalışma dizini">{task.cwd ?? "Varsayılan"}</Fact>
+        <Fact label="Working directory">{task.cwd ?? "Default"}</Fact>
       </dl>
       <div>
-        <h3 className="mb-1 font-semibold">Talimat</h3>
+        <h3 className="mb-1 font-semibold">Instruction</h3>
         <p className="preserve">{task.input}</p>
       </div>
       {task.result && (
         <div>
-          <h3 className="mb-1 font-semibold">Sonuç</h3>
+          <h3 className="mb-1 font-semibold">Result</h3>
           <p className="preserve">{task.result}</p>
         </div>
       )}
       {task.error && <Notice error={task.error} />}
       <div>
-        <h3 className="mb-1 font-semibold">Etkinlikler</h3>
+        <h3 className="mb-1 font-semibold">Activity</h3>
         <Notice error={activity.error} />
         <ul className="flex flex-col gap-1 text-sm">
           {activity.data?.items.map((item) => (
@@ -664,7 +663,7 @@ function TaskDetail({
         </ul>
       </div>
       <div>
-        <h3 className="mb-1 font-semibold">Çıktılar</h3>
+        <h3 className="mb-1 font-semibold">Outputs</h3>
         <Notice error={outputs.error} />
         <div className="flex flex-wrap gap-3">
           {outputs.data?.items.map((output) => (
@@ -679,9 +678,9 @@ function TaskDetail({
           ))}
         </div>
       </div>
-      <Disclose summary="Alt görev delege et">
+      <Disclose summary="Delegate a subtask">
         <Form
-          submit="Alt görevi oluştur"
+          submit="Create the subtask"
           onSubmit={(d) =>
             mutate(`tasks/${task.id}/delegate`, "POST", {
               title: str(d, "title"),
@@ -690,12 +689,12 @@ function TaskDetail({
             })
           }
         >
-          <Field label="Alt görev başlığı" name="title" required />
-          <Field label="Alt görev talimatı" name="input" type="textarea" required />
+          <Field label="Subtask title" name="title" required />
+          <Field label="Subtask instruction" name="input" type="textarea" required />
           <ComputerSelect computers={computers} />
         </Form>
       </Disclose>
-      <Disclose summary="Teknik ayrıntılar">
+      <Disclose summary="Technical details">
         <Json value={task} />
       </Disclose>
     </div>

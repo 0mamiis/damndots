@@ -162,7 +162,7 @@ test('non-retryable provider errors become an immediate response.failed event; t
     assert.equal(dead.statusCode, 200); assert.match(String(dead.headers['content-type']), /event-stream/);
     const e1 = events(dead.body)[0]; assert.equal(e1.type, 'response.failed'); assert.equal(e1.response.error.code, 'invalid_prompt'); assert.match(e1.response.error.message, /antigravity/);
     const limited = events((await f.gateway({ model: 'limited', stream: true, input: 'x' })).body)[0]; assert.equal(limited.response.error.code, 'insufficient_quota');
-    const rate = events((await f.gateway({ model: 'rate', stream: true, input: 'x' })).body)[0]; assert.equal(rate.response.error.code, 'rate_limit_exceeded'); assert.match(rate.response.error.message,/hız sınırı/);
+    const rate = events((await f.gateway({ model: 'rate', stream: true, input: 'x' })).body)[0]; assert.equal(rate.response.error.code, 'rate_limit_exceeded'); assert.match(rate.response.error.message,/rate limit/);
     const flaky = await f.gateway({ model: 'flaky', stream: true, input: 'x' }); assert.equal(flaky.statusCode, 503, '5xx Codex tarafından yeniden denenebilir kalır');
   } finally { await f.cleanup(); await fake.close(); }
 });

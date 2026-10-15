@@ -68,21 +68,21 @@ function OutboxPanel() {
   const outbox = useData<ApiList<ReplyOutbox>>("connectors/outbox");
   return (
     <Section
-      title="Kanal yanıtları"
-      description="Gelen mesajlardan oluşan yanıtların gerçek gönderim durumu."
+      title="Channel replies"
+      description="The real delivery status of replies created from incoming messages."
     >
       <Notice error={outbox.error} />
       {outbox.loading && !outbox.data ? (
         <Loading />
       ) : !outbox.data?.items.length ? (
-        <Empty>Henüz kanal yanıtı yok.</Empty>
+        <Empty>No channel replies yet.</Empty>
       ) : (
         outbox.data.items.map((reply) => (
           <Row key={reply.id} className="items-start">
             <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <strong className="break-all">Görev: {reply.taskId}</strong>
+              <strong className="break-all">Task: {reply.taskId}</strong>
               <small className="text-muted">
-                {reply.attempts} deneme · {time(reply.updatedAt)}
+                {reply.attempts} attempts · {time(reply.updatedAt)}
               </small>
               {reply.lastError && (
                 <p className="text-sm text-danger" role="alert">
@@ -90,17 +90,15 @@ function OutboxPanel() {
                 </p>
               )}
               {["failed", "delivery_unknown"].includes(reply.status) && (
-                <Disclose summary="Yeniden gönderme">
+                <Disclose summary="Resend">
                   <p className="text-sm text-muted">
-                    Sağlayıcı mesajı daha önce almış olabilir. Yeniden denemeden
-                    önce hedef kanalı kontrol edin. Yeni deneme ayrı bir onay
-                    görevi oluşturur.
+                    The provider may already have received the message. Check the target channel before retrying. A new attempt creates a separate approval task.
                   </p>
                   <Action
                     path={`connectors/outbox/${encodeURIComponent(reply.id)}/retry`}
                     variant="secondary"
                   >
-                    Yeniden deneme görevi oluştur
+                    Create a retry task
                   </Action>
                 </Disclose>
               )}
@@ -125,17 +123,17 @@ export function ComputerPanel() {
   return (
     <>
       <PageHeading
-        eyebrow="Dot’unun elleri"
-        title="Bilgisayarlar"
-        description="Bu bilgisayarı veya uzak bir yürütücüyü çalışma alanına bağla."
+        eyebrow="Your Dot’s hands"
+        title="Computers"
+        description="Connect this computer or a remote executor to the workspace."
       />
       <Notice error={computers.error} />
       <Section
-        title="Bilgisayar bağla"
-        description="Worker, sunucuya dışarı doğru bağlantı kurar. Kaydı tamamlamak için komutu hedef bilgisayarda çalıştır."
+        title="Connect a computer"
+        description="The worker makes an outbound connection to the server. Run the command on the target computer to finish enrollment."
       >
         <Form
-          submit="Tek kullanımlık kayıt anahtarı oluştur"
+          submit="Create a single-use enrollment key"
           onSubmit={async (d) => {
             setEnrollment(
               (await mutate("computers/enrollment", "POST", {
@@ -145,15 +143,15 @@ export function ComputerPanel() {
           }}
         >
           <Field
-            label="Bilgisayar adı"
+            label="Computer name"
             name="name"
-            placeholder="Örn. Çalışma bilgisayarım"
+            placeholder="e.g. My work computer"
           />
         </Form>
         {enrollment && (
           <div className="flex flex-col gap-3 rounded-2xl border border-border p-4">
             <p className="text-sm">
-              Kayıt anahtarının son kullanımı: {time(enrollment.expiresAt)}
+              Enrollment key valid until: {time(enrollment.expiresAt)}
             </p>
             <Code>{enrollment.command}</Code>
             <RemoteInstall token={enrollment.token} />
@@ -167,14 +165,14 @@ export function ComputerPanel() {
                   try {
                     await navigator.clipboard.writeText(enrollment.command);
                   } catch {
-                    setCopyError("Komut kopyalanamadı. Metni seçip elle kopyalayın.");
+                    setCopyError("The command could not be copied. Select the text and copy it manually.");
                   }
                 }}
               >
-                Komutu kopyala
+                Copy the command
               </Button>
             </Actions>
-            <Disclose summary="Kayıt anahtarı">
+            <Disclose summary="Enrollment key">
               <Code>{enrollment.token}</Code>
             </Disclose>
           </div>
@@ -184,20 +182,19 @@ export function ComputerPanel() {
         <Loading />
       ) : !computers.data?.items.length ? (
         <Empty>
-          Bağlı bilgisayar yok. Bir kayıt anahtarı oluştur ve worker komutunu
-          çalıştır.
+          No computers connected. Create an enrollment key and run the worker command.
         </Empty>
       ) : (
         computers.data.items.map((computer) => (
           <Section
             key={computer.id}
             title={computer.name}
-            description={`${computer.platform} · Son görülme ${time(computer.lastSeenAt)}`}
+            description={`${computer.platform} · Last seen ${time(computer.lastSeenAt)}`}
             action={<Status value={computer.state} />}
           >
             <Tags items={computer.capabilities} />
             <p className="text-sm text-muted">
-              Çalışma kökleri: {computer.roots.join(", ") || "Kök seçilmemiş"}
+              Working roots: {computer.roots.join(", ") || "No root selected"}
             </p>
             <Actions>
               <Button
@@ -211,19 +208,19 @@ export function ComputerPanel() {
                   setSelected(selected === computer.id ? "" : computer.id)
                 }
               >
-                Tarayıcıyı aç
+                Open the browser
               </Button>
             </Actions>
-            <Disclose summary="Bağlantıyı kaldır">
+            <Disclose summary="Disconnect">
               <p className="text-sm text-muted">
-                Bu bilgisayarın erişimi iptal edilir.
+                This computer’s access will be revoked.
               </p>
               <Action
                 path={`computers/${computer.id}`}
                 method="DELETE"
                 variant="danger"
               >
-                Erişimi kaldır
+                Revoke access
               </Action>
             </Disclose>
             {selected === computer.id && <BrowserControl computer={computer} />}
@@ -262,13 +259,13 @@ function BrowserControl({ computer }: { computer: Computer }) {
       while (["queued", "running"].includes(job.status) && alive.current) {
         if (Date.now() > deadline)
           throw new Error(
-            "Tarayıcı işi hâlâ sürüyor. Bilgisayarın çevrimiçi olduğunu kontrol edin.",
+            "The browser job is still running. Check that the computer is online.",
           );
         await new Promise((resolve) => setTimeout(resolve, 650));
         job = await api<BrowserJob>(`browser/jobs/${job.id}`);
       }
       if (["failed", "cancelled"].includes(job.status))
-        throw new Error(job.error ?? "Tarayıcı işi başarısız.");
+        throw new Error(job.error ?? "The browser job failed.");
       if (job.result && job.status === "completed") {
         if (action === "close") browserSessions.delete(computer.id);
         else browserSessions.set(computer.id, job.result);
@@ -280,7 +277,7 @@ function BrowserControl({ computer }: { computer: Computer }) {
       return true;
     } catch (e) {
       if (alive.current)
-        setError(e instanceof Error ? e.message : "Tarayıcı işlemi başarısız.");
+        setError(e instanceof Error ? e.message : "The browser operation failed.");
       return false;
     } finally {
       if (alive.current) setPending(false);
@@ -291,9 +288,9 @@ function BrowserControl({ computer }: { computer: Computer }) {
     <div className="flex flex-col gap-4 rounded-2xl border border-border p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="font-semibold">Tarayıcı kontrolü</h3>
+          <h3 className="font-semibold">Browser control</h3>
           <p className="text-sm text-muted">
-            {result?.title ?? "Yeni ve yalıtılmış tarayıcı oturumu"}
+            {result?.title ?? "A new, isolated browser session"}
           </p>
         </div>
         {result && <Status value={result.control} />}
@@ -307,7 +304,7 @@ function BrowserControl({ computer }: { computer: Computer }) {
       >
         <div className="min-w-60 flex-1">
           <ControlledField
-            label="Tarayıcı adresi"
+            label="Browser address"
             type="url"
             required
             placeholder="https://example.com"
@@ -316,7 +313,7 @@ function BrowserControl({ computer }: { computer: Computer }) {
           />
         </div>
         <Button type="submit" isPending={pending}>
-          {result ? "Git" : "Oturumu aç"}
+          {result ? "Go" : "Open session"}
         </Button>
       </form>
       <Notice error={error} />
@@ -329,7 +326,7 @@ function BrowserControl({ computer }: { computer: Computer }) {
               isPending={pending}
               onPress={() => execute(mine ? "release" : "takeover")}
             >
-              {mine ? "Dot’a geri ver" : "Kontrolü devral"}
+              {mine ? "Give back to the Dot" : "Take over control"}
             </Button>
             <Button
               size="sm"
@@ -337,7 +334,7 @@ function BrowserControl({ computer }: { computer: Computer }) {
               isDisabled={pending}
               onPress={() => execute("screenshot")}
             >
-              Görüntüyü yenile
+              Refresh the view
             </Button>
             <Button
               size="sm"
@@ -347,18 +344,18 @@ function BrowserControl({ computer }: { computer: Computer }) {
                 if (await execute("close")) setResult(null);
               }}
             >
-              Oturumu kapat
+              Sign out
             </Button>
           </Actions>
           <p className="text-sm text-muted">
             {mine
-              ? "Kontrol sende. Görüntüde bir noktaya tıklayabilir, yazabilir veya tuş gönderebilirsin."
-              : "Kontrolü devraldığında Dot’un tarayıcı işlemleri durdurulur."}
+              ? "You are in control. You can click a point in the view, type, or send keys."
+              : "When you take control, the Dot’s browser actions are paused."}
           </p>
           {result.screenshotId ? (
             <button
               className="overflow-hidden rounded-2xl border border-border outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent enabled:cursor-crosshair disabled:opacity-80"
-              aria-label="Tarayıcı görüntüsü; seçtiğin noktaya tıkla"
+              aria-label="Browser view; click the point you want"
               disabled={pending || !mine}
               onClick={(event) => {
                 const bounds = event.currentTarget.getBoundingClientRect();
@@ -378,32 +375,32 @@ function BrowserControl({ computer }: { computer: Computer }) {
                 src={`/api/backend/browser/screenshots/${result.screenshotId}`}
                 width={result.width ?? 1280}
                 height={result.height ?? 720}
-                alt="Bağlı bilgisayarın tarayıcı görüntüsü"
+                alt="Browser view of the connected computer"
                 unoptimized
                 className="h-auto w-full"
               />
             </button>
           ) : (
-            <Empty>Henüz ekran görüntüsü yok. Görüntüyü yenile.</Empty>
+            <Empty>No screenshot yet. Refresh the view.</Empty>
           )}
           <Form
-            submit="Metni yaz"
+            submit="Type the text"
             disabled={pending || !mine}
             onSubmit={async () => {
               if (await execute("type", { text })) setText("");
             }}
           >
             <ControlledField
-              label="Odaklanan alana yazılacak metin"
+              label="Text to type into the focused field"
               name="text"
               value={text}
               onChange={setText}
               required
             />
             <SelectField
-              label="Tuş"
+              label="Key"
               value=""
-              placeholder="Tuş gönder…"
+              placeholder="Send key…"
               disabled={pending || !mine}
               onChange={(key) => {
                 if (key) void execute("press", { key });
@@ -428,9 +425,9 @@ export function ConnectorPanel() {
   return (
     <>
       <PageHeading
-        eyebrow="Dış dünyayla bağlantı"
-        title="Bağlantılar"
-        description="Okuma ve gönderme yetkilerini ayrı ayrı seç; araçları keşfet."
+        eyebrow="Connections to the outside world"
+        title="Connections"
+        description="Choose read and send permissions separately; discover tools."
         action={
           <Button
             onPress={() => {
@@ -439,18 +436,18 @@ export function ConnectorPanel() {
             }}
           >
             <PlusIcon />
-            Bağlantı ekle
+            Add connection
           </Button>
         }
       />
       <Notice error={connectors.error} />
       {edit !== undefined && (
         <Section
-          title={edit ? "Bağlantıyı düzenle" : "Yeni bağlantı"}
+          title={edit ? "Edit connection" : "New connection"}
           action={
             <Button size="sm" variant="ghost" onPress={() => setEdit(undefined)}>
               <CloseIcon width={14} height={14} />
-              Kapat
+              Close
             </Button>
           }
         >
@@ -460,7 +457,7 @@ export function ConnectorPanel() {
             onSubmit={(d) => {
               const config = JSON.parse(str(d, "config") || "{}");
               if (!config || Array.isArray(config) || typeof config !== "object")
-                throw new Error("Yapılandırma bir JSON nesnesi olmalı.");
+                throw new Error("The configuration must be a JSON object.");
               const kind = edit?.kind ?? str(d, "kind");
               return mutate(
                 edit ? `connectors/${edit.id}` : "connectors",
@@ -479,9 +476,9 @@ export function ConnectorPanel() {
             }}
           >
             <FormGrid>
-              <Field label="Ad" name="name" value={edit?.name} required />
+              <Field label="Name" name="name" value={edit?.name} required />
               <SelectField
-                label="Bağlantı türü"
+                label="Connection type"
                 name="kind"
                 value={connectorKind}
                 onChange={setConnectorKind}
@@ -492,7 +489,7 @@ export function ConnectorPanel() {
               />
             </FormGrid>
             <Field
-              label="Sağlayıcı yapılandırması (JSON)"
+              label="Provider configuration (JSON)"
               name="config"
               type="textarea"
               value={JSON.stringify(
@@ -510,14 +507,14 @@ export function ConnectorPanel() {
                 2,
               )}
               required
-              description="Sağlayıcının URL ve erişim bilgilerini girin. Kayıtlı sırlar gösterilmez; mevcut sırları değiştirmek için yeni değer girin."
+              description="Enter the provider’s URL and credentials. Stored secrets are not shown; enter a new value to replace an existing secret."
             />
             <Check
               name="read"
               label={
                 connectorKind === "mcp"
-                  ? "Araç listesini okumaya izin ver"
-                  : "Okuma araçlarına izin ver"
+                  ? "Allow reading the tool list"
+                  : "Allow read tools"
               }
               checked={
                 edit
@@ -531,8 +528,8 @@ export function ConnectorPanel() {
               name="send"
               label={
                 connectorKind === "mcp"
-                  ? "Araçları çalıştırmaya izin ver (yazma işlemleri onay ister)"
-                  : "Gönderme araçlarına izin ver (onay akışına tabi)"
+                  ? "Allow running tools (write actions ask for approval)"
+                  : "Allow send tools (subject to the approval flow)"
               }
               checked={
                 edit
@@ -544,14 +541,12 @@ export function ConnectorPanel() {
             />
             <Check
               name="enabled"
-              label="Bağlantı etkin"
+              label="Connection enabled"
               checked={edit?.enabled ?? true}
             />
-            <Disclose summary="Kurulum örnekleri">
+            <Disclose summary="Setup examples">
               <p className="text-sm text-muted">
-                MCP: url, headers. Slack: botToken, signingSecret. Email:
-                SMTP/IMAP sunucusu ve kimlik bilgileri. GitHub: token. Teams ve
-                webhook kurulumunun ayrıntıları docs/INTEGRATIONS.md dosyasında.
+                MCP: url, headers. Slack: botToken, signingSecret. Email: SMTP/IMAP server and credentials. GitHub: token. Details for Teams and webhook setup are in docs/INTEGRATIONS.md.
               </p>
             </Disclose>
           </Form>
@@ -559,7 +554,7 @@ export function ConnectorPanel() {
       )}
       <Notice error={testError} />
       {testResult !== undefined && (
-        <Section title="Bağlantı testinin yanıtı">
+        <Section title="Connection test response">
           <Json value={testResult} />
         </Section>
       )}
@@ -567,14 +562,14 @@ export function ConnectorPanel() {
         <Loading />
       ) : !connectors.data?.items.length ? (
         <Empty>
-          Henüz bağlantı yok. Kullanacağın hizmeti ekle ve yetkilerini seç.
+          No connections yet. Add the service you will use and choose its permissions.
         </Empty>
       ) : (
         connectors.data.items.map((connector) => (
           <Section
             key={connector.id}
             title={connector.name}
-            description={`${connector.kind} · ${connector.scopes.join(", ") || "Yetki verilmemiş"}`}
+            description={`${connector.kind} · ${connector.scopes.join(", ") || "No permission granted"}`}
             action={<Status value={connector.state} />}
           >
             <Notice error={connector.lastError ?? ""} />
@@ -589,13 +584,13 @@ export function ConnectorPanel() {
                   try {
                     setTestResult(await mutate(`connectors/${connector.id}/test`, "POST"));
                   } catch (e) {
-                    setTestError(e instanceof Error ? e.message : "Test başarısız.");
+                    setTestError(e instanceof Error ? e.message : "Test failed.");
                   } finally {
                     setTesting("");
                   }
                 }}
               >
-                Bağlantıyı test et
+                Test connection
               </Button>
               <Button
                 size="sm"
@@ -604,7 +599,7 @@ export function ConnectorPanel() {
                   setSelected(selected === connector.id ? "" : connector.id)
                 }
               >
-                Araçları keşfet
+                Discover tools
               </Button>
               <Button
                 size="sm"
@@ -614,17 +609,17 @@ export function ConnectorPanel() {
                   setConnectorKind(connector.kind);
                 }}
               >
-                Düzenle
+                Edit
               </Button>
               <Action
                 path={`connectors/${connector.id}`}
                 method="PATCH"
                 body={{ enabled: !connector.enabled }}
               >
-                {connector.enabled ? "Devre dışı bırak" : "Etkinleştir"}
+                {connector.enabled ? "Disable" : "Enable"}
               </Action>
               <Action path={`connectors/${connector.id}`} method="DELETE" variant="ghost">
-                Sil
+                Delete
               </Action>
             </Actions>
             {selected === connector.id && <ToolPanel connector={connector} />}
@@ -648,13 +643,13 @@ function ToolPanel({ connector }: { connector: Connector }) {
       {tools.loading ? (
         <Loading />
       ) : !items?.length ? (
-        <Empty>Bu bağlantı kullanılabilir araç döndürmedi.</Empty>
+        <Empty>This connection returned no usable tools.</Empty>
       ) : (
         items.map((tool) => (
           <Disclose key={tool.name} summary={`${tool.name} — ${tool.description}`}>
             <Json value={tool.inputSchema} />
             <Form
-              submit="Aracı çalıştır"
+              submit="Run the tool"
               onSubmit={async (d) => {
                 setResult(
                   await mutate(
@@ -666,7 +661,7 @@ function ToolPanel({ connector }: { connector: Connector }) {
               }}
             >
               <Field
-                label="Araç parametreleri (JSON)"
+                label="Tool parameters (JSON)"
                 name="arguments"
                 type="textarea"
                 value="{}"
@@ -678,9 +673,9 @@ function ToolPanel({ connector }: { connector: Connector }) {
       )}
       {result !== undefined && (
         <>
-          <h3 className="font-semibold">Araç isteğinin yanıtı</h3>
+          <h3 className="font-semibold">Tool request response</h3>
           <p className="text-sm text-muted">
-            Görev oluşturulduysa sonucu Görevler bölümünde izleyin.
+            If a task was created, follow its result in the Tasks section.
           </p>
           <Json value={result} />
         </>
@@ -694,9 +689,9 @@ export function SettingsPanel() {
   return (
     <>
       <PageHeading
-        eyebrow="Çalışma biçimin"
-        title="Ayarlar"
-        description="Modeli ve sunucunun görev davranışını seç."
+        eyebrow="Your way of working"
+        title="Settings"
+        description="Choose the model and how the server handles tasks."
       />
       <Notice error={settings.error} />
       <ProvidersPanel />
@@ -704,7 +699,7 @@ export function SettingsPanel() {
         <Loading />
       ) : (
         settings.data && (
-          <Section title="Sunucu ayarları">
+          <Section title="Server settings">
             <Form
               key={JSON.stringify(settings.data)}
               onSubmit={(d) =>
@@ -721,14 +716,14 @@ export function SettingsPanel() {
             >
               <FormGrid>
                 <Field
-                  label="Codex uygulama sunucusu"
+                  label="Codex app server"
                   name="appServerUrl"
                   value={settings.data.appServerUrl}
                   required
-                  description="Sunucunun Codex app-server bağlantı adresi."
+                  description="The server’s Codex app-server connection address."
                 />
                 <Field
-                  label="Eşzamanlı görev sınırı"
+                  label="Concurrent task limit"
                   name="maxParallelTasks"
                   type="number"
                   value={settings.data.maxParallelTasks}
@@ -740,25 +735,25 @@ export function SettingsPanel() {
                   model={settings.data.model}
                   reasoningEffort={settings.data.reasoningEffort}
                   serviceTier={settings.data.serviceTier}
-                  blankLabel="Sunucu varsayılanı"
+                  blankLabel="Server default"
                 />
               </FormGrid>
               <Check
                 name="autoApproveExecution"
-                label="Tam erişim — komut onayı isteme"
+                label="Full access — do not ask for command approval"
                 checked={settings.data.autoApproveExecution ?? true}
               />
               <p className="text-sm text-muted">
-                Açıkken Codex görevleri tam erişimle, onay istemeden çalışır. Gerçek kullanıcı soruları cevap gerektirir.
+                When on, Codex tasks run with full access without asking for approval. Real user questions still need an answer.
               </p>
               <Check
                 name="proactiveEnabled"
-                label="Proaktif çalışmaya izin ver"
+                label="Allow proactive work"
                 checked={settings.data.proactiveEnabled}
               />
               {settings.data.dataDirectory && (
                 <p className="text-sm text-muted">
-                  Veri dizini: {settings.data.dataDirectory}
+                  Data directory: {settings.data.dataDirectory}
                 </p>
               )}
             </Form>
@@ -785,20 +780,18 @@ export function LegacyClientPairingPanel() {
   const shellQuote = (value: string) => `'${value.replaceAll("'", "''")}'`;
   return (
     <Section
-      title="Eski izole istemci eşleştirmesi"
-      description="Aynı bilgisayardan veya uzak sunucudan Dots’a bağlanan özel uygulama kopyası. Ana Codex yerine ayrı profil kullanır."
+      title="Legacy isolated client pairing"
+      description="A separate app copy that connects to Dots from the same computer or a remote server. It uses its own profile rather than the main Codex."
     >
       <p className="text-sm text-muted">
-        Bağlanılacak sunucu: {serverUrl}. Komutu istemci bilgisayarda Dots proje
-        klasöründe çalıştırın. Uzak sunucu için HTTPS veya localhost SSH tüneli
-        kullanın.
+        Server to connect to: {serverUrl}. Run the command in the Dots project folder on the client computer. For a remote server use HTTPS or a localhost SSH tunnel.
       </p>
       <Form
-        submit="İstemci kayıt komutunu oluştur"
+        submit="Create the client enrollment command"
         onSubmit={async (data) => {
           const port = Number(str(data, "port"));
           if (!Number.isInteger(port) || port < 1024 || port > 65535)
-            throw new Error("1024 ile 65535 arasında boş bir yerel port seçin.");
+            throw new Error("Choose a free local port between 1024 and 65535.");
           const value = (await mutate("clients/enrollment", "POST")) as {
             token: string;
             expiresAt: string;
@@ -808,7 +801,7 @@ export function LegacyClientPairingPanel() {
             typeof value.token !== "string" ||
             !Number.isFinite(new Date(value.expiresAt).getTime())
           )
-            throw new Error("Sunucu geçerli bir istemci kayıt anahtarı döndürmedi.");
+            throw new Error("The server did not return a valid client enrollment key.");
           setEnrollment({
             ...value,
             command: `npm run dev:client -- --server ${shellQuote(serverUrl)} --enrollment ${shellQuote(value.token)} --port ${port} --launch`,
@@ -816,20 +809,19 @@ export function LegacyClientPairingPanel() {
         }}
       >
         <Field
-          label="İstemcinin yerel gateway portu"
+          label="The client’s local gateway port"
           name="port"
           type="number"
           value={8001}
           required
-          description="Bu bilgisayarda başka bir uygulamanın kullanmadığı port."
+          description="A port no other application on this computer is using."
         />
       </Form>
       {enrollment && (
         <div className="flex flex-col gap-3 rounded-2xl border border-border p-4">
           <p className="text-sm">
-            Tek kullanımlık kayıt anahtarının son kullanımı:{" "}
-            {time(enrollment.expiresAt)}. Komutu yalnız kendi istemci
-            bilgisayarında kullan.
+            Single-use enrollment key valid until:{" "}
+            {time(enrollment.expiresAt)}. Use the command only on your own client computer.
           </p>
           <Code>{enrollment.command}</Code>
             <RemoteInstall token={enrollment.token} />
@@ -843,14 +835,14 @@ export function LegacyClientPairingPanel() {
                 try {
                   await navigator.clipboard.writeText(enrollment.command);
                 } catch {
-                  setCopyError("Komut kopyalanamadı. Metni seçip elle kopyalayın.");
+                  setCopyError("The command could not be copied. Select the text and copy it manually.");
                 }
               }}
             >
-              Komutu kopyala
+              Copy the command
             </Button>
             <Button variant="ghost" size="sm" onPress={() => setEnrollment(undefined)}>
-              Komutu gizle
+              Hide the command
             </Button>
           </Actions>
         </div>
@@ -907,7 +899,7 @@ export function VoicePanel() {
       });
       setTranscript(result.text);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Ses çözümlenemedi.");
+      setError(e instanceof Error ? e.message : "The audio could not be transcribed.");
     } finally {
       setTranscribing(false);
     }
@@ -921,7 +913,7 @@ export function VoicePanel() {
     setError("");
     try {
       if (!navigator.mediaDevices?.getUserMedia)
-        throw new Error("Mikrofon için HTTPS veya localhost kullanın.");
+        throw new Error("Use HTTPS or localhost for the microphone.");
       stream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
       const chunks: Blob[] = [];
       const instance = new MediaRecorder(stream.current);
@@ -934,17 +926,17 @@ export function VoicePanel() {
       instance.start();
       setRecording(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Mikrofona erişilemedi.");
+      setError(e instanceof Error ? e.message : "The microphone could not be accessed.");
     }
   }
   return (
     <>
       <PageHeading
-        eyebrow="Konuşarak çalış"
-        title="Ses"
-        description="Sesini yazıya çevir veya AI tarafından oluşturulan bir sesi dinle."
+        eyebrow="Work by speaking"
+        title="Voice"
+        description="Turn your voice into text, or listen to an AI-generated voice."
       />
-      <Section title="Ses çalışma alanı">
+      <Section title="Voice workspace">
         <Notice error={error} />
         <Actions>
           <Button
@@ -952,14 +944,14 @@ export function VoicePanel() {
             isDisabled={transcribing}
             onPress={record}
           >
-            {recording ? "Kaydı durdur" : "Mikrofondan kaydet"}
+            {recording ? "Stop recording" : "Record from the microphone"}
           </Button>
           <Button
             variant="secondary"
             isDisabled={transcribing || recording}
             onPress={() => picker.current?.click()}
           >
-            Ses dosyası yükle
+            Upload an audio file
           </Button>
           <input
             ref={picker}
@@ -975,21 +967,21 @@ export function VoicePanel() {
           />
           <span role="status" className="text-sm text-muted">
             {transcribing
-              ? "Ses yazıya çevriliyor…"
+              ? "Transcribing the audio…"
               : recording
-                ? "Kayıt sürüyor…"
+                ? "Recording…"
                 : ""}
           </span>
         </Actions>
         <ControlledField
-          label="Metin"
+          label="Text"
           value={transcript}
           onChange={setTranscript}
           rows={6}
-          placeholder="Sesin çözümlendiğinde metin burada görünür."
+          placeholder="Once your audio is transcribed, the text appears here."
         />
         <Form
-          submit="Metni seslendir"
+          submit="Read the text aloud"
           onSubmit={async (d) => {
             const response = await fetch("/api/backend/voice/speak", {
               method: "POST",
@@ -1001,26 +993,26 @@ export function VoicePanel() {
             });
             if (!response.ok) {
               const value = await response.json();
-              throw new Error(value.error ?? "Ses oluşturulamadı.");
+              throw new Error(value.error ?? "Audio could not be generated.");
             }
             setAudioUrl(URL.createObjectURL(await response.blob()));
           }}
         >
           <Field
-            label="Ses adı (isteğe bağlı)"
+            label="Voice name (optional)"
             name="voice"
             value={settings.data?.voice}
           />
         </Form>
         {audioUrl && (
           <audio controls src={audioUrl} className="w-full">
-            Tarayıcınız ses oynatmayı desteklemiyor.
+            Your browser does not support audio playback.
           </audio>
         )}
       </Section>
       <Section
-        title="Ses sağlayıcısı"
-        description="OpenAI uyumlu transkripsiyon ve seslendirme servisi. Ses AI ile oluşturulur."
+        title="Voice provider"
+        description="An OpenAI-compatible transcription and speech service. The voice is generated by AI."
       >
         <Notice error={settings.error} />
         {settings.loading && !settings.data ? (
@@ -1045,57 +1037,57 @@ export function VoicePanel() {
           >
             <FormGrid>
               <Field
-                label="Servis adresi"
+                label="Service address"
                 name="apiUrl"
                 type="url"
                 value={settings.data?.apiUrl}
                 placeholder="https://api.openai.com/v1"
               />
               <Field
-                label="Yeni API anahtarı"
+                label="New API key"
                 name="apiKey"
                 type="password"
-                description="Boş bırakıldığında kayıtlı anahtar korunur."
+                description="When left empty, the stored key is kept."
               />
               <Field
-                label="Transkripsiyon modeli"
+                label="Transcription model"
                 name="transcriptionModel"
                 value={settings.data?.transcriptionModel}
               />
               <Field
-                label="Seslendirme modeli"
+                label="Speech model"
                 name="speechModel"
                 value={settings.data?.speechModel}
               />
               <Field
-                label="Varsayılan ses"
+                label="Default voice"
                 name="voice"
                 value={settings.data?.voice}
               />
               <SelectField
-                label="Arama modu"
+                label="Call mode"
                 name="mode"
                 defaultValue={settings.data?.mode ?? "auto"}
-                description="Otomatik: OpenAI adresinde Realtime API, başka bir proxy adresinde konuşma → Dot modeli → seslendirme hattı."
+                description="Automatic: the Realtime API on an OpenAI address; speech → Dot model → speech synthesis pipeline on any other proxy address."
                 options={[
-                  { value: "auto", label: "Otomatik" },
-                  { value: "pipeline", label: "Proxy hattı (STT → model → TTS)" },
+                  { value: "auto", label: "Automatic" },
+                  { value: "pipeline", label: "Proxy pipeline (STT → model → TTS)" },
                   { value: "realtime", label: "OpenAI Realtime API" },
                 ]}
               />
               <SelectField
-                label="Transkripsiyon yöntemi"
+                label="Transcription method"
                 name="transcriptionMode"
                 defaultValue={settings.data?.transcriptionMode ?? "auto"}
-                description="Ses girdili bir sohbet modeli (ör. Gemini) seçiliyse “Sohbet modeli” kullanın."
+                description="If a chat model that accepts audio input (e.g. Gemini) is selected, use “Chat model”."
                 options={[
-                  { value: "auto", label: "Otomatik" },
+                  { value: "auto", label: "Automatic" },
                   { value: "audio", label: "Ses API'si (/audio/transcriptions)" },
-                  { value: "chat", label: "Sohbet modeli (ses girdili)" },
+                  { value: "chat", label: "Chat model (audio input)" },
                 ]}
               />
               <Field
-                label="Konuşma dili"
+                label="Speech language"
                 name="language"
                 value={settings.data?.language}
                 placeholder="tr"
@@ -1103,13 +1095,13 @@ export function VoicePanel() {
             </FormGrid>
             <Check
               name="enabled"
-              label="Ses servisleri etkin"
+              label="Voice services enabled"
               checked={settings.data?.enabled}
             />
             <Check
               name="followCodexVoice"
-              label="Aramalarda Codex’te seçili sesi kullan"
-              description="Açıkken cevaplar Codex uygulamasındaki ses ayarıyla okunur; kapalıyken yukarıdaki seslendirme modeli kullanılır."
+              label="Use the voice selected in Codex for calls"
+              description="When on, replies are read with the voice setting in the Codex app; when off, the speech model above is used."
               checked={settings.data?.followCodexVoice}
             />
           </Form>

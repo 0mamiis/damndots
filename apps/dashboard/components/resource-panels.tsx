@@ -62,7 +62,7 @@ function ApprovalDecision({ approval }: { approval: Approval }) {
     return (
       <div className="flex flex-col gap-3">
         <Form
-          submit="Yanıtları gönder"
+          submit="Send answers"
           onSubmit={(data) => {
             const answers: Record<string, { answers: string[] }> = {};
             for (const question of questions) {
@@ -70,7 +70,7 @@ function ApprovalDecision({ approval }: { approval: Approval }) {
               const chosen = str(data, `choice-${question.id}`).trim();
               if (!free && !chosen)
                 throw new Error(
-                  `${question.header ?? question.question}: bir yanıt gerekli.`,
+                  `${question.header ?? question.question}: an answer is required.`,
                 );
               answers[question.id] = { answers: [free || chosen] };
             }
@@ -92,11 +92,11 @@ function ApprovalDecision({ approval }: { approval: Approval }) {
               </div>
               {(question.options?.length ?? 0) > 0 && (
                 <SelectField
-                  label="Seçenek"
+                  label="Option"
                   name={`choice-${question.id}`}
                   defaultValue=""
                   options={[
-                    { value: "", label: "Yanıt seçin veya aşağıya yazın" },
+                    { value: "", label: "Choose an answer or type below" },
                     ...(question.options ?? []).map((option) => ({
                       value: option.label,
                       label: option.description
@@ -107,7 +107,7 @@ function ApprovalDecision({ approval }: { approval: Approval }) {
                 />
               )}
               <Field
-                label={question.options?.length ? "Kendi yanıtın" : "Yanıtın"}
+                label={question.options?.length ? "Your own answer" : "Your answer"}
                 name={`free-${question.id}`}
                 type="textarea"
                 required={!question.options?.length}
@@ -121,7 +121,7 @@ function ApprovalDecision({ approval }: { approval: Approval }) {
             body={{ approved: false }}
             variant="danger"
           >
-            Yanıtlamayı reddet
+            Decline to answer
           </Action>
         </div>
       </div>
@@ -135,7 +135,7 @@ function ApprovalDecision({ approval }: { approval: Approval }) {
     return (
       <div className="flex flex-col gap-3">
         <Form
-          submit="Bilgileri gönder"
+          submit="Send details"
           onSubmit={(data) => {
             let content: Record<string, unknown>;
             if (simple) {
@@ -154,7 +154,7 @@ function ApprovalDecision({ approval }: { approval: Approval }) {
                   !value &&
                   schema.required?.includes(name)
                 )
-                  throw new Error(`${property.title ?? name} alanı gerekli.`);
+                  throw new Error(`${property.title ?? name} is required.`);
               }
             } else {
               content = JSON.parse(str(data, "content"));
@@ -163,7 +163,7 @@ function ApprovalDecision({ approval }: { approval: Approval }) {
                 typeof content !== "object" ||
                 Array.isArray(content)
               )
-                throw new Error("Bir JSON nesnesi gerekli.");
+                throw new Error("A JSON object is required.");
             }
             return mutate(`approvals/${approval.id}/resolve`, "POST", {
               approved: true,
@@ -191,7 +191,7 @@ function ApprovalDecision({ approval }: { approval: Approval }) {
                     typeof property.default === "string" ? property.default : ""
                   }
                   options={[
-                    { value: "", label: "Seçin" },
+                    { value: "", label: "Select" },
                     ...property.enum.map((value) => ({ value, label: value })),
                   ]}
                 />
@@ -219,7 +219,7 @@ function ApprovalDecision({ approval }: { approval: Approval }) {
             <>
               <Json value={schema} />
               <Field
-                label="Yanıt içeriği (JSON)"
+                label="Answer content (JSON)"
                 name="content"
                 type="textarea"
                 value="{}"
@@ -234,7 +234,7 @@ function ApprovalDecision({ approval }: { approval: Approval }) {
             body={{ approved: false }}
             variant="danger"
           >
-            Bilgi vermeyi reddet
+            Decline to provide details
           </Action>
         </div>
       </div>
@@ -247,14 +247,14 @@ function ApprovalDecision({ approval }: { approval: Approval }) {
         body={{ approved: true }}
         variant="primary"
       >
-        İşlemi onayla
+        Approve the action
       </Action>
       <Action
         path={`approvals/${approval.id}/resolve`}
         body={{ approved: false }}
         variant="danger"
       >
-        Reddet
+        Deny
       </Action>
     </Actions>
   );
@@ -267,30 +267,30 @@ export function MemoryPanel() {
   return (
     <>
       <PageHeading
-        eyebrow="Hatırlanacak şeyler"
-        title="Hafıza"
-        description="Dot’larının sonraki görevlerde kullanacağı bilgileri düzenle."
+        eyebrow="Things to remember"
+        title="Memory"
+        description="Edit the information your Dots will use in later tasks."
         action={
           <Button onPress={() => setEdit(null)}>
             <PlusIcon />
-            Bilgi ekle
+            Add information
           </Button>
         }
       />
       <Notice error={memories.error} />
       {edit !== undefined && (
         <Section
-          title={edit ? "Bilgiyi düzenle" : "Yeni bilgi"}
+          title={edit ? "Edit information" : "New information"}
           action={
             <Button size="sm" variant="ghost" onPress={() => setEdit(undefined)}>
               <CloseIcon width={14} height={14} />
-              Kapat
+              Close
             </Button>
           }
         >
           <Form
             key={edit?.id ?? "new"}
-            submit={edit ? "Değişiklikleri kaydet" : "Hafızaya ekle"}
+            submit={edit ? "Save changes" : "Add to memory"}
             onDone={() => setEdit(undefined)}
             onSubmit={(d) =>
               mutate(
@@ -314,16 +314,16 @@ export function MemoryPanel() {
                 value={edit?.dotId}
                 disabled={Boolean(edit)}
               />
-              <Field label="Başlık" name="title" value={edit?.title} required />
+              <Field label="Title" name="title" value={edit?.title} required />
               <Field
-                label="Etiketler"
+                label="Tags"
                 name="tags"
                 value={edit?.tags.join(", ")}
-                description="Virgülle ayırın."
+                description="Separate with commas."
               />
             </FormGrid>
             <Field
-              label="İçerik"
+              label="Content"
               name="content"
               type="textarea"
               value={edit?.content}
@@ -336,8 +336,7 @@ export function MemoryPanel() {
         <Loading />
       ) : !memories.data?.items.length ? (
         <Empty>
-          Henüz hafızaya eklenmiş bilgi yok. Dot’unun hatırlamasını istediğin bir
-          bilgi ekle.
+          No information has been added to memory yet. Add something you want your Dot to remember.
         </Empty>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
@@ -359,14 +358,14 @@ export function MemoryPanel() {
                 </div>
                 <Actions>
                   <Button size="sm" variant="ghost" onPress={() => setEdit(memory)}>
-                    Düzenle
+                    Edit
                   </Button>
                   <Action
                     path={`memories/${memory.id}`}
                     method="DELETE"
                     variant="ghost"
                   >
-                    Sil
+                    Delete
                   </Action>
                 </Actions>
               </Card.Header>
@@ -385,7 +384,7 @@ function parseOnce(value: string) {
   const date = new Date(value);
   if (!value.trim() || Number.isNaN(date.getTime()))
     throw new Error(
-      "Çalışma zamanı geçerli bir tarih olmalı. Örn. 2026-10-01T09:00:00+03:00",
+      "The run time must be a valid date, e.g. 2026-10-01T09:00:00+03:00",
     );
   return date.toISOString();
 }
@@ -399,9 +398,9 @@ export function SchedulePanel() {
   return (
     <>
       <PageHeading
-        eyebrow="Zamanı geldiğinde"
-        title="Zamanlama"
-        description="Tek seferlik veya tekrarlayan işler; seçtiğin saat diliminde."
+        eyebrow="When the time comes"
+        title="Schedules"
+        description="One-off or recurring jobs, in the time zone you choose."
         action={
           <Button
             onPress={() => {
@@ -410,18 +409,18 @@ export function SchedulePanel() {
             }}
           >
             <PlusIcon />
-            Zamanlama oluştur
+            Create schedule
           </Button>
         }
       />
       <Notice error={schedules.error} />
       {edit !== undefined && (
         <Section
-          title={edit ? "Zamanlamayı düzenle" : "Yeni zamanlama"}
+          title={edit ? "Edit schedule" : "New schedule"}
           action={
             <Button size="sm" variant="ghost" onPress={() => setEdit(undefined)}>
               <CloseIcon width={14} height={14} />
-              Kapat
+              Close
             </Button>
           }
         >
@@ -457,28 +456,28 @@ export function SchedulePanel() {
                 value={edit?.dotId}
                 disabled={Boolean(edit)}
               />
-              <Field label="Başlık" name="title" required value={edit?.title} />
+              <Field label="Title" name="title" required value={edit?.title} />
               <SelectField
-                label="Zamanlama türü"
+                label="Schedule type"
                 name="kind"
                 value={kind}
                 onChange={setKind}
                 options={[
-                  { value: "interval", label: "Aralıklarla" },
-                  { value: "once", label: "Tek sefer" },
-                  { value: "cron", label: "Cron ifadesi" },
-                  { value: "rrule", label: "Takvim kuralı (RRULE)" },
+                  { value: "interval", label: "At intervals" },
+                  { value: "once", label: "One time" },
+                  { value: "cron", label: "Cron expression" },
+                  { value: "rrule", label: "Calendar rule (RRULE)" },
                 ]}
               />
               <Field
-                label="Saat dilimi"
+                label="Time zone"
                 name="timezone"
                 value={edit?.timezone ?? "Europe/Istanbul"}
                 required
               />
               {kind === "interval" && (
                 <Field
-                  label="Tekrar aralığı (saniye)"
+                  label="Repeat interval (seconds)"
                   name="intervalSeconds"
                   type="number"
                   value={edit?.intervalSeconds ?? 3600}
@@ -487,33 +486,33 @@ export function SchedulePanel() {
               )}
               {kind === "cron" && (
                 <Field
-                  label="Cron ifadesi"
+                  label="Cron expression"
                   name="cron"
                   value={edit?.cron ?? "0 9 * * *"}
                   required
-                  description="Dakika saat gün ay haftanın-günü"
+                  description="Minute hour day month day-of-week"
                 />
               )}
               {kind === "rrule" && (
                 <Field
-                  label="Takvim kuralı (RRULE)"
+                  label="Calendar rule (RRULE)"
                   name="rrule"
                   type="textarea"
                   value={
                     edit?.rrule ?? "RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0;BYSECOND=0"
                   }
                   required
-                  description="iCalendar RRULE ifadesi. Saat dilimi ayrı alandan uygulanır."
+                  description="An iCalendar RRULE expression. The time zone is applied from the separate field."
                 />
               )}
               {kind === "once" && (
                 <Field
-                  label="Çalışma zamanı (ISO 8601)"
+                  label="Run time (ISO 8601)"
                   name="nextRunAt"
                   value={edit?.nextRunAt ?? ""}
                   required
                   placeholder="2026-10-01T09:00:00+03:00"
-                  description="Saat dilimi farkını da ekleyin."
+                  description="Include the time zone offset as well."
                 />
               )}
               <ComputerSelect
@@ -522,7 +521,7 @@ export function SchedulePanel() {
               />
             </FormGrid>
             <Field
-              label="Görev talimatı"
+              label="Task instruction"
               name="prompt"
               type="textarea"
               required
@@ -530,12 +529,12 @@ export function SchedulePanel() {
             />
             <Check
               name="enabled"
-              label="Zamanlama etkin"
+              label="Schedule enabled"
               checked={edit?.enabled ?? true}
             />
             <Check
               name="proactive"
-              label="Proaktif çalışma olarak işaretle"
+              label="Mark as proactive work"
               checked={edit?.proactive}
             />
           </Form>
@@ -545,7 +544,7 @@ export function SchedulePanel() {
         <Loading />
       ) : !schedules.data?.items.length ? (
         <Empty>
-          Zamanlama yok. Düzenli takip veya tek seferlik bir iş oluştur.
+          No schedules yet. Create a regular follow-up or a one-off job.
         </Empty>
       ) : (
         <div className="flex flex-col gap-3">
@@ -561,13 +560,13 @@ export function SchedulePanel() {
                     {schedule.kind === "cron"
                       ? schedule.cron
                       : schedule.kind === "rrule"
-                        ? (schedule.rrule ?? "Takvim kuralı")
+                        ? (schedule.rrule ?? "Calendar rule")
                         : schedule.kind === "interval"
-                          ? `${schedule.intervalSeconds} sn aralık`
-                          : "Tek sefer"}
+                          ? `${schedule.intervalSeconds} sec interval`
+                          : "One time"}
                   </small>
                   <small className="text-muted">
-                    Sonraki: {time(schedule.nextRunAt)} · Son çalışma:{" "}
+                    Next: {time(schedule.nextRunAt)} · Last run:{" "}
                     {time(schedule.lastRunAt)}
                   </small>
                 </div>
@@ -578,10 +577,10 @@ export function SchedulePanel() {
                     method="PATCH"
                     body={{ enabled: !schedule.enabled }}
                   >
-                    {schedule.enabled ? "Duraklat" : "Etkinleştir"}
+                    {schedule.enabled ? "Pause" : "Enable"}
                   </Action>
                   <Action path={`schedules/${schedule.id}/run`}>
-                    Şimdi çalıştır
+                    Run now
                   </Action>
                   <Button
                     size="sm"
@@ -591,14 +590,14 @@ export function SchedulePanel() {
                       setKind(schedule.kind);
                     }}
                   >
-                    Düzenle
+                    Edit
                   </Button>
                   <Action
                     path={`schedules/${schedule.id}`}
                     method="DELETE"
                     variant="ghost"
                   >
-                    Sil
+                    Delete
                   </Action>
                 </Actions>
               </Card.Content>
@@ -618,9 +617,9 @@ export function OutputsPanel() {
   return (
     <>
       <PageHeading
-        eyebrow="İşin sonucu"
-        title="Çıktılar"
-        description="Görevlerin ürettiği dosyalar; doğrudan sunucundan."
+        eyebrow="Result of the job"
+        title="Outputs"
+        description="Files produced by your tasks, straight from your server."
       />
       <div className="max-w-sm">
         <SelectField
@@ -628,7 +627,7 @@ export function OutputsPanel() {
           value={dotId}
           onChange={setDotId}
           options={[
-            { value: "", label: "Tüm Dot’lar" },
+            { value: "", label: "All Dots" },
             ...(dots.data?.items ?? []).map((d) => ({ value: d.id, label: d.name })),
           ]}
         />
@@ -638,7 +637,7 @@ export function OutputsPanel() {
         <Loading />
       ) : !outputs.data?.items.length ? (
         <Empty>
-          Henüz çıktı yok. Dosya üreten görevlerin sonuçları burada görünecek.
+          No outputs yet. Results of tasks that produce files will appear here.
         </Empty>
       ) : (
         <div className="flex flex-col gap-3">
@@ -657,7 +656,7 @@ export function OutputsPanel() {
                     {output.mimeType} · {Math.ceil(output.size / 1024)} KB ·{" "}
                     {time(output.createdAt)}
                   </small>
-                  <small className="truncate text-muted">Görev: {output.taskId}</small>
+                  <small className="truncate text-muted">Task: {output.taskId}</small>
                 </div>
               </div>
               <a
@@ -665,7 +664,7 @@ export function OutputsPanel() {
                 href={`/api/backend/outputs/${output.id}/content`}
                 download
               >
-                Dosyayı indir
+                Download the file
               </a>
             </Row>
           ))}
@@ -679,15 +678,15 @@ export function ApprovalPanel() {
   return (
     <>
       <PageHeading
-        eyebrow="Son söz sende"
-        title="Onaylar"
-        description="Dot’unun kararını beklediği işlemleri incele."
+        eyebrow="The last word is yours"
+        title="Approvals"
+        description="Review the actions your Dot is waiting on you to decide."
       />
       <Notice error={approvals.error} />
       {approvals.loading && !approvals.data ? (
         <Loading />
       ) : !approvals.data?.items.length ? (
-        <Empty>Onay bekleyen veya kayıtlı bir işlem yok.</Empty>
+        <Empty>There are no actions awaiting approval or recorded.</Empty>
       ) : (
         newest(approvals.data.items).map((approval) => (
           <Section
@@ -697,14 +696,14 @@ export function ApprovalPanel() {
             action={<Status value={approval.status} />}
           >
             <p className="preserve text-sm">{approval.detail}</p>
-            <Disclose summary="İşlem ayrıntıları">
+            <Disclose summary="Action details">
               <Json value={approval.request} />
             </Disclose>
             {approval.status === "pending" && (
               <ApprovalDecision approval={approval} />
             )}
             {approval.resolution && (
-              <Disclose summary="Gönderilen yanıt">
+              <Disclose summary="Submitted answer">
                 <Json value={approval.resolution} />
               </Disclose>
             )}

@@ -19,8 +19,8 @@ function fatalProviderError(status: number, detail: string): { code: string; mes
   try { const j = JSON.parse(detail); message = String(j?.error?.message ?? j?.error ?? j?.message ?? detail); } catch { /* düz metin */ }
   message = message.replace(/\s+/g, ' ').slice(0, 400);
   if (status === 429 && /usage limit|quota|cooling down|exhaust|hit your/i.test(message)) return { code: 'insufficient_quota', message };
-  if (status === 429) return { code: 'rate_limit_exceeded', message: 'Model sağlayıcısının hız sınırı doldu (429). Bir süre sonra yeniden deneyin. '+message };
-  if (status === 401 || status === 403 || status === 404) return { code: 'invalid_prompt', message: 'Model sağlayıcısı isteği reddetti (' + status + '): ' + message };
+  if (status === 429) return { code: 'rate_limit_exceeded', message: 'The model provider’s rate limit was reached (429). Try again later. '+message };
+  if (status === 401 || status === 403 || status === 404) return { code: 'invalid_prompt', message: 'The model provider rejected the request (' + status + '): ' + message };
   return undefined;
 }
 /** Etkin model sağlayıcısına istek iletir; Chat Completions sağlayıcıları için Responses biçimini çevirir. */
@@ -40,7 +40,7 @@ export async function modelProxy(req: FastifyRequest, reply: FastifyReply, provi
     response = await fetch(target, { method: req.method, headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : JSON.stringify(bridge ? bridge.chat : req.body), redirect: 'error', signal: controller.signal });
   } catch (error) {
     if (controller.signal.aborted && reply.raw.destroyed) return reply;
-    return reply.code(502).send({ error: { message: 'Model sağlayıcısına ulaşılamadı: ' + (error instanceof Error ? error.message : 'bilinmeyen hata'), type: 'provider_unreachable' } });
+    return reply.code(502).send({ error: { message: 'The model provider could not be reached: ' + (error instanceof Error ? error.message : 'unknown error'), type: 'provider_unreachable' } });
   }finally{clearTimeout(headerTimeout);}
   if (!response.ok) {
     // Anahtar, istek metni ve sağlayıcının ham hata gövdesi günlüklere yazılmaz.

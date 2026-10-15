@@ -11,7 +11,7 @@ export const runtime = "nodejs";
 export async function POST(request: Request) {
   if (!sameOrigin(request))
     return Response.json(
-      { error: "İstek kaynağı doğrulanamadı." },
+      { error: "Request origin could not be verified." },
       { status: 403 },
     );
   try {
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     const server = validateServer(String(body.serverUrl));
     if (!body.token)
       return Response.json(
-        { error: "Yönetici erişim anahtarı gerekli." },
+        { error: "The admin access key is required." },
         { status: 400 },
       );
     const response = await fetch(`${server}/api/v1/session`, {
@@ -33,18 +33,18 @@ export async function POST(request: Request) {
     if (!response.ok) {
       const error = await response
         .json()
-        .catch(() => ({ error: "Sunucu oturumu açılamadı." }));
+        .catch(() => ({ error: "Could not open a server session." }));
       return Response.json(
         {
           error:
-            error.error ?? error.message ?? "Erişim anahtarı doğrulanamadı.",
+            error.error ?? error.message ?? "The access key could not be verified.",
         },
         { status: response.status },
       );
     }
     const data = await response.json();
     if (typeof data.accessToken !== "string")
-      throw new Error("Sunucu geçerli bir oturum döndürmedi.");
+      throw new Error("The server did not return a valid session.");
     const jar = await cookies();
     const expires = new Date(data.expiresAt);
     const options = {
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
   } catch (error) {
     return Response.json(
       {
-        error: error instanceof Error ? error.message : "Bağlantı kurulamadı.",
+        error: error instanceof Error ? error.message : "Could not connect.",
       },
       { status: 400 },
     );
@@ -72,7 +72,7 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   if (!sameOrigin(request))
     return Response.json(
-      { error: "İstek kaynağı doğrulanamadı." },
+      { error: "Request origin could not be verified." },
       { status: 403 },
     );
   const jar = await cookies();

@@ -19,11 +19,11 @@ export class LocalCodex {
  private async request(tool:string,args:Record<string,unknown>,signal?:AbortSignal,sender?:CodexSender):Promise<any>{
   let response:Response;
   try{response=await fetch(this.url+'/call',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+readFileSync(this.tokenFile,'utf8').trim()},body:JSON.stringify({tool,arguments:args,...sender?{sender}:{}}),signal:signal?AbortSignal.any([signal,AbortSignal.timeout(75000)]):AbortSignal.timeout(75000)});}
-  catch{throw new Error('Yerel PC veya Codex kapalı/bağlantısız. VPS sohbetleri için codex_* araçlarını kullan.');}
+  catch{throw new Error('The local PC or Codex is closed or not connected. Use the codex_* tools for VPS chats.');}
   const result:any=await response.json();
-  if(!response.ok)throw new Error(result.error||'Yerel Codex bağlantısı başarısız');
+  if(!response.ok)throw new Error(result.error||'The local Codex connection failed');
   const text=(result.contentItems||[]).filter((i:any)=>i.type==='inputText').map((i:any)=>i.text).join('\n');
-  if(result.success===false)throw new Error(text.slice(0,600)||'Yerel Codex işlemi başarısız');
+  if(result.success===false)throw new Error(text.slice(0,600)||'The local Codex operation failed');
   try{return JSON.parse(text);}catch{return {text};}
  }
  async call(name:string,args:Record<string,any>,signal?:AbortSignal,sender?:CodexSender):Promise<unknown>{

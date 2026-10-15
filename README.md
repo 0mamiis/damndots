@@ -33,11 +33,11 @@ Copy-Item .env.example .env
 
 Open [the dashboard](http://127.0.0.1:4320). Its login key is generated in `apps/server/.data/server/admin.key`. Add a provider URL and API key, test the API format, fetch or enter a model, and activate the provider.
 
-Model lists refresh automatically every 30 seconds while the panel is visible, and when you return to it. Providers share one in-flight discovery request; failed discovery retains the last successful list and retries after 30 seconds. Manually entered models are preserved. **Modelleri çek** still refreshes immediately.
+Model lists refresh automatically every 30 seconds while the panel is visible, and when you return to it. Providers share one in-flight discovery request; failed discovery retains the last successful list and retries after 30 seconds. Manually entered models are preserved. **Fetch models** still refreshes immediately.
 
 Once the services are ready, open Codex from your original shortcut. If Codex was already running during initial setup, close and reopen it once. `Start-Dots.cmd` does not open another Codex window or replace your shortcuts.
 
-The dashboard UI currently uses Turkish labels. Use its host-management section to configure backend connections and computer mode, and its settings section to select the model and execution policy. A host change is refused while tasks are running, and it does not move conversations between backends. Each backend keeps its own data.
+The dashboard is in English. Use its host-management section to configure backend connections and computer mode, and its settings section to select the model and execution policy. A host change is refused while tasks are running, and it does not move conversations between backends. Each backend keeps its own data.
 
 ## Where things run
 
@@ -104,7 +104,7 @@ The same installer can host the backend itself:
 
 The backend runs from `C:\Dots\server-data` as a `DotsServer` task. It has no dashboard of its own: add it from the dashboard on your PC under **Servers → Add host** using `http://<tailnet IP>:9340` and the admin key from `C:\Dots\server-data\admin.key`. Read that file on the VPS and keep it out of chats and screenshots. The install folder is readable only by SYSTEM and Administrators. Configure a model provider on the new backend; it cannot reach a provider that only listens on your PC's loopback unless that provider is also exposed to the tailnet.
 
-Once the host is added, its card on **Servers** can issue a computer enrollment code together with the install command for the machine to attach (run it on the VPS itself for a Dot that runs on and controls the VPS), and can copy a Dot's name, model, instructions and avatar files to the new backend. Cached profile, room and root identifiers remain linked to the copied Dot. Chat history is not copied. Existing profile settings are preserved; a missing avatar from an earlier copy can be restored. Then press **Use this host** with the computer mode set to **Sunucuya bağlı bilgisayar** (server computer).
+Once the host is added, its card on **Servers** can issue a computer enrollment code together with the install command for the machine to attach (run it on the VPS itself for a Dot that runs on and controls the VPS), and can copy a Dot's name, model, instructions and avatar files to the new backend. Cached profile, room and root identifiers remain linked to the copied Dot. Chat history is not copied. Existing profile settings are preserved; a missing avatar from an earlier copy can be restored. Then press **Use this host** with the computer mode set to **Computer connected to the server**.
 
 ## Execution access
 

@@ -54,7 +54,7 @@ export function responsesToChat(body: any): ChatRequest {
     if (tool?.type === 'function' && tool.name) tools.push({ type: 'function', function: { name: tool.name, ...(tool.description ? { description: tool.description } : {}), parameters: tool.parameters ?? { type: 'object', properties: {} } } });
     else if (tool?.type === 'custom' && tool.name) {
       customTools.add(tool.name);
-      tools.push({ type: 'function', function: { name: tool.name, description: [tool.description, tool.format?.definition ? 'Girdi biçimi:\n' + tool.format.definition : ''].filter(Boolean).join('\n\n'), parameters: { type: 'object', properties: { input: { type: 'string', description: 'Aracın ham girdisi' } }, required: ['input'] } } });
+      tools.push({ type: 'function', function: { name: tool.name, description: [tool.description, tool.format?.definition ? 'Input format:\n' + tool.format.definition : ''].filter(Boolean).join('\n\n'), parameters: { type: 'object', properties: { input: { type: 'string', description: 'Raw input of the tool' } }, required: ['input'] } } });
     } else if (tool?.type === 'namespace' && Array.isArray(tool.tools)) tool.tools.forEach(addTool);
   };
   for (const tool of Array.isArray(body?.tools) ? body.tools : []) addTool(tool);
@@ -141,7 +141,7 @@ export async function* translateStream(upstream: AsyncIterable<Uint8Array>, requ
     if (!payload || payload === '[DONE]') return;
     let chunk: any;
     try { chunk = JSON.parse(payload); } catch { return; }
-    if (chunk.error) throw new Error(typeof chunk.error === 'string' ? chunk.error : chunk.error.message ?? 'Sağlayıcı hatası');
+    if (chunk.error) throw new Error(typeof chunk.error === 'string' ? chunk.error : chunk.error.message ?? 'Provider error');
     gotChunk = true; model = chunk.model ?? model;
     if (chunk.usage) usage = chunk.usage;
     const choice = chunk.choices?.[0]; if (!choice) return;
@@ -195,7 +195,7 @@ export async function* translateStream(upstream: AsyncIterable<Uint8Array>, requ
       }
     }
     if (buffer.trim()) yield* handle(buffer.split(/\r?\n/).filter(l => l.startsWith('data:')).map(l => l.slice(5).trimStart()).join('\n'));
-    if (!gotChunk) throw new Error('Sağlayıcı boş yanıt döndürdü');
+    if (!gotChunk) throw new Error('The provider returned an empty response');
     // Bazı küçük modeller yanıtı yalnızca akıl yürütme alanına yazar; boş tur yerine bu metni yanıt olarak göster.
     if (!text && !calls.size && thoughtAll.trim() && !output.some(o => o?.type === 'message')) {
       yield* closeReasoning();
@@ -208,6 +208,6 @@ export async function* translateStream(upstream: AsyncIterable<Uint8Array>, requ
     const final = { ...base(finish === 'length' ? 'incomplete' : 'completed'), output: output.filter(Boolean), usage: usageOf(usage), ...(finish === 'length' ? { incomplete_details: { reason: 'max_output_tokens' } } : {}) };
     yield ev(finish === 'length' ? 'response.incomplete' : 'response.completed', { response: final });
   } catch (error) {
-    yield ev('response.failed', { response: { ...base('failed'), error: { code: 'provider_error', message: error instanceof Error ? error.message : 'Sağlayıcı akışı kesildi' } } });
+    yield ev('response.failed', { response: { ...base('failed'), error: { code: 'provider_error', message: error instanceof Error ? error.message : 'The provider stream was interrupted' } } });
   }
 }

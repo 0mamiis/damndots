@@ -54,7 +54,7 @@ export class ConnectionController {
   }
   if(plan.options.nativeEnabled&&process.platform==='win32'&&!this.children.has('native')&&!await open(plan.options.gatewayPort))this.startChild('native','scripts/native-dots.ts',[],{DOTS_SERVER_URL:plan.serverUrl,DOTS_NATIVE_PORT:String(plan.options.gatewayPort),DOTS_NATIVE_PARENT_PID:String(process.pid),DOTS_STACK_DIR:this.data});
   if(plan.options.linuxEnabled&&process.platform==='win32'&&!this.children.has('linux')){
-   if(!existsSync(join(this.root,'.data/linux-computer/enabled')))throw Error('Önce Dot Linux bilgisayarını kurun.');
+   if(!existsSync(join(this.root,'.data/linux-computer/enabled')))throw Error('Set up the Dot Linux computer first.');
    this.startChild('linux','scripts/start-linux-computer.ts',[],{DOTS_LINUX_PARENT_PID:String(process.pid),DOTS_SERVER_URL:plan.serverUrl,DOTS_LINUX_CONNECTION_ID:plan.id,DOTS_LINUX_RELAY_PORT:'9352',DOTS_LINUX_CREDENTIALS:JSON.stringify(plan.linux)});
   }
  }
@@ -66,9 +66,9 @@ export class ConnectionController {
   catch{}finally{this.busy=false;}
  }
  private async install(job:any){this.installing=true;let error:string|null=null;try{
-  if(process.platform!=='win32')throw Error('Linux kurulumu için Windows/WSL2 gerekir.');
-  if(this.applied?.options.linuxEnabled)throw Error('Kurulumdan önce bilgisayar modunu PC olarak seçip uygula.');
-  const p=spawn(process.execPath,['scripts/setup-linux-computer.mjs'],{cwd:this.root,windowsHide:true,env:{...process.env,DOTS_LINUX_DISTRO:job.distribution,DOTS_LINUX_IMAGE:job.kind==='custom'?job.imagePath:undefined,DOTS_LINUX_IMAGE_SHA256:job.sha256},stdio:['ignore','pipe','pipe']});let tail='';for(const s of [p.stdout,p.stderr])s?.on('data',b=>{tail=(tail+b.toString()).slice(-1800);});const code=await new Promise<number|null>((r,j)=>{p.once('error',j);p.once('exit',r);});if(code!==0)throw Error('Linux kurulumu tamamlanamadı: '+tail);
- }catch(e){error=(e as Error).message.slice(0,2000);}finally{try{await this.api('/setup/'+job.id,{status:error?'failed':'completed',error});}catch(e){console.error('Kurulum sonucu kaydedilemedi: '+(e as Error).message);}this.installing=false;}}
+  if(process.platform!=='win32')throw Error('Linux setup requires Windows/WSL2.');
+  if(this.applied?.options.linuxEnabled)throw Error('Before setup, choose the PC computer mode and apply it.');
+  const p=spawn(process.execPath,['scripts/setup-linux-computer.mjs'],{cwd:this.root,windowsHide:true,env:{...process.env,DOTS_LINUX_DISTRO:job.distribution,DOTS_LINUX_IMAGE:job.kind==='custom'?job.imagePath:undefined,DOTS_LINUX_IMAGE_SHA256:job.sha256},stdio:['ignore','pipe','pipe']});let tail='';for(const s of [p.stdout,p.stderr])s?.on('data',b=>{tail=(tail+b.toString()).slice(-1800);});const code=await new Promise<number|null>((r,j)=>{p.once('error',j);p.once('exit',r);});if(code!==0)throw Error('Linux setup could not be completed: '+tail);
+ }catch(e){error=(e as Error).message.slice(0,2000);}finally{try{await this.api('/setup/'+job.id,{status:error?'failed':'completed',error});}catch(e){console.error('The setup result could not be saved: '+(e as Error).message);}this.installing=false;}}
  async close(){this.closing=true;if(this.timer)clearInterval(this.timer);await this.stop('windows');await this.stop('linux');await this.stop('native');await this.relay.close();}
 }

@@ -46,11 +46,11 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     const data = await response
       .json()
-      .catch(() => ({ error: `Sunucu yanıtı: ${response.status}` }));
+      .catch(() => ({ error: `Server response: ${response.status}` }));
     throw new Error(
       typeof data.error === "string"
         ? data.error
-        : (data.message ?? `Sunucu yanıtı: ${response.status}`),
+        : (data.message ?? `Server response: ${response.status}`),
     );
   }
   if (response.status === 204) return undefined as T;
@@ -119,7 +119,7 @@ export function Notice({ error }: { error: string }) {
     <Alert status="danger" className="my-2">
       <Alert.Indicator />
       <Alert.Content>
-        <Alert.Title>İşlem tamamlanamadı</Alert.Title>
+        <Alert.Title>The operation could not be completed</Alert.Title>
         <Alert.Description className="preserve">{error}</Alert.Description>
       </Alert.Content>
     </Alert>
@@ -141,7 +141,7 @@ export function Empty({ children }: { children: ReactNode }) {
 export function Loading() {
   return (
     <div role="status" aria-live="polite" className="flex flex-col gap-3">
-      <span className="sr-only">Sunucudan alınıyor…</span>
+      <span className="sr-only">Loading from the server…</span>
       <Skeleton className="h-16 w-full rounded-2xl" />
       <Skeleton className="h-16 w-4/5 rounded-2xl" />
       <Skeleton className="h-16 w-3/5 rounded-2xl" />
@@ -351,7 +351,7 @@ export function SelectField({
   defaultValue,
   onChange,
   description,
-  placeholder = "Seçin",
+  placeholder = "Select",
   disabled = false,
   required = false,
 }: {
@@ -490,7 +490,7 @@ export function Disclose({
 export function Form({
   children,
   onSubmit,
-  submit = "Kaydet",
+  submit = "Save",
   className = "",
   onDone,
   disabled = false,
@@ -513,7 +513,7 @@ export function Form({
       await onSubmit(data);
       onDone?.();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "İşlem başarısız.");
+      setError(e instanceof Error ? e.message : "Operation failed.");
     } finally {
       setPending(false);
     }
@@ -533,7 +533,7 @@ export function Form({
       <Notice error={error} />
       <div>
         <Button type="submit" isPending={pending} isDisabled={disabled}>
-          {pending ? "İşleniyor…" : submit}
+          {pending ? "Processing…" : submit}
         </Button>
       </div>
     </HeroForm>
@@ -576,7 +576,7 @@ export function Action({
           try {
             await mutate(path, method, body);
           } catch (e) {
-            setError(e instanceof Error ? e.message : "İşlem başarısız.");
+            setError(e instanceof Error ? e.message : "Operation failed.");
           } finally {
             setPending(false);
           }
@@ -599,7 +599,7 @@ export const nullable = (data: FormData, name: string) =>
   str(data, name) || null;
 export function time(value: string | null | undefined) {
   return value
-    ? new Date(value).toLocaleString("tr-TR", {
+    ? new Date(value).toLocaleString("en-US", {
         day: "numeric",
         month: "short",
         hour: "2-digit",
@@ -609,32 +609,32 @@ export function time(value: string | null | undefined) {
 }
 
 export const statuses: Record<string, string> = {
-  enabled: "Etkin",
-  sent: "Gönderildi",
-  sending: "Gönderiliyor",
-  delivery_unknown: "Teslim belirsiz",
-  approval_required: "Onay gerekli",
-  ready: "Hazır",
-  agent: "Dot kontrolünde",
-  user: "Kontrol sende",
-  queued: "Sırada",
-  running: "Çalışıyor",
-  waiting_approval: "Onay bekliyor",
-  paused: "Duraklatıldı",
-  completed: "Tamamlandı",
-  failed: "Başarısız",
-  cancelled: "İptal edildi",
-  interrupted: "Kesildi",
-  online: "Çevrimiçi",
-  offline: "Çevrimdışı",
-  pending: "Bekliyor",
-  approved: "Onaylandı",
-  denied: "Reddedildi",
-  expired: "Süresi doldu",
-  connected: "Bağlı",
-  configured: "Yapılandırıldı",
-  needs_configuration: "Kurulum gerekli",
-  error: "Hata",
+  enabled: "Active",
+  sent: "Sent",
+  sending: "Sending",
+  delivery_unknown: "Delivery uncertain",
+  approval_required: "Approval required",
+  ready: "Ready",
+  agent: "Under Dot control",
+  user: "You are in control",
+  queued: "Queued",
+  running: "Running",
+  waiting_approval: "Waiting for approval",
+  paused: "Paused",
+  completed: "Completed",
+  failed: "Failed",
+  cancelled: "Cancelled",
+  interrupted: "Interrupted",
+  online: "Online",
+  offline: "Offline",
+  pending: "Waiting",
+  approved: "Approved",
+  denied: "Denied",
+  expired: "Expired",
+  connected: "Connected",
+  configured: "Configured",
+  needs_configuration: "Setup required",
+  error: "Error",
 };
 type Tone = "default" | "accent" | "success" | "warning" | "danger";
 const tones: Record<string, Tone> = {

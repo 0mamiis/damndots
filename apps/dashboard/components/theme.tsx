@@ -23,7 +23,7 @@ export function ThemeToggle() {
       isIconOnly
       size="sm"
       variant="ghost"
-      aria-label={next === "dark" ? "Koyu temaya geç" : "Açık temaya geç"}
+      aria-label={next === "dark" ? "Switch to the dark theme" : "Switch to the light theme"}
       onPress={() => {
         apply(next);
         setTheme(next);
@@ -48,7 +48,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <>
       {children}
-      {armed && <Toast.Provider placement="bottom end" aria-label="Bildirimler" />}
+      {armed && <Toast.Provider placement="bottom end" aria-label="Notifications" />}
     </>
   );
 }

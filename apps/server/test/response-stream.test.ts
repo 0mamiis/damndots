@@ -13,9 +13,9 @@ test('completed streams pass through even when the terminal event crosses byte b
 });
 test('truncated streams expose a failure instead of leaving Thinking active',async()=>{
   const source=(async function*(){yield 'event: response.created\ndata: {"type":"response.created"}\n\n';})();
-  const result=await collect(source);assert.match(result.text,/"type":"response.failed"/);assert.match(result.text,/akışı tamamlanmadan/);assert.equal(result.stopped,true);
+  const result=await collect(source);assert.match(result.text,/"type":"response.failed"/);assert.match(result.text,/before it finished/);assert.equal(result.stopped,true);
 });
 test('a provider which never sends bytes is terminated by the idle deadline',async()=>{
   const source={ [Symbol.asyncIterator](){return {next:()=>new Promise<IteratorResult<string>>(()=>{})};}};
-  const result=await collect(source,10);assert.match(result.text,/"type":"response.failed"/);assert.match(result.text,/veri göndermedi/);assert.equal(result.stopped,true);
+  const result=await collect(source,10);assert.match(result.text,/"type":"response.failed"/);assert.match(result.text,/sent no data/);assert.equal(result.stopped,true);
 });

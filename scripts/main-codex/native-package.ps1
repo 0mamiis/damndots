@@ -44,16 +44,21 @@ if(-not(Test-Path -LiteralPath $cliExe) -or -not(Test-Path -LiteralPath $cliHash
  [IO.File]::WriteAllText($cliHashFile,$cliHash)
 }
 $enabled=$null
+$enabledEnvironment=$null
 try{
- do{
-  $package=Get-AppxPackage -Name OpenAI.Codex|Select-Object -First 1
+  do{
+   $inputState=Get-Content -LiteralPath $EnvironmentFile -Raw|ConvertFrom-Json
+   $environmentHash=(Get-FileHash -LiteralPath $EnvironmentFile -Algorithm SHA256).Hash
+   $package=Get-AppxPackage -Name OpenAI.Codex|Select-Object -First 1
   if(-not $package){throw 'Kurulu Codex paketi bulunamadi.'}
-  if($enabled -ne $package.PackageFullName){
+   if($enabled -ne $package.PackageFullName -or $enabledEnvironment -ne $environmentHash){
    if($enabled){[void]$settings.Disable($enabled)}
    $vars=@($inputState.environment.PSObject.Properties|ForEach-Object{$_.Name+'='+[string]$_.Value})
+   [void]$settings.Disable($package.PackageFullName)
    $hr=$settings.Enable($package.PackageFullName,$helper,$vars)
    if($hr -lt 0){throw ('Orijinal Codex baglantisi kurulamadi: 0x'+$hr.ToString('X8'))}
-   $enabled=$package.PackageFullName
+    $enabled=$package.PackageFullName
+    $enabledEnvironment=$environmentHash
    [IO.File]::WriteAllText((Join-Path $data 'package-ready.json'),(@{package=$enabled;pid=$PID;updatedAt=(Get-Date).ToUniversalTime().ToString('o')}|ConvertTo-Json))
    Write-Output ('Orijinal Codex acilisi Dots proxy ayarlariyla hazir: '+$enabled)
   }

@@ -2,8 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers, themeScript } from "@/components/theme";
 export const metadata: Metadata = {
-  title: "damndots · Kontrol paneli",
-  description: "Kendi sunucunda çalışan Dots kontrol merkezi.",
+  title: "damndots · Control panel",
+  description: "The Dots control center running on your own server.",
   robots: { index: false, follow: false },
 };
 export const viewport: Viewport = {
@@ -13,7 +13,7 @@ export const viewport: Viewport = {
 };
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="tr" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>

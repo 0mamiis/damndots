@@ -50,7 +50,7 @@ export class NetworkService {
       try { return (await this.exec(file, args, { timeout: 8000 })).stdout; }
       catch (error) { last = error; if ((error as NodeJS.ErrnoException).code !== 'ENOENT') missing = false; }
     }
-    throw Object.assign(new Error(missing ? 'Tailscale bulunamadı.' : (last as Error).message), { code: missing ? 'ENOENT' : 'EFAIL' });
+    throw Object.assign(new Error(missing ? 'Tailscale was not found.' : (last as Error).message), { code: missing ? 'ENOENT' : 'EFAIL' });
   }
 
   private async forwards(): Promise<Record<string, { TCPForward?: string }>> {
@@ -83,14 +83,14 @@ export class NetworkService {
 
   async setExposed(enabled: boolean): Promise<NetworkStatus> {
     const port = this.listen.port;
-    if (!Number.isInteger(port) || port < 1 || port > 65535) throw Object.assign(new Error('Geçersiz sunucu portu.'), { statusCode: 400 });
+    if (!Number.isInteger(port) || port < 1 || port > 65535) throw Object.assign(new Error('Invalid server port.'), { statusCode: 400 });
     const loopback = ['127.0.0.1', 'localhost', '::1'].includes(this.listen.host);
-    if (enabled && !loopback) throw Object.assign(new Error('Sunucu loopback dışında dinliyor; Tailscale yönlendirmesi gerekmez.'), { statusCode: 409 });
+    if (enabled && !loopback) throw Object.assign(new Error('The server is not listening on loopback; Tailscale forwarding is not needed.'), { statusCode: 409 });
     try {
       if (enabled) await this.tailscale(['serve', '--bg', '--tcp', String(port), 'tcp://127.0.0.1:' + port]);
       else await this.tailscale(['serve', '--tcp', String(port), 'off']);
     } catch (error) {
-      throw Object.assign(new Error((error as NodeJS.ErrnoException).code === 'ENOENT' ? 'Tailscale bu bilgisayarda kurulu değil.' : 'Tailscale yönlendirmesi değiştirilemedi: ' + (error as Error).message.slice(0, 300)), { statusCode: 502 });
+      throw Object.assign(new Error((error as NodeJS.ErrnoException).code === 'ENOENT' ? 'Tailscale is not installed on this computer.' : 'Tailscale forwarding could not be changed: ' + (error as Error).message.slice(0, 300)), { statusCode: 502 });
     }
     return this.status();
   }

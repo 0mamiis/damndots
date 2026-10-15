@@ -67,18 +67,18 @@ type PageKey =
   | "settings";
 // Local host management remains available when the data backend is remote.
 const pages: [PageKey, string, ReactElement][] = [
-  ["overview", "Genel bakış", <HomeIcon key="i" />],
-  ["dots", "Dot’lar", <DotIcon key="i" />],
-  ["tasks", "Görevler", <TaskIcon key="i" />],
-  ["outputs", "Çıktılar", <DownloadIcon key="i" />],
-  ["memories", "Hafıza", <MemoryIcon key="i" />],
-  ["schedules", "Zamanlama", <ClockIcon key="i" />],
-  ["computers", "Bilgisayarlar", <ComputerIcon key="i" />],
-  ["servers", "Sunucular", <PlugIcon key="host" />],
-  ["connectors", "Bağlantılar", <PlugIcon key="i" />],
-  ["approvals", "Onaylar", <ShieldIcon key="i" />],
-  ["voice", "Ses", <MicIcon key="i" />],
-  ["settings", "Ayarlar", <GearIcon key="i" />],
+  ["overview", "Overview", <HomeIcon key="i" />],
+  ["dots", "Dots", <DotIcon key="i" />],
+  ["tasks", "Tasks", <TaskIcon key="i" />],
+  ["outputs", "Outputs", <DownloadIcon key="i" />],
+  ["memories", "Memory", <MemoryIcon key="i" />],
+  ["schedules", "Schedules", <ClockIcon key="i" />],
+  ["computers", "Computers", <ComputerIcon key="i" />],
+  ["servers", "Servers", <PlugIcon key="host" />],
+  ["connectors", "Connections", <PlugIcon key="i" />],
+  ["approvals", "Approvals", <ShieldIcon key="i" />],
+  ["voice", "Voice", <MicIcon key="i" />],
+  ["settings", "Settings", <GearIcon key="i" />],
 ];
 const isPage = (value: string): value is PageKey =>
   pages.some(([key]) => key === value);
@@ -105,7 +105,7 @@ function Nav({
   onSelect: (page: PageKey) => void;
 }) {
   return (
-    <nav aria-label="Ana menü" className="flex flex-col gap-1">
+    <nav aria-label="Main menu" className="flex flex-col gap-1">
       {pages.map(([key, label, icon]) => (
         <Button
           key={key}
@@ -138,7 +138,7 @@ export function Dashboard({
   const [serverLabel, setServerLabel] = useState(initialLabel);
   const [page, setPageState] = useState<PageKey>("overview");
   const [revision, setRevision] = useState(0);
-  const [eventState, setEventState] = useState("Bağlanıyor");
+  const [eventState, setEventState] = useState("Connecting");
   const [menu, setMenu] = useState(false);
   const refresh = useCallback(() => setRevision((r) => r + 1), []);
   const setPage = useCallback((next: PageKey) => {
@@ -172,7 +172,7 @@ export function Dashboard({
               : JSON.stringify(body),
       });
       refresh();
-      saved("Değişiklik sunucuya kaydedildi.");
+      saved("Change saved to the server.");
       return value;
     },
     [refresh],
@@ -181,7 +181,7 @@ export function Dashboard({
     if (!connected) return;
     const events = new EventSource("/api/backend/events");
     let timer: ReturnType<typeof setTimeout> | undefined;
-    events.onopen = () => setEventState("Canlı");
+    events.onopen = () => setEventState("Live");
     const update = () => {
       if (!timer)
         timer = setTimeout(() => {
@@ -219,9 +219,14 @@ export function Dashboard({
       "output.created",
       "schedule.updated",
       "connector.reply.updated",
+      "computer.registered",
+      "computer.revoked",
+      "settings.updated",
+      "thread.attached",
+      "worker.job.completed",
     ];
     for (const type of types) events.addEventListener(type, update);
-    events.onerror = () => setEventState("Yeniden bağlanıyor");
+    events.onerror = () => setEventState("Reconnecting");
     const fallback = setInterval(refresh, 15000);
     return () => {
       events.close();
@@ -238,16 +243,15 @@ export function Dashboard({
         <div className="flex flex-col gap-5">
           <Brand />
           <p className="text-xs font-semibold tracking-widest text-accent uppercase">
-            Senin sunucun · Senin Dot’un
+            Your server · Your Dot
           </p>
           <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
-            Bir noktayla
+            Start with
             <br />
-            başlayalım.
+            a dot.
           </h1>
           <p className="max-w-md text-muted">
-            Görevlerini, hafızanı ve bilgisayarlarını tek bir çalışma alanında
-            buluştur.
+            Bring your tasks, memory and computers together in a single workspace.
           </p>
         </div>
         <Card className="gap-4 p-6">
@@ -256,15 +260,15 @@ export function Dashboard({
               className="text-xl"
               render={(props) => <h2 {...props} />}
             >
-              Çalışma alanına bağlan
+              Connect to the workspace
             </Card.Title>
             <Card.Description>
-              Dots sunucun bu bilgisayarda veya uzak bir makinede çalışabilir.
+              Your Dots server can run on this computer or on a remote machine.
             </Card.Description>
           </Card.Header>
           <Card.Content className="flex flex-col gap-4">
             <Form
-              submit="Sunucuya bağlan"
+              submit="Connect to the server"
               onSubmit={async (data) => {
                 const response = await fetch("/api/session", {
                   method: "POST",
@@ -281,28 +285,27 @@ export function Dashboard({
               }}
             >
               <Field
-                label="Sunucu adresi"
+                label="Server address"
                 name="serverUrl"
                 type="url"
                 value={defaultServer}
                 required
                 description={
                   serverLocked
-                    ? "Bu panel yalnızca yöneticinin yapılandırdığı sunucuya bağlanır."
-                    : "Uzak sunucularda HTTPS kullanın; SSH tüneli için localhost adresi."
+                    ? "This panel only connects to the server the administrator configured."
+                    : "Use HTTPS for remote servers; for an SSH tunnel use a localhost address."
                 }
               />
               <Field
-                label="Yönetici erişim anahtarı"
+                label="Admin access key"
                 name="token"
                 type="password"
                 required
-                description="Sunucu kurulumunda oluşturulan erişim anahtarı."
+                description="The access key created during server setup."
               />
             </Form>
             <p className="text-xs text-muted">
-              Oturum bilgilerin bu tarayıcının güvenli sunucu oturumunda
-              tutulur.
+              Your session details are kept in this browser’s secure server session.
             </p>
           </Card.Content>
         </Card>
@@ -319,13 +322,13 @@ export function Dashboard({
           document.getElementById("content")?.focus();
         }}
       >
-        Ana içeriğe geç
+        Skip to main content
       </a>
       <div className="flex min-h-dvh">
         <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col gap-4 border-r border-border bg-surface p-4 lg:flex">
           <a
             href="#overview"
-            aria-label="Genel bakışa git"
+            aria-label="Go to overview"
             className="rounded-xl px-2 py-1"
             onClick={(e) => {
               e.preventDefault();
@@ -336,7 +339,7 @@ export function Dashboard({
           </a>
           <div className="flex flex-col gap-0.5 rounded-2xl bg-surface-secondary px-3 py-2">
             <span className="text-[11px] font-semibold tracking-widest text-muted uppercase">
-              Çalışma alanı
+              Workspace
             </span>
             <span
               className="truncate text-sm font-medium"
@@ -358,13 +361,13 @@ export function Dashboard({
             }}
           >
             <LogoutIcon />
-            Oturumu kapat
+            Sign out
           </Button>
         </aside>
         <Drawer isOpen={menu} onOpenChange={setMenu}>
           <Drawer.Backdrop>
             <Drawer.Content placement="left">
-              <Drawer.Dialog aria-label="Ana menü">
+              <Drawer.Dialog aria-label="Main menu">
                 <Drawer.CloseTrigger />
                 <Drawer.Header>
                   <Drawer.Heading>
@@ -384,7 +387,7 @@ export function Dashboard({
                     }}
                   >
                     <LogoutIcon />
-                    Oturumu kapat
+                    Sign out
                   </Button>
                 </Drawer.Footer>
               </Drawer.Dialog>
@@ -398,7 +401,7 @@ export function Dashboard({
               size="sm"
               variant="ghost"
               className="lg:hidden"
-              aria-label="Menüyü aç"
+              aria-label="Open menu"
               onPress={() => setMenu(true)}
             >
               <MenuIcon />
@@ -410,9 +413,9 @@ export function Dashboard({
               size="sm"
               variant="soft"
               color={
-                eventState === "Canlı"
+                eventState === "Live"
                   ? "success"
-                  : eventState === "Bağlanıyor"
+                  : eventState === "Connecting"
                     ? "default"
                     : "warning"
               }
@@ -424,7 +427,7 @@ export function Dashboard({
               isIconOnly
               size="sm"
               variant="ghost"
-              aria-label="Yenile"
+              aria-label="Refresh"
               onPress={refresh}
             >
               <RefreshIcon />
@@ -463,7 +466,7 @@ export function Dashboard({
           </main>
           <footer className="flex items-center gap-2 px-6 py-4 text-xs text-muted">
             <span className="size-1.5 rounded-full bg-success" />
-            Dots kendi sunucunda çalışıyor.
+            Dots runs on your own server.
           </footer>
         </div>
       </div>
@@ -493,40 +496,40 @@ function OverviewPanel() {
   return (
     <>
       <PageHeading
-        eyebrow="Çalışma alanının nabzı"
-        title="Bugün ne yapıyoruz?"
-        description="Dot’larının son hareketleri, gerçek görevler ve çıktılar."
+        eyebrow="The pulse of your workspace"
+        title="What are we doing today?"
+        description="Your Dots’ latest activity, real tasks and outputs."
       />
       {data.pendingApprovals > 0 && (
         <Alert status="warning">
           <Alert.Indicator />
           <Alert.Content>
             <Alert.Title>
-              {data.pendingApprovals} işlem onayını bekliyor
+              {data.pendingApprovals} actions waiting for your approval
             </Alert.Title>
             <Alert.Description>
-              Onaylar bölümünden incele; Dot’un ilerlemesi karara bağlı.
+              Review them in the Approvals section; your Dot’s progress depends on your decision.
             </Alert.Description>
           </Alert.Content>
         </Alert>
       )}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat value={data.dots.length} label="Dot" />
-        <Stat value={active.length} label="Etkin görev" />
-        <Stat value={data.pendingApprovals} label="Bekleyen onay" />
+        <Stat value={active.length} label="Active tasks" />
+        <Stat value={data.pendingApprovals} label="Pending approvals" />
         <Stat
           value={data.computers.filter((c) => c.state === "online").length}
-          label="Çevrimiçi bilgisayar"
+          label="Online computers"
         />
       </div>
       <div className="grid gap-6 lg:grid-cols-2">
         <Section
-          title="Şimdi çalışanlar"
-          description="Kuyruktaki ve devam eden görevler"
+          title="Running now"
+          description="Queued and running tasks"
         >
           {!active.length ? (
             <Empty>
-              Etkin görev yok. Dot’lar bölümünden bir mesajla başlayın.
+              No active tasks. Start with a message in the Dots section.
             </Empty>
           ) : (
             active.map((task) => (
@@ -544,12 +547,12 @@ function OverviewPanel() {
           )}
         </Section>
         <Section
-          title="Dot’ların"
-          description="Seninle çalışan kalıcı yardımcılar"
+          title="Your Dots"
+          description="Persistent helpers that work with you"
         >
           {!data.dots.length ? (
             <Empty>
-              İlk Dot’unu oluştur; ona bir ad ve çalışma talimatı ver.
+              Create your first Dot; give it a name and working instructions.
             </Empty>
           ) : (
             data.dots.map((dot) => (
@@ -564,7 +567,7 @@ function OverviewPanel() {
                   <div className="flex min-w-0 flex-col">
                     <strong className="truncate">{dot.name}</strong>
                     <small className="truncate text-muted">
-                      {dot.model ?? "Varsayılan model"}
+                      {dot.model ?? "Default model"}
                     </small>
                   </div>
                 </div>
@@ -575,11 +578,11 @@ function OverviewPanel() {
         </Section>
       </div>
       <Section
-        title="Son hareketler"
-        description="Sunucudan kaydedilen gerçek etkinlikler"
+        title="Recent activity"
+        description="Real activity recorded by the server"
       >
         {!data.activity.length ? (
-          <Empty>Henüz bir hareket kaydedilmedi.</Empty>
+          <Empty>No activity recorded yet.</Empty>
         ) : (
           <ol className="flex flex-col divide-y divide-border">
             {newest(data.activity)
@@ -605,9 +608,9 @@ function OverviewPanel() {
           </ol>
         )}
       </Section>
-      <Section title="Son çıktılar">
+      <Section title="Recent outputs">
         {!data.outputs.length ? (
-          <Empty>Görevlerin ürettiği dosyalar burada görünecek.</Empty>
+          <Empty>Files produced by your tasks will appear here.</Empty>
         ) : (
           newest(data.outputs)
             .slice(0, 6)
@@ -624,7 +627,7 @@ function OverviewPanel() {
                   href={`/api/backend/outputs/${encodeURIComponent(output.id)}/content`}
                   download
                 >
-                  İndir
+                  Download
                 </a>
               </Row>
             ))
