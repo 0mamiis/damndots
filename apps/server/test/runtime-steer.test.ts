@@ -2,6 +2,16 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SqliteStore } from '../src/storage.js';
 import { OrbitRuntime } from '../src/runtime/index.js';
+test('maintenance prevents chat/manual/scheduled work from starting and resumes existing queued work afterwards',async()=>{
+ const store=new SqliteStore(':memory:');const runner=new GateRunner();const runtime=new OrbitRuntime(store,runner);
+ const dot=runtime.createDot({name:'Maintenance'});const task=runtime.createTask({dotId:dot.id,input:'queued before update'});
+ runtime.setMaintenance(true);runtime.start();
+ assert.throws(()=>runtime.submitMessage(dot.id,{text:'new message'}),/updating/);
+ assert.throws(()=>runtime.createTask({dotId:dot.id,input:'manual'}),/updating/);
+ await new Promise(resolve=>setTimeout(resolve,15));assert.equal(runner.calls.length,0);
+ runtime.setMaintenance(false);await until(()=>runner.calls.length===1);
+ runner.complete(0);await until(()=>runtime.getTask(task.id).status==='completed');await runtime.stop();store.close();
+});
 import type { RunInput, RunResult, RunnerHooks, Task, TaskRunner } from '@dots/contracts';
 
 async function until(check:()=>boolean):Promise<void> {
