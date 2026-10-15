@@ -150,7 +150,10 @@ export class OrbitRuntime {
         const original=this.store.get<{messageId:string;taskId:string}>('submissions',key);
         if(original) return {message:this.must<Message>('messages',original.messageId),task:this.getTask(original.taskId)};
       }
-      const task=this.createTask({dotId,input:requiredText(input.text,'text'),title:input.text.slice(0,120),attachments:input.attachments,computerId:input.computerId,source:channel==='dashboard'?'chat':'channel',...(channel==='voice'&&voiceEffort()?{reasoningEffort:voiceEffort()}:{})});
+      const text=typeof input.text==='string'?input.text.trim():requiredText(input.text,'text');
+      if(!text&&!input.attachments?.length) throw new RuntimeError('A message or attachment is required');
+      // Preserve the empty caption in chat history; only the execution task needs a nonempty prompt.
+      const task=this.createTask({dotId,input:text||'Review the attached files.',title:text.slice(0,120)||'Attached files',attachments:input.attachments,computerId:input.computerId,source:channel==='dashboard'?'chat':'channel',...(channel==='voice'&&voiceEffort()?{reasoningEffort:voiceEffort()}:{})});
       if(channel==='voice')this.store.put('voice_tasks',{id:task.id,callId:String(input.requestId??'').split(':')[0]||'default'});
       const message=this.store.put<Message>('messages',{id:id(),dotId,role:'user',text:input.text,attachments:input.attachments??[],taskId:task.id,channel,requestId:input.requestId??null,createdAt:this.now()});
       if(key) this.store.put('submissions',{id:key,dotId,messageId:message.id,taskId:task.id});

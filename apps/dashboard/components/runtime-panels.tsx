@@ -387,7 +387,7 @@ function DotDetail({ dot, computers }: { dot: Dot; computers: Computer[] }) {
             label="Your message"
             name="text"
             rows={3}
-            required
+            required={attachments.length === 0}
             value={text}
             onChange={setText}
             placeholder="Give your Dot a task or think together… (send with Ctrl+Enter)"
