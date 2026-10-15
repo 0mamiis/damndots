@@ -1,10 +1,10 @@
-import {readFile,writeFile,mkdir,rename,unlink,open,stat} from 'node:fs/promises';
+import {readFile,writeFile,mkdir,rename,unlink,open} from 'node:fs/promises';
 import {existsSync} from 'node:fs';
 import {join,dirname,resolve} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {spawn,execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {createHash,randomUUID} from 'node:crypto';
+import {randomUUID} from 'node:crypto';
 const exec=promisify(execFile);
 export const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');

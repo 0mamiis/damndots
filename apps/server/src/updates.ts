@@ -1,5 +1,5 @@
 import {readFile,writeFile,mkdir,rename,open,unlink} from 'node:fs/promises';
-import {existsSync} from 'node:fs';
+import {existsSync,readFileSync} from 'node:fs';
 import {join,resolve,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {spawn,execFile} from 'node:child_process';
@@ -29,6 +29,7 @@ export interface UpdateJob {id:string;target:string;status:string;step:string;st
 const active=new Set(['preparing','ready','applying','restarting','rolling_back']);
 export class UpdateService {
   private current:string;private cached?:ReleaseInfo;private checkedAt:number=0;private checking?:Promise<void>;private error:string|null=null;private starting=false;
+  private sourceCheck?:{time:number;reason:string|null};
   constructor(private options:{root?:string;dataDir:string;fetch?:typeof fetch;busy:()=>boolean;maintenance:(value:boolean)=>void;stackPid?:number;clock?:()=>number;launch?:(job:UpdateJob)=>Promise<void>}){
     const root=options.root||installationRoot;this.current=JSON.parse(requireText(join(root,'package.json'))).version;
   }
@@ -60,6 +61,17 @@ export class UpdateService {
     if(!Number.isSafeInteger(pid)||pid<1||(!this.options.launch&&process.env.DOTS_UPDATE_MANAGED!=='1'))blocked='Restart all Dots services together with Start-Dots to enable managed updates.';
     else if(!existsSync(join(this.root(),'.git')))blocked='This is a source archive installation. Use a Git checkout for in-app updates.';
     else if(this.options.busy())blocked='Finish or cancel active tasks before updating.';
+    else if(this.cached&&newerVersion(this.cached.version,this.current)){
+      if(!this.sourceCheck||this.now()-this.sourceCheck.time>60000){
+        let reason:string|null=null;
+        try{
+          const changes=(await run('git',['status','--porcelain'],{cwd:this.root(),windowsHide:true})).stdout.trim();
+          if(changes)reason='Local source changes detected. Back up or commit them before updating; they will not be overwritten.';
+        }catch{reason='Git is not available for this installation.';}
+        this.sourceCheck={time:this.now(),reason};
+      }
+      blocked=this.sourceCheck.reason;
+    }
     return {current:this.current,latest:this.cached||null,available:!!this.cached&&newerVersion(this.cached.version,this.current),checkedAt:this.checkedAt?new Date(this.checkedAt).toISOString():null,error:this.error,blocked,job};
   }
   async start(tag:string){
@@ -121,6 +133,5 @@ export class UpdateService {
     this.options.maintenance(!!job&&active.has(job.status));
   }
 }
-import {readFileSync} from 'node:fs';
 function requireText(path:string){return readFileSync(path,'utf8');}
 export async function atomicJson(path:string,value:unknown){const temp=path+'.'+randomUUID()+'.tmp';await writeFile(temp,JSON.stringify(value,null,2)+'\n',{mode:0o600});await rename(temp,path);}
