@@ -55,7 +55,7 @@ const server = net.createServer(socket => {
     try { socket.destroy(); } catch { /* soket zaten kapandı */ }
   };
   socket.setNoDelay(true);
-  socket.setTimeout(AUTH_TIMEOUT_MS, () => { if (!child) { log('doğrulama zaman aşımı'); cleanup(); } });
+  socket.setTimeout(AUTH_TIMEOUT_MS, () => { if (!child) { log('verification timed out'); cleanup(); } });
   socket.on('error', cleanup);
   socket.on('close', cleanup);
   const onData = chunk => {
@@ -67,14 +67,14 @@ const server = net.createServer(socket => {
     const head = buffer.subarray(0, end).toString('latin1');
     const match = /^authorization:[ \t]*bearer[ \t]+(\S+)[ \t]*$/im.exec(head);
     if (!match || !tokenOk(match[1])) {
-      log('reddedildi: ' + socket.remoteAddress);
+      log('rejected: ' + socket.remoteAddress);
       socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
       setTimeout(cleanup, 300);
       return;
     }
     socket.setTimeout(0);
     child = spawn(CLI, ['app-server', 'proxy', '--sock', SOCK], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, env: { ...process.env, CODEX_HOME } });
-    child.on('error', error => { log('proxy başlatılamadı: ' + error.message); cleanup(); });
+    child.on('error', error => { log('the proxy could not be started: ' + error.message); cleanup(); });
     child.on('exit', cleanup);
     child.stderr.on('data', data => log('proxy: ' + String(data).replace(/\s+/g, ' ').slice(0, 300)));
     child.stdin.on('error', () => {});
@@ -85,5 +85,5 @@ const server = net.createServer(socket => {
   };
   socket.on('data', onData);
 });
-server.on('error', error => { log('sunucu hatası: ' + error.message); process.exit(1); });
+server.on('error', error => { log('server error: ' + error.message); process.exit(1); });
 server.listen(PORT, '127.0.0.1', () => log('dinliyor 127.0.0.1:' + PORT));

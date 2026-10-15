@@ -13,7 +13,7 @@ const root=resolve(import.meta.dirname,'..'),stack=resolve(process.env.DOTS_STAC
 const data=join(stack,'native'),main=process.env.DOTS_MAIN_CODEX_HOME||join(homedir(),'.codex');
 if(existsSync(join(data,'disabled')))process.exit(0);
 const release=await acquireLaunchLock(join(data,'runtime.lock'));
-if(!release){console.log('Orijinal Codex baglantisi zaten hazir.');process.exit(0);}
+if(!release){console.log('The original Codex connection is already ready.');process.exit(0);}
 process.once('exit',()=>{void release();});
 const check=process.argv.includes('--check-only');
 await mkdir(data,{recursive:true});
@@ -28,7 +28,7 @@ const targetWatch=setInterval(()=>{if(switching)return;switching=true;void readF
 const certificate=join(data,'certs/ca.pem'),run=promisify(execFile);
 const cliDirectory=join(process.env.LOCALAPPDATA||join(homedir(),'AppData/Local'),'OpenAI/Codex/bin');
 const candidates=[];for(const name of await readdir(cliDirectory)){const file=join(cliDirectory,name,'codex.exe'),host=join(cliDirectory,name,'codex-code-mode-host.exe');try{if(existsSync(file)){candidates.push({file,hasHost:existsSync(host),time:(await stat(file)).mtimeMs});}}catch{}}
-candidates.sort((a,b)=>(b.hasHost===a.hasHost?b.time-a.time:(b.hasHost?1:-1)));if(!candidates[0])throw new Error('Kurulu Codex CLI bulunamadi.');
+candidates.sort((a,b)=>(b.hasHost===a.hasHost?b.time-a.time:(b.hasHost?1:-1)));if(!candidates[0])throw new Error('The installed Codex CLI was not found.');
 await writeFile(join(data,'cli-bridge.json'),JSON.stringify({realCli:candidates[0].file,node:process.execPath,script:join(root,'scripts/native-cli-bridge.mjs'),gateway:'https://localhost:'+port,certificate},null,2),{mode:0o600});
 if(!check)await run('certutil.exe',['-user','-addstore','Root',certificate],{windowsHide:true,maxBuffer:4000});
 // Same environment as a normal launch except desktop API traffic. The app keeps its own CODEX_HOME, SQLite state,
@@ -37,6 +37,7 @@ if(!check)await run('certutil.exe',['-user','-addstore','Root',certificate],{win
 const environment={
  CODEX_API_BASE_URL:'https://localhost:'+port+'/backend-api',
  CODEX_CLI_PATH:join(data,'native-cli.exe'),
+ ORBIT_DURABLE_WS_URL:'wss://localhost:'+port+'/native/app-server',
  NODE_EXTRA_CA_CERTS:certificate
 };
 await writeFile(join(data,'environment.json'),JSON.stringify({environment},null,2),{mode:0o600});

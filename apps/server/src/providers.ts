@@ -46,12 +46,12 @@ export class ProviderService {
   constructor(private store: RecordStore, private options: ProviderOptions) { this.fetcher = options.fetch ?? fetch; }
   private builtin(): StoredProvider {
     const saved = this.store.get<StoredProvider>('providers', DEFAULT_PROVIDER_ID);
-    return { ...(saved ?? { models: [], modelsFetchedAt: null, lastError: null, createdAt: now() }), id: DEFAULT_PROVIDER_ID, name: 'Sunucu varsayılanı', baseUrl: this.options.fallback.baseUrl, apiFormat: 'responses', sealedKey: null, updatedAt: saved?.updatedAt ?? now() };
+    return { ...(saved ?? { models: [], modelsFetchedAt: null, lastError: null, createdAt: now() }), id: DEFAULT_PROVIDER_ID, name: 'Server default', baseUrl: this.options.fallback.baseUrl, apiFormat: 'responses', sealedKey: null, updatedAt: saved?.updatedAt ?? now() };
   }
   private raw(id: string): StoredProvider {
     if (id === DEFAULT_PROVIDER_ID) return this.builtin();
     const found = this.store.get<StoredProvider>('providers', id);
-    if (!found) throw new IntegrationError('Sağlayıcı bulunamadı', 404);
+    if (!found) throw new IntegrationError('Provider not found', 404);
     return found;
   }
   private view(p: StoredProvider): PublicProvider {
@@ -89,7 +89,7 @@ export class ProviderService {
     try { return await this.refreshModels(provider.id); } catch { return this.get(provider.id); }
   }
   update(id: string, patch: { name?: string; baseUrl?: string; apiKey?: string | null; apiFormat?: ApiFormat; manualModels?: string[] }): PublicProvider {
-    if (id === DEFAULT_PROVIDER_ID) throw new IntegrationError('Sunucu varsayılanı değiştirilemez; yeni bir sağlayıcı ekleyin', 400);
+    if (id === DEFAULT_PROVIDER_ID) throw new IntegrationError('The server default cannot be changed; add a new provider', 400);
     const p = this.raw(id), next = { ...p, updatedAt: now() };
     if (patch.name !== undefined) next.name = patch.name.trim();
     if (patch.baseUrl !== undefined) next.baseUrl = cleanBase(patch.baseUrl);
@@ -101,7 +101,7 @@ export class ProviderService {
     return this.view(next);
   }
   remove(id: string): boolean {
-    if (id === DEFAULT_PROVIDER_ID) throw new IntegrationError('Sunucu varsayılanı silinemez', 400);
+    if (id === DEFAULT_PROVIDER_ID) throw new IntegrationError('The server default cannot be deleted', 400);
     return this.store.delete('providers', id);
   }
   private async call(url: string, key: string, init: RequestInit = {}, timeout = 20000): Promise<Response> {
@@ -124,16 +124,16 @@ export class ProviderService {
       try {
         const response = await this.call(candidate + '/models', key);
         if (response.ok) { json = await response.json(); base = candidate; failure = ''; break; }
-        failure = 'Sağlayıcı /models için ' + response.status + ' döndürdü';
+        failure = 'The provider returned ' + response.status + ' for /models';
         if (response.status === 401 || response.status === 403) break;
-      } catch (error) { failure = 'Sağlayıcıya ulaşılamadı: ' + short(error); }
+      } catch (error) { failure = 'The provider could not be reached: ' + short(error); }
     }
     const saved = this.store.get<StoredProvider>('providers', id);
     if (id !== DEFAULT_PROVIDER_ID && (!saved || saved.baseUrl !== p.baseUrl || saved.sealedKey !== p.sealedKey)) return this.get(id);
     const target = saved ?? p;
     if (json === undefined) {
-      this.store.put('providers', { ...target, lastError: failure || 'Model listesi alınamadı' });
-      throw new IntegrationError(failure || 'Model listesi alınamadı', 502);
+      this.store.put('providers', { ...target, lastError: failure || 'The model list could not be fetched' });
+      throw new IntegrationError(failure || 'The model list could not be fetched', 502);
     }
     const fetched = parseModels(json), ids = new Set(fetched.map(m => m.id));
     const manual = target.models.filter(m => m.manual && !ids.has(m.id));

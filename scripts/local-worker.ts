@@ -2,7 +2,7 @@ import {join,resolve} from 'node:path';
 import {acquireLaunchLock} from '../apps/client/src/launch-policy.js';
 const data=resolve(process.env.DOTS_WORKER_DATA_DIR||'.data/local-stack/worker');
 const release=await acquireLaunchLock(join(data,'worker.lock'));
-if(!release){console.log('Yerel bilgisayar servisi zaten açık.');process.exit(0);}
+if(!release){console.log('The local computer service is already running.');process.exit(0);}
 process.once('exit',()=>{void release();});
 const parent=Number(process.env.DOTS_WORKER_SUPERVISOR_PID);
 const watch=parent>0?setInterval(()=>{

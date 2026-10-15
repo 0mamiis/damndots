@@ -51,30 +51,30 @@ type TestResult = {
 };
 const LADDER = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"];
 const effortLabel: Record<string, string> = {
-  none: "Kapalı",
+  none: "Off",
   minimal: "Minimal",
-  low: "Düşük",
-  medium: "Orta",
-  high: "Yüksek",
-  xhigh: "Çok yüksek",
-  max: "Maksimum",
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  xhigh: "Very high",
+  max: "Maximum",
   ultra: "Ultra",
 };
 const formatLabel = { responses: "Responses API", chat: "Chat Completions" } as const;
-/** Hızlı mod yalnızca GPT model kimliklerinde sunulur (sunucudaki kuralla aynı). */
+/** Fast mode is only offered for GPT model ids (same rule as on the server). */
 const isGpt = (id: string) => /(^|[/_.:-])(gpt|chatgpt)[-_.\d]|(^|[/_.:-])o\d/i.test(id);
 
 /**
- * Model, düşünme düzeyi ve (yalnızca GPT için) Hızlı mod seçimi.
- * Formda model / reasoningEffort / serviceTier adlı alanlar üretir.
- * inherit=true iken boş seçim "üst düzeydeki varsayılanı kullan" anlamına gelir.
+ * Model, thinking level and (GPT only) Fast mode selection.
+ * Produces fields named model / reasoningEffort / serviceTier in the form.
+ * With inherit=true an empty choice means "use the higher-level default".
  */
 export function ModelPicker({
   model,
   reasoningEffort,
   serviceTier,
   inherit = false,
-  blankLabel = "Varsayılan model",
+  blankLabel = "Default model",
 }: {
   model?: string | null;
   reasoningEffort?: string | null;
@@ -102,7 +102,7 @@ export function ModelPicker({
       firstRender.current = false;
       return;
     }
-    // Model değişince, yeni modelin desteklemediği düzey seçili kalmasın.
+    // When the model changes, do not keep a level the new model does not support.
     if (effort && effectiveInfo && !effectiveInfo.efforts.includes(effort))
       setEffort(effectiveInfo.defaultEffort ?? "");
     if (!fastAvailable) setFast(false);
@@ -124,10 +124,10 @@ export function ModelPicker({
           {
             value: "",
             label: inherit
-              ? "Varsayılan"
+              ? "Default"
               : effectiveInfo?.defaultEffort
-                ? effortLabel[effectiveInfo.defaultEffort] + " (model varsayılanı)"
-                : "Model varsayılanı",
+                ? effortLabel[effectiveInfo.defaultEffort] + " (model default)"
+                : "Model default",
           },
         ]
       : []),
@@ -145,39 +145,39 @@ export function ModelPicker({
           }}
           description={
             catalog.loading && !catalog.data
-              ? "Model listesi alınıyor…"
+              ? "Loading the model list…"
               : models.length
-                ? models.length + " model · etkin sağlayıcıdan çekildi"
-                : "Model listesi boş. Ayarlar’daki Model sağlayıcıları bölümünden modelleri çekin veya özel ad yazın."
+                ? models.length + " models · fetched from the active provider"
+                : "The model list is empty. Fetch models in Settings → Model providers or type a custom name."
           }
           options={[
             { value: "", label: blankLabel },
             ...models.map((m) => ({ value: m.id, label: m.id })),
-            { value: "__custom", label: "Özel model adı yaz…" },
+            { value: "__custom", label: "Type a custom model name…" },
           ]}
         />
         {custom && (
           <ControlledField
-            label="Özel model adı"
+            label="Custom model name"
             value={selected}
             onChange={(value) => setSelected(value.trim())}
-            placeholder="örn. gpt-6.1-sol"
+            placeholder="e.g. gpt-6.1-sol"
           />
         )}
         <input type="hidden" name="model" value={selected} />
       </div>
       <SelectField
-        label="Düşünme düzeyi"
+        label="Thinking level"
         value={unsupported ? "" : valid}
         disabled={unsupported}
         onChange={setEffort}
         options={effortOptions}
         description={
           unsupported
-            ? "Bu model düşünme düzeyi seçimini desteklemiyor."
+            ? "This model does not support choosing a thinking level."
             : effectiveInfo
-              ? "Seçenekler bu modelin desteklediği düzeylerdir."
-              : "Model bilinmiyor; tüm düzeyler gösteriliyor."
+              ? "The options are the levels this model supports."
+              : "The model is unknown; all levels are shown."
         }
       />
       <input type="hidden" name="reasoningEffort" value={effortValue} />
@@ -185,8 +185,8 @@ export function ModelPicker({
         <Check
           label={
             inherit
-              ? "Hızlı mod (seçili değilse genel ayar geçerli)"
-              : "Hızlı mod (öncelikli servis katmanı)"
+              ? "Fast mode (the global setting applies when unselected)"
+              : "Fast mode (priority service tier)"
           }
           isSelected={fast}
           onChange={setFast}
@@ -219,8 +219,8 @@ function TestReport({
       <li>
         {label}:{" "}
         {r.ok
-          ? "çalışıyor" + (r.ms ? " (" + (r.ms / 1000).toFixed(1) + " sn)" : "")
-          : "çalışmıyor" + (r.error ? " — " + r.error : "")}
+          ? "running" + (r.ms ? " (" + (r.ms / 1000).toFixed(1) + " s)" : "")
+          : "not working" + (r.error ? " — " + r.error : "")}
       </li>
     );
   const ok = Boolean(result.suggestedFormat);
@@ -228,14 +228,14 @@ function TestReport({
     <Alert status={ok ? "success" : "warning"}>
       <Alert.Indicator />
       <Alert.Content>
-        <Alert.Title>Bağlantı denemesi</Alert.Title>
+        <Alert.Title>Connection test</Alert.Title>
         <Alert.Description>
           <ul className="list-disc ps-5">
             <li>
-              Model listesi:{" "}
+              Model list:{" "}
               {result.models.ok
-                ? result.models.count + " model alındı"
-                : "alınamadı — " + result.models.error}
+                ? result.models.count + " models fetched"
+                : "failed — " + result.models.error}
             </li>
             {line("Responses API", result.responses)}
             {line("Chat Completions", result.chat)}
@@ -250,12 +250,12 @@ function TestReport({
                   })
                 }
               >
-                Biçimi {formatLabel[result.suggestedFormat]} yap
+                Format {formatLabel[result.suggestedFormat]} yap
               </Button>
             ) : result.suggestedFormat ? (
-              <p>Seçili API biçimi bu sağlayıcıyla uyumlu.</p>
+              <p>The selected API format is compatible with this provider.</p>
             ) : (
-              <p>İki biçim de yanıt vermedi; adres, anahtar ve model adını kontrol et.</p>
+              <p>Neither format responded; check the address, key and model name.</p>
             )}
           </div>
         </Alert.Description>
@@ -287,7 +287,7 @@ function ProviderCard({
     try {
       await work();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "İşlem başarısız.");
+      setError(e instanceof Error ? e.message : "Operation failed.");
     } finally {
       setPending(false);
     }
@@ -298,13 +298,13 @@ function ProviderCard({
       description={
         provider.baseUrl +
         (provider.modelsFetchedAt
-          ? " · Modeller " + time(provider.modelsFetchedAt) + " tarihinde çekildi"
+          ? " · Models fetched " + time(provider.modelsFetchedAt) + " "
           : "")
       }
       action={
         active ? (
           <Chip size="sm" variant="soft" color="success">
-            Etkin
+            Active
           </Chip>
         ) : undefined
       }
@@ -313,16 +313,16 @@ function ProviderCard({
         items={[
           formatLabel[provider.apiFormat],
           provider.builtin
-            ? "Anahtar sunucu ortamında"
+            ? "Key in the server environment"
             : provider.hasKey
-              ? "Anahtar şifreli kayıtlı"
-              : "Anahtarsız",
-          provider.models.length + " model",
+              ? "Key stored encrypted"
+              : "No key",
+          provider.models.length + " models",
         ]}
       />
       {provider.lastError && (
         <p className="text-sm text-danger" role="alert">
-          Son model çekme hatası: {provider.lastError}
+          Last model fetch error: {provider.lastError}
         </p>
       )}
       <Notice error={error} />
@@ -343,11 +343,11 @@ function ProviderCard({
               })
             }
           >
-            Bunu kullan
+            Use this
           </Button>
         )}
         <Action path={"providers/" + provider.id + "/refresh-models"}>
-          Modelleri çek
+          Fetch models
         </Action>
         <Button
           size="sm"
@@ -365,14 +365,14 @@ function ProviderCard({
             )
           }
         >
-          Bağlantıyı dene
+          Test connection
         </Button>
       </Actions>
       {result && (
         <TestReport result={result} current={provider.apiFormat} id={provider.id} />
       )}
       {provider.models.length > 0 && (
-        <Disclose summary={`Modeller (${provider.models.length})`}>
+        <Disclose summary={`Models (${provider.models.length})`}>
           <div className="flex flex-wrap gap-2">
             {provider.models.map((m) => (
               <Chip
@@ -381,12 +381,12 @@ function ProviderCard({
                 variant="soft"
                 title={
                   m.efforts.length
-                    ? "Düşünme: " + m.efforts.join(", ")
-                    : "Düşünme düzeyi yok"
+                    ? "Thinking: " + m.efforts.join(", ")
+                    : "No thinking level"
                 }
               >
                 {m.id}
-                {m.fast ? " · hızlı" : ""}
+                {m.fast ? " · fast" : ""}
               </Chip>
             ))}
           </div>
@@ -394,7 +394,7 @@ function ProviderCard({
       )}
       {!provider.builtin && (
         <>
-          <Disclose summary="Düzenle">
+          <Disclose summary="Edit">
             <Form
               key={JSON.stringify([
                 provider.name,
@@ -423,13 +423,12 @@ function ProviderCard({
               <ProviderFields provider={provider} manual={manual} editing />
             </Form>
           </Disclose>
-          <Disclose summary="Sağlayıcıyı sil">
+          <Disclose summary="Delete provider">
             <p className="text-sm text-muted">
-              Kayıtlı anahtar da silinir. Bu sağlayıcı etkinse sunucu varsayılanına
-              dönülür.
+              The stored key is deleted too. If this provider is active, the server default is used again.
             </p>
             <Action path={"providers/" + provider.id} method="DELETE" variant="danger">
-              Sağlayıcıyı sil
+              Delete provider
             </Action>
           </Disclose>
         </>
@@ -451,38 +450,38 @@ function ProviderFields({
     <>
       <FormGrid>
         <Field
-          label="Ad"
+          label="Name"
           name="name"
           value={provider?.name}
           required
-          placeholder="örn. OpenRouter"
+          placeholder="e.g. OpenRouter"
         />
         <Field
-          label="API adresi"
+          label="API address"
           name="baseUrl"
           value={provider?.baseUrl}
           required
           placeholder="https://api.openai.com/v1"
-          description="Uzak sağlayıcılar HTTPS gerektirir; yerel adresler HTTP olabilir. /v1 eksikse otomatik denenir."
+          description="Remote providers require HTTPS; local addresses may use HTTP. /v1 is tried automatically if missing."
         />
         <Field
-          label={editing ? "Yeni API anahtarı" : "API anahtarı"}
+          label={editing ? "New API key" : "API key"}
           name="apiKey"
           type="password"
           placeholder={
             editing
               ? provider?.hasKey
-                ? "Kayıtlı anahtarı korumak için boş bırak"
-                : "Anahtar yok"
-              : "sk-…  (boş olabilir)"
+                ? "Leave empty to keep the stored key"
+                : "No key"
+              : "sk-…  (may be empty)"
           }
-          description="Anahtar şifrelenerek saklanır; sonradan görüntülenemez ve günlüklere yazılmaz."
+          description="The key is stored encrypted; it cannot be viewed later and is never written to logs."
         />
         <SelectField
-          label="API biçimi"
+          label="API format"
           name="apiFormat"
           defaultValue={provider?.apiFormat ?? "responses"}
-          description="Emin değilsen sağlayıcıyı kaydet ve “Bağlantıyı dene” ile hangisinin çalıştığına bak."
+          description="If you are not sure, save the provider and use “Test connection” to see which one works."
           options={[
             { value: "responses", label: "Responses API (/responses)" },
             { value: "chat", label: "Chat Completions (/chat/completions)" },
@@ -490,14 +489,14 @@ function ProviderFields({
         />
       </FormGrid>
       <Field
-        label="Elle eklenen modeller"
+        label="Models added manually"
         name="manualModels"
         type="textarea"
         value={manual}
-        placeholder="Satır başına bir model adı (liste çekilemiyorsa)"
+        placeholder="One model name per line (if the list cannot be fetched)"
       />
       {editing && provider?.hasKey && (
-        <Check name="clearKey" label="Kayıtlı anahtarı sil" />
+        <Check name="clearKey" label="Delete the stored key" />
       )}
     </>
   );
@@ -513,19 +512,19 @@ export function ProvidersPanel() {
   return (
     <>
       <Section
-        title="Model sağlayıcıları"
-        description="Kendi API adresini ve anahtarını ekle; model listesi 30 saniyede bir otomatik yenilenir. Hem Responses hem Chat Completions sağlayıcıları çalışır."
+        title="Model providers"
+        description="Add your own API address and key; the model list refreshes automatically every 30 seconds. Both Responses and Chat Completions providers work."
         action={
           <Button onPress={() => setAdding(!adding)}>
             {adding ? <CloseIcon /> : <PlusIcon />}
-            {adding ? "Kapat" : "Sağlayıcı ekle"}
+            {adding ? "Close" : "Add provider"}
           </Button>
         }
       >
         <Notice error={providers.error} />
         {adding && (
           <Form
-            submit="Sağlayıcıyı kaydet"
+            submit="Save provider"
             onDone={() => setAdding(false)}
             onSubmit={(d) =>
               mutate("providers", "POST", {
@@ -546,7 +545,7 @@ export function ProvidersPanel() {
         {providers.loading && !providers.data ? (
           <Loading />
         ) : !providers.data?.items.length ? (
-          <Empty>Sağlayıcı bulunamadı.</Empty>
+          <Empty>Provider not found.</Empty>
         ) : null}
       </Section>
       {providers.data?.items.map((p) => (

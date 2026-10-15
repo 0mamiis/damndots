@@ -1,35 +1,37 @@
-# Dots paneli
+# Dots dashboard
 
-Panel, Next.js 16 ve **HeroUI v3** (React Aria + Tailwind CSS v4) ile yazılmıştır. Özel bileşen CSS'i yoktur; görünüm HeroUI bileşenleri, HeroUI tasarım değişkenleri ve Tailwind sınıflarından oluşur. `apps/dashboard/app/globals.css` yalnız marka rengini (`--accent`) ve kontrast için `--muted/--success/--warning/--danger` değerlerini ayarlar.
+The dashboard is written with Next.js 16 and **HeroUI v3** (React Aria + Tailwind CSS v4). There is no custom component CSS; the look comes from HeroUI components, HeroUI design variables and Tailwind classes. `apps/dashboard/app/globals.css` only sets the brand colour (`--accent`) and the `--muted/--success/--warning/--danger` values for contrast.
 
-## Çalıştırma
+## Running it
 
 ```powershell
 npm run build --workspace @dots/dashboard
 npm run start --workspace @dots/dashboard -- --port 4320
 ```
 
-Dots yerel yığını paneli otomatik başlatır (varsayılan: http://127.0.0.1:4320). Giriş için sunucunun yönetici erişim anahtarı gerekir (`apps/server/.data/server/admin.key`).
+The local Dots stack starts the dashboard automatically (default: http://127.0.0.1:4320). Signing in needs the server's admin access key (`apps/server/.data/server/admin.key`).
 
-## Başkalarına açarken
+## Exposing it to other people
 
-Panel, giriş formundaki sunucu adresine sunucu tarafından istek atar. Panele başka insanlar erişebiliyorsa bu, panelin kendi ağındaki adreslere istek atmasına yol açar. Bu yüzden yayınlarken izin verilen sunucuyu sabitle:
+The dashboard makes server-side requests to the server address typed into the sign-in form. If other people can reach the dashboard, that lets them make it call addresses on its own network. When you publish it, pin the allowed server:
 
-| Değişken | Anlamı |
+| Variable | Meaning |
 | --- | --- |
-| `DOTS_SERVER_URL` | Panelin bağlanabileceği tek Dots sunucusu; form bu adresle dolar. |
-| `DOTS_ALLOWED_SERVERS` | Virgülle ayrılmış birden fazla izinli sunucu. |
-| `DOTS_DASHBOARD_HOST`, `DOTS_DASHBOARD_PORT` | Dinlenen adres ve port (varsayılan 127.0.0.1:3000; `--port` ile de verilebilir). |
+| `DOTS_SERVER_URL` | The only Dots server the dashboard may connect to; the form is pre-filled with it. |
+| `DOTS_ALLOWED_SERVERS` | Several allowed servers, separated by commas. |
+| `DOTS_DASHBOARD_HOST`, `DOTS_DASHBOARD_PORT` | Listening address and port (default 127.0.0.1:3000; `--port` also works). |
 
-Uzak sunucular HTTPS gerektirir; yalnız localhost HTTP olabilir. Panelin önüne TLS sonlandıran bir ters vekil koy ve `X-Forwarded-Proto: https` ilet; oturum çerezi o zaman `Secure` olur. Çerezler `HttpOnly` ve `SameSite=Strict` ayarlıdır, değiştirici isteklerde kaynak denetimi yapılır. Yanıtlarda `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy` ve `Permissions-Policy` başlıkları vardır.
+Remote servers require HTTPS; only localhost may use HTTP. Put a TLS-terminating reverse proxy in front of the dashboard and forward `X-Forwarded-Proto: https`; the session cookie then becomes `Secure`. Cookies are `HttpOnly` and `SameSite=Strict`, and mutating requests are origin-checked. Responses carry `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy` and `Permissions-Policy` headers.
 
-## Arayüz
+## Interface
 
-- Açık ve koyu tema (sistem tercihi, üst çubuktan değiştirilir, tercih saklanır).
-- Mobilde menü HeroUI Drawer ile açılır; sayfa adresin `#bölüm` kısmında saklanır, yenileyince aynı bölümde kalırsın.
-- Kaydedilen değişiklikler HeroUI Toast ile bildirilir; hatalar formun altında Alert olarak görünür.
-- Ses ayarlarında “Aramalarda Codex’te seçili sesi kullan” anahtarı vardır.
+- The interface is in English.
+- Light and dark theme (follows the system preference, can be switched from the top bar, and the choice is remembered).
+- On mobile the menu opens in a HeroUI Drawer; the page is kept in the `#section` part of the address, so a refresh keeps you on the same section.
+- Saved changes are announced with a HeroUI Toast; errors appear under the form as an Alert.
+- The live views update from the server event stream (tasks, messages, activity, approvals, computers, settings and attached threads), with a 15 second fallback refresh.
+- In the voice settings there is a "Use the voice selected in Codex for calls" switch.
 
-## Doğrulama
+## Verification
 
-`npm run test --workspace @dots/dashboard` oturum ve izin listesi kurallarını sınar. Arayüz etkileşimleri (model/düşünme/hızlı mod, anahtarlar, seçim kutuları, zorunlu alanlar, bildirim, yenilemede bölüm korunması) ve axe erişilebilirlik taraması gerçek tarayıcıda çalıştırıldı. Taramada kalan tek bulgu, React Aria'nın kendi ekran okuyucu duyuru kabıdır (`role=img`); kütüphaneden gelir.
+`npm run test --workspace @dots/dashboard` tests the session and allow-list rules. The interface interactions (model/thinking/fast mode, switches, select boxes, required fields, notifications, section kept on refresh) and an axe accessibility scan were run in a real browser. The only remaining finding in the scan is React Aria's own screen-reader announcement container (`role=img`), which comes from the library.

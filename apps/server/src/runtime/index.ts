@@ -21,6 +21,12 @@ export interface RuntimeOptions {
   proactiveEnabled?:boolean;
   defaultCwd?:string;
   defaultComputerId?:()=>string|null;
+  /**
+   * Deliver a chat message to the Codex turn that is already running in the same room (turn/steer),
+   * so the Dot can react immediately instead of the message waiting for the whole turn to end.
+   * Resolve true when the running turn accepted it; any other outcome falls back to the normal queue.
+   */
+  steer?:(task:Task,text:string)=>Promise<boolean>;
   /** Read current settings without restarting the runtime. */
   settings?:()=>{maxParallelTasks?:number;proactiveEnabled?:boolean;autoApproveExecution?:boolean;model?:string|null;reasoningEffort?:string|null;serviceTier?:string|null};
 }
@@ -49,6 +55,8 @@ export class OrbitRuntime {
   private timer:ReturnType<typeof setInterval>|undefined;
   private started = false;
   private pumping = false;
+  /** Chat messages whose live delivery to a running turn is in flight; the queue must not start them meanwhile. */
+  private steering = new Set<string>();
   constructor(readonly store:RecordStore, readonly runner:TaskRunner, readonly options:RuntimeOptions = {}) {}
   private now():string {return (this.options.clock?.() ?? new Date()).toISOString();}
   private must<T>(namespace:string, recordId:string):T {
@@ -146,15 +154,44 @@ export class OrbitRuntime {
       if(channel==='voice')this.store.put('voice_tasks',{id:task.id,callId:String(input.requestId??'').split(':')[0]||'default'});
       const message=this.store.put<Message>('messages',{id:id(),dotId,role:'user',text:input.text,attachments:input.attachments??[],taskId:task.id,channel,requestId:input.requestId??null,createdAt:this.now()});
       if(key) this.store.put('submissions',{id:key,dotId,messageId:message.id,taskId:task.id});
-      this.event('message.created',dotId,task.id,{message});return {message,task};
+      this.event('message.created',dotId,task.id,{message});
+      if(channel!=='voice'&&!input.attachments?.length) queueMicrotask(()=>this.trySteer(task));
+      return {message,task};
     });
+  }
+  /** Chats and channels of one Dot share one Codex thread, so a second message used to wait for the whole running turn. */
+  private roomKey(task:Task):string {
+    const voiceCall=this.store.get<{callId:string}>('voice_tasks',task.id);if(voiceCall)return 'voice:'+task.dotId+':'+voiceCall.callId;
+    const chat=task.source==='chat'||task.source==='channel';
+    const threadId=task.threadId??(chat?this.getDot(task.dotId).rootThreadId:null);
+    return threadId?'thread:'+threadId:chat?'room:'+this.getDot(task.dotId).messagingRoomId:'task:'+task.id;
+  }
+  private trySteer(task:Task):void {
+    const steer=this.options.steer;
+    if(!steer||(task.source!=='chat'&&task.source!=='channel')||task.status!=='queued'||this.getDot(task.dotId).paused) return;
+    const room=this.roomKey(task);
+    const running=[...this.active.keys()].map(id=>this.store.get<Task>('tasks',id)).find((t):t is Task=>Boolean(t)&&t!.id!==task.id&&t!.status==='running'&&Boolean(t!.threadId)&&Boolean(t!.turnId)&&(t!.source==='chat'||t!.source==='channel')&&this.roomKey(t!)===room);
+    if(!running) return;
+    this.steering.add(task.id);
+    void (async()=>{
+      let delivered=false;
+      try {delivered=await steer(running,task.input);} catch(e) {this.activity(task.dotId,task.id,'task.steer_failed','Could not reach the running turn; the message stays queued',{error:errorText(e)});}
+      try {
+        const current=this.store.get<Task>('tasks',task.id);
+        if(delivered&&current?.status==='queued') {
+          // Keep thread/turn unset: the running task owns them, and a finished stand-in must not mark the live thread as completed.
+          this.saveTask({...current,status:'completed',result:null,completedAt:this.now()});
+          this.activity(task.dotId,task.id,'task.steered','Sent to the running turn',{taskId:running.id,turnId:running.turnId});
+        }
+      } finally {this.steering.delete(task.id);this.wake();}
+    })();
   }
   /** Başarısız görev sohbette sessiz kalmasın: kullanıcı mesajının altına okunur bir hata yazılır. */
   private failureMessage(dotId:string,taskId:string,error:string):void {
     const origin=this.store.list<Message>('messages').find(m=>m.taskId===taskId&&m.role==='user');
     if(!origin) return;
-    const reason=/429|too many requests|rate.?limit|usage limit/i.test(error)?'Model sağlayıcısı istek sınırına ulaştı (429). Ayarlar\u2019dan başka bir model seçin veya sınır sıfırlanınca yeniden deneyin.':/ECONNREFUSED|fetch failed|unreachable/i.test(error)?'Model sağlayıcısına veya Codex app-server\u2019a ulaşılamadı. Servislerin çalıştığını kontrol edin.':error;
-    const message=this.store.put<Message>('messages',{id:id(),dotId,role:'assistant',text:'⚠ Yanıt alınamadı: '+reason,attachments:[],taskId,channel:origin.channel??'dashboard',requestId:null,createdAt:this.now()});
+    const reason=/429|too many requests|rate.?limit|usage limit/i.test(error)?'The model provider hit its request limit (429). Pick another model in Settings or try again once the limit resets.':/ECONNREFUSED|fetch failed|unreachable/i.test(error)?'The model provider or the Codex app-server could not be reached. Check that the services are running.':error;
+    const message=this.store.put<Message>('messages',{id:id(),dotId,role:'assistant',text:'⚠ No reply received: '+reason,attachments:[],taskId,channel:origin.channel??'dashboard',requestId:null,createdAt:this.now()});
     this.event('message.created',dotId,taskId,{message});
   }
   listMessages(dotId:string):Message[] {this.getDot(dotId);return this.store.list<Message>('messages').filter(m=>m.dotId===dotId);}
@@ -400,12 +437,7 @@ export class OrbitRuntime {
     if(!this.started||this.pumping) return;
     this.pumping=true;
     try {
-      const roomKey=(task:Task)=>{
-        const voiceCall=this.store.get<{callId:string}>('voice_tasks',task.id);if(voiceCall)return 'voice:'+task.dotId+':'+voiceCall.callId;
-        const chat=task.source==='chat'||task.source==='channel';
-        const threadId=task.threadId??(chat?this.getDot(task.dotId).rootThreadId:null);
-        return threadId?`thread:${threadId}`:chat?`room:${this.getDot(task.dotId).messagingRoomId}`:`task:${task.id}`;
-      };
+      const roomKey=(task:Task)=>this.roomKey(task);
       const busyRooms=new Set([...this.active.keys()].map(taskId=>this.store.get<Task>('tasks',taskId)).filter((t):t is Task=>Boolean(t)).map(roomKey));
       const max=Math.max(1,Math.floor(this.options.settings?.().maxParallelTasks??this.options.maxParallelTasks??2));
       const order=(task:Task)=>this.store.get<{sequence:number}>('task_order',task.id)?.sequence??0;
@@ -417,7 +449,7 @@ export class OrbitRuntime {
         const parent=continuation?this.store.get<Task>('tasks',continuation.parentTaskId):undefined;
         if(parent?.threadId&&parent.threadId!==task.threadId) {task.threadId=parent.threadId;task.computerId=parent.computerId;task.cwd=parent.cwd;this.saveTask(task);}
         const dot=this.getDot(task.dotId);
-        if(dot.paused||busyRooms.has(roomKey(task))||(task.source==='proactive'&&!this.proactiveEnabled())) continue;
+        if(dot.paused||this.steering.has(task.id)||busyRooms.has(roomKey(task))||(task.source==='proactive'&&!this.proactiveEnabled())) continue;
         busyRooms.add(roomKey(task));
         const controller=new AbortController();
         // Install the controller before the runner can synchronously request approval.

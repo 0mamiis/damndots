@@ -8,16 +8,16 @@ import {acquireLaunchLock} from '../apps/client/src/launch-policy.js';
 import {ConnectionController} from './connection-controller.js';
 const root=resolve(fileURLToPath(new URL('..',import.meta.url)));
 const data=resolve(process.env.DOTS_STACK_DIR||join(root,'.data/local-stack'));await mkdir(data,{recursive:true});
-if(process.argv.includes('--launch')||process.argv.includes('--main-profile'))throw new Error('Bu betik yalnızca servis başlatır. Codex uygulaması masaüstündeki Codex simgesinden açılır.');
+if(process.argv.includes('--launch')||process.argv.includes('--main-profile'))throw new Error('This script only starts services. The Codex app is opened from the Codex icon on the desktop.');
 const serverPort=Number(process.env.DOTS_PORT||9340),appServerPort=Number(process.env.DOTS_APPSERVER_PORT||9912),dashboardPort=Number(process.env.DOTS_DASHBOARD_PORT||4320),mainGateway=process.argv.includes('--main-gateway'),clientPort=Number(process.env.DOTS_CLIENT_PORT||(mainGateway?8002:8001));
 const open=(port:number)=>new Promise<boolean>(r=>{const s=net.connect(port,'127.0.0.1');s.once('connect',()=>{s.destroy();r(true);});s.once('error',()=>r(false));s.setTimeout(500,()=>{s.destroy();r(false);});});
-const ports=[['sunucu',serverPort],['app-server',appServerPort],['panel',dashboardPort]] as [string,number][];
+const ports=[['server',serverPort],['app-server',appServerPort],['panel',dashboardPort]] as [string,number][];
 const unavailable=async()=>{const status=await Promise.all(ports.map(async([name,port])=>await open(port)?null:`${name} (${port})`));return status.filter((s):s is string=>s!==null);};
 const release=await acquireLaunchLock(join(data,'services.lock'));
 if(!release){
   const missing=await unavailable();
-  if(missing.length)console.log('Dots başlatma süreci açık, ancak henüz hazır olmayan servisler var: '+missing.join(', ')+'. Başlatma konsolundaki hata satırlarını kontrol edin.');
-  else console.log(`Dots servisleri zaten çalışıyor. Panel: http://127.0.0.1:${dashboardPort}. Codex penceresinin kapalı olması servisleri durdurmaz.`);
+  if(missing.length)console.log('The Dots launch process is open, but some services are not ready yet: '+missing.join(', ')+'. Check the error lines in the launch console.');
+  else console.log(`The Dots services are already running. Panel: http://127.0.0.1:${dashboardPort}. Closing the Codex window does not stop the services.`);
   process.exit(0);
 }
 process.once('exit',()=>{void release();});
@@ -28,7 +28,7 @@ if(!await open(appServerPort))start('scripts/appserver.ts',[],{DOTS_APPSERVER_LI
 if(!await open(serverPort))start('apps/server/src/index.ts',[],{DOTS_DATA_DIR:serverData,DOTS_PORT:String(serverPort),DOTS_APPSERVER_URL:`ws://127.0.0.1:${appServerPort}`,DOTS_MODEL:process.env.DOTS_MODEL||'anthropic/claude-sonnet-5-5',DOTS_REASONING_EFFORT:'high',...process.env.DOTS_SERVICE_TIER?{DOTS_SERVICE_TIER:process.env.DOTS_SERVICE_TIER}:{}});
 for(let i=0;i<100;i++){try{if((await fetch(url+'/health')).ok)break;}catch{}await new Promise(r=>setTimeout(r,250));}
 for(let i=0;i<120&&!await open(appServerPort);i++)await new Promise(r=>setTimeout(r,250));
-if(!await open(appServerPort))console.error('UYARI: Codex app-server başlamadı ('+appServerPort+'). Dot paneli "Couldn\'t load your dot" verir. Yukarıdaki hata satırına bakın veya DOTS_CODEX_CLI değişkenini codex.exe yoluna ayarlayın.');
+if(!await open(appServerPort))console.error('WARNING: the Codex app-server did not start ('+appServerPort+'). The Dot panel will show “Couldn’t load your dot”. Check the error line above or set the DOTS_CODEX_CLI variable to the codex.exe path.');
 const admin=process.env.DOTS_ADMIN_KEY||(await readFile(join(serverData,'admin.key'),'utf8')).trim();const login=await fetch(url+'/api/v1/session',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token:admin})});if(!login.ok)throw new Error('Existing server uses a different data directory/access key; configure DOTS_DATA_DIR');const session=await login.json();
 const controller=new ConnectionController(root,data,url,admin,appServerPort,mainGateway&&process.platform==='win32');
 await controller.start();
@@ -37,5 +37,5 @@ await writeFile(join(data,'processes.json'),JSON.stringify(children.map(c=>({pid
 for(const sig of ['SIGINT','SIGTERM'] as const)process.once(sig,()=>{void controller.close().then(()=>{for(const c of children)c.kill();void release();});});
 let missing=await unavailable();
 for(let i=0;i<80&&missing.length;i++){await new Promise(r=>setTimeout(r,250));missing=await unavailable();}
-if(missing.length)console.error('Dots açılışı tamamlanamadı. Hazır olmayan servisler: '+missing.join(', '));
-else console.log(`Dots servisleri hazır. Panel: http://127.0.0.1:${dashboardPort}. Codex penceresi açılmadı.`);
+if(missing.length)console.error('Dots startup could not be completed. Services that are not ready: '+missing.join(', '));
+else console.log(`The Dots services are ready. Panel: http://127.0.0.1:${dashboardPort}. The Codex window was not opened.`);

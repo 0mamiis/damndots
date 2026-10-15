@@ -54,10 +54,10 @@ export function validateServer(
     (!local && url.protocol !== "https:")
   )
     throw new Error(
-      "Yerel sunucu veya Tailscale adresi için HTTP, diğer uzak sunucular için HTTPS adresi kullanın.",
+      "Use HTTP for a local server or Tailscale address, and HTTPS for other remote servers.",
     );
   if (allowed && !allowed.has(url.origin))
-    throw new Error("Bu panel yalnızca yapılandırılmış Dots sunucusuna bağlanabilir.");
+    throw new Error("This panel can only connect to the configured Dots server.");
   return url.origin;
 }
 export async function session() {

@@ -51,41 +51,41 @@ export function NetworkPanel() {
   const ts = status?.tailscale;
   return (
     <Section
-      title="Ağ erişimi"
-      description="Aktif sunucunun başka bilgisayarlara Tailscale üzerinden nasıl açılacağı. Trafik şifrelenir ve sunucu internete açılmaz."
+      title="Network access"
+      description="How the active server is exposed to other computers through Tailscale. Traffic is encrypted and the server is not opened to the internet."
     >
       <Notice error={error} />
       {!status && !error && <Loading />}
       {status && ts && !ts.installed && (
-        <p className="text-sm text-muted">Tailscale bu sunucunun çalıştığı bilgisayarda kurulu değil. tailscale.com/download adresinden kurup giriş yap.</p>
+        <p className="text-sm text-muted">Tailscale is not installed on the computer running this server. Install it from tailscale.com/download and sign in.</p>
       )}
       {status && ts?.installed && ts.state !== "Running" && (
-        <p className="text-sm text-muted">Tailscale çalışmıyor{ts.state ? " (durum: " + ts.state + ")" : ""}. Tailscale uygulamasını açıp giriş yap.</p>
+        <p className="text-sm text-muted">Tailscale is not running{ts.state ? " (state: " + ts.state + ")" : ""}. Open the Tailscale app and sign in.</p>
       )}
       {status && ts?.installed && ts.state === "Running" && (
         <>
           <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
-            <span>Bilgisayar: {ts.hostname ?? "—"}</span>
-            <span>Adres: {ts.ips.find((ip) => !ip.includes(":")) ?? "—"}</span>
-            <span>Sunucu portu: {status.listen.port}</span>
+            <span>Computer: {ts.hostname ?? "—"}</span>
+            <span>Address: {ts.ips.find((ip) => !ip.includes(":")) ?? "—"}</span>
+            <span>Server port: {status.listen.port}</span>
           </div>
           <p className="text-sm">
             {status.exposed
-              ? "Sunucu tailnet’e açık. Aynı Tailscale hesabındaki bilgisayarlar şu adresle bağlanır: "
-              : "Sunucu yalnızca bu bilgisayardan erişilebilir. Başka bir PC veya VPS’in bağlanabilmesi için tailnet’e aç."}
+              ? "The server is open to the tailnet. Computers on the same Tailscale account connect with this address: "
+              : "The server can only be reached from this computer. Open it to the tailnet so another PC or VPS can connect."}
             {status.address && <strong className="break-all">{status.address}</strong>}
           </p>
           <Actions>
             <Button size="sm" isDisabled={busy} onPress={() => void toggle(!status.exposed)}>
-              {status.exposed ? "Tailnet erişimini kapat" : "Tailnet’e aç"}
+              {status.exposed ? "Turn off tailnet access" : "Open to the tailnet"}
             </Button>
           </Actions>
           {status.peers.length > 0 && (
-            <Disclose summary={"Tailnet’teki cihazlar (" + status.peers.length + ")"}>
+            <Disclose summary={"Devices on the tailnet (" + status.peers.length + ")"}>
               <ul className="text-sm">
                 {status.peers.map((peer) => (
                   <li key={peer.ip}>
-                    {peer.name} · {peer.ip} · {peer.os || "bilinmiyor"} · {peer.online ? "çevrimiçi" : "çevrimdışı"}
+                    {peer.name} · {peer.ip} · {peer.os || "unknown"} · {peer.online ? "online" : "offline"}
                   </li>
                 ))}
               </ul>
@@ -102,14 +102,14 @@ export function RemoteInstall({ token }: { token: string }) {
   const network = useData<NetworkStatus>("network");
   const address = network.data?.address ? new URL(network.data.address) : null;
   return (
-    <Disclose summary="Uzak Windows PC veya VPS için komutlar">
+    <Disclose summary="Commands for a remote Windows PC or VPS">
       {!address ? (
         <p className="text-sm text-muted">
-          Önce Sunucular bölümünde Ağ erişimi altından bu sunucuyu tailnet’e aç. Uzak bilgisayar sunucuya bu adresle bağlanır.
+          First open this server to the tailnet under Network access in the Servers section. The remote computer connects to the server at this address.
         </p>
       ) : (
         <div className="flex flex-col gap-3">
-          <p className="text-sm">Uzak bilgisayarda yönetici PowerShell aç ve sırayla çalıştır. İkinci komut kayıt anahtarını tüketir.</p>
+          <p className="text-sm">Open an administrator PowerShell on the remote computer and run these in order. The second command consumes the enrollment key.</p>
           <Code>{"irm " + INSTALLER + " -OutFile $env:TEMP\\install-dots-worker.ps1; powershell -NoProfile -ExecutionPolicy Bypass -File $env:TEMP\\install-dots-worker.ps1 -ServerAddress " + address.hostname + " -ServerPort " + (address.port || "80")}</Code>
           <Code>{"C:\\Dots\\start-worker.cmd --enrollment " + token}</Code>
         </div>

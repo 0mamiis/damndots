@@ -21,7 +21,7 @@ export async function enterMainProfile(home: string, stateDir: string): Promise<
 export async function leaveMainProfile(home: string, stateDir: string): Promise<boolean> {
   let state: { home: string; had: { auth: boolean; config: boolean } };
   try { state = JSON.parse(await readFile(marker(stateDir), 'utf8')); } catch { return false; }
-  if (state.home !== home) throw new Error('Kayıtlı geri alma bilgisi başka bir profile ait: ' + state.home);
+  if (state.home !== home) throw new Error('The saved restore information belongs to another profile: ' + state.home);
   const original = join(stateDir, 'original');
   if (state.had.auth) await copyFile(join(original, 'auth.json'), join(home, 'auth.json'));
   else await rm(join(home, 'auth.json'), { force: true });

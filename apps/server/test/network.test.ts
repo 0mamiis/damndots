@@ -59,7 +59,7 @@ test('missing or stopped Tailscale is reported without throwing, and exposure is
   const none = await new NetworkService({ host: '127.0.0.1', port: 9340 }, missing, ['tailscale']).status();
   assert.equal(none.tailscale.installed, false);
   assert.equal(none.exposed, false);
-  await assert.rejects(new NetworkService({ host: '127.0.0.1', port: 9340 }, missing, ['tailscale']).setExposed(true), /kurulu değil/);
+  await assert.rejects(new NetworkService({ host: '127.0.0.1', port: 9340 }, missing, ['tailscale']).setExposed(true), /not installed/);
   const stopped = await new NetworkService({ host: '127.0.0.1', port: 9340 }, fake({ serve: { '9340': { TCPForward: '127.0.0.1:9340' } }, calls: [], backend: 'Stopped' }), ['tailscale']).status();
   assert.equal(stopped.exposed, false);
   await assert.rejects(new NetworkService({ host: '0.0.0.0', port: 9340 }, fake({ serve: {}, calls: [] }), ['tailscale']).setExposed(true), /loopback/);

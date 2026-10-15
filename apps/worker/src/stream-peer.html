@@ -5,8 +5,8 @@ function arrow(x,y){g.save();g.translate(x,y);g.beginPath();g.moveTo(0,0);g.line
 function paint(){
   g.fillStyle='#101622';g.fillRect(0,0,1280,800);
   if(blank||!bitmap){
-    g.textAlign='center';g.fillStyle='#e5ebf7';g.font='600 32px system-ui,sans-serif';g.fillText('Dot’un tarayıcısı hazır',640,372);
-    g.fillStyle='#abbad2';g.font='20px system-ui,sans-serif';g.fillText('Henüz açık bir sayfa yok. Dot bir site açtığında burada görünür.',640,418);
+    g.textAlign='center';g.fillStyle='#e5ebf7';g.font='600 32px system-ui,sans-serif';g.fillText('The Dot’s browser is ready',640,372);
+    g.fillStyle='#abbad2';g.font='20px system-ui,sans-serif';g.fillText('No page is open yet. It will appear here when the Dot opens a site.',640,418);
   }else g.drawImage(bitmap,0,0,1280,800);
   if(control&&cursor)arrow(cursor.x,cursor.y);
   if(videoTrack&&videoTrack.requestFrame)videoTrack.requestFrame();

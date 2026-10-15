@@ -31,16 +31,16 @@ async function proxy(
     !allowed.has(path[0]) ||
     path.some((p) => p === "." || p === ".." || p.includes("/"))
   )
-    return Response.json({ error: "Geçersiz API yolu." }, { status: 404 });
+    return Response.json({ error: "Invalid API path." }, { status: 404 });
   if (request.method !== "GET" && !sameOrigin(request))
     return Response.json(
-      { error: "İstek kaynağı doğrulanamadı." },
+      { error: "Request origin could not be verified." },
       { status: 403 },
     );
   try {
     const auth = await session();
     if (!auth)
-      return Response.json({ error: "Sunucuya bağlanın." }, { status: 401 });
+      return Response.json({ error: "Connect to a server first." }, { status: 401 });
     const url = new URL(
       `${auth.server}/api/v1/${path.map(encodeURIComponent).join("/")}`,
     );
@@ -78,7 +78,7 @@ async function proxy(
   } catch (error) {
     return Response.json(
       {
-        error: error instanceof Error ? error.message : "Sunucuya ulaşılamadı.",
+        error: error instanceof Error ? error.message : "Could not reach the server.",
       },
       { status: 502 },
     );

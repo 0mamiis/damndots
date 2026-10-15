@@ -34,7 +34,9 @@ export async function acquireLaunchLock(directory:string):Promise<(()=>Promise<v
           if(!(error instanceof SyntaxError)&&(error as NodeJS.ErrnoException).code!=='ENOENT')throw error;
         }
         if(owner&&Number.isSafeInteger(owner.pid)&&owner.pid!>0){
-          try{process.kill(owner.pid!,0);return;}catch(e){if((e as NodeJS.ErrnoException).code!=='ESRCH')throw e;}
+          // ESRCH: process is gone. EPERM: the PID was reused by a process of another account (for example a
+          // Windows service), which can never be this user's launcher, so the lock is stale in both cases.
+          try{process.kill(owner.pid!,0);return;}catch(e){if(!['ESRCH','EPERM'].includes((e as NodeJS.ErrnoException).code||''))throw e;}
         }else if(Date.now()-statSync(directory).mtimeMs<1000){
           // Another launch may be between mkdir and writing owner.json.
           await new Promise(r=>setTimeout(r,100));continue;
@@ -47,5 +49,5 @@ export async function acquireLaunchLock(directory:string):Promise<(()=>Promise<v
       }
     }
   }
-  throw new Error('Açılış kilidi temizlenemedi: '+directory);
+  throw new Error('The launch lock could not be cleared: '+directory);
 }

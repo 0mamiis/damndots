@@ -36,7 +36,7 @@ export async function* guardedResponses(
     if(!terminal){
       options.stop?.();
       const idle=error instanceof Error&&error.message==='idle';
-      const event={type:'response.failed',sequence_number:0,response:{id:'resp_'+randomUUID().replaceAll('-',''),object:'response',status:'failed',error:{code:'invalid_prompt',message:idle?'Model sağlayıcısı 60 saniye boyunca veri göndermedi. Yeniden deneyin veya başka model seçin.':'Model sağlayıcısının yanıt akışı tamamlanmadan kesildi. Yeniden deneyin.'}}};
+      const event={type:'response.failed',sequence_number:0,response:{id:'resp_'+randomUUID().replaceAll('-',''),object:'response',status:'failed',error:{code:'invalid_prompt',message:idle?'The model provider sent no data for 60 seconds. Try again or pick another model.':'The model provider’s response stream ended before it finished. Try again.'}}};
       yield 'event: response.failed\ndata: '+JSON.stringify(event)+'\n\n';
     }
   }finally{

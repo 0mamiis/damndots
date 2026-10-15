@@ -80,7 +80,7 @@ test('an in-flight refresh cannot resurrect a deleted provider or overwrite a ch
   const custom=await f.service.create({name:'Test',baseUrl:'http://127.0.0.1:10100/v1',apiFormat:'responses'});
   f.block(); const pending=f.service.refreshModels(custom.id);
   f.service.remove(custom.id); f.unblock();
-  await assert.rejects(pending,/bulunamadı/);
+  await assert.rejects(pending,/not found/);
   assert.equal(f.store.get('providers',custom.id),undefined);
   const next=await f.service.create({name:'Next',baseUrl:'http://127.0.0.1:10100/v1',apiFormat:'responses'});
   f.block();const stale=f.service.refreshModels(next.id);

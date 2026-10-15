@@ -29,11 +29,11 @@ async function senderThread(sender){
 }
 function requestPipe(pipePath,method,params){
  return new Promise((resolve,reject)=>{
-  const socket=net.connect(pipePath);let data=Buffer.alloc(0);const timer=setTimeout(()=>finish(new Error('Codex uygulaması cevap vermedi')),method==='tools/list'?1500:70000);
+  const socket=net.connect(pipePath);let data=Buffer.alloc(0);const timer=setTimeout(()=>finish(new Error('The Codex app did not respond')),method==='tools/list'?1500:70000);
   const finish=(error,value)=>{clearTimeout(timer);socket.destroy();error?reject(error):resolve(value);};
   socket.on('error',e=>finish(e));
   socket.on('connect',()=>{const p=Buffer.from(JSON.stringify({id:1,jsonrpc:'2.0',method,params}));const h=Buffer.alloc(4);h.writeUInt32LE(p.length);socket.write(Buffer.concat([h,p]));});
-  socket.on('data',chunk=>{data=Buffer.concat([data,chunk]);if(data.length<4)return;const n=data.readUInt32LE();if(n>8*1024*1024){finish(new Error('Yanıt fazla büyük'));return;}if(data.length<n+4)return;try{const m=JSON.parse(data.subarray(4,n+4));m.error?finish(new Error(m.error.message)):finish(null,m.result);}catch(e){finish(e);}});
+  socket.on('data',chunk=>{data=Buffer.concat([data,chunk]);if(data.length<4)return;const n=data.readUInt32LE();if(n>8*1024*1024){finish(new Error('The response is too large'));return;}if(data.length<n+4)return;try{const m=JSON.parse(data.subarray(4,n+4));m.error?finish(new Error(m.error.message)):finish(null,m.result);}catch(e){finish(e);}});
  });
 }
 async function resolvePipe(){
@@ -45,7 +45,7 @@ async function resolvePipe(){
    if(result.tools?.some(t=>t.name==='list_threads'&&t.namespace==='codex_app')){pipe=candidate;return pipe;}
   }catch{}
  }
- throw new Error('Yerel Codex uygulaması kapalı veya sohbet bağlantısı hazır değil.');
+ throw new Error('The local Codex app is closed or its chat connection is not ready.');
 }
 let active=0;
 const server=http.createServer(async(req,res)=>{
@@ -57,7 +57,7 @@ const server=http.createServer(async(req,res)=>{
  if(active>=8)return respond(429,{error:'Too many requests'});
  active++;let text='';
  try{
-  for await(const chunk of req){text+=chunk.toString();if(text.length>256000)throw new Error('İstek fazla büyük');}
+  for await(const chunk of req){text+=chunk.toString();if(text.length>256000)throw new Error('The request is too large');}
   const body=JSON.parse(text);
   if(!allowed.has(body.tool))return respond(403,{error:'Tool not allowed'});
   const args=body.arguments||{};
