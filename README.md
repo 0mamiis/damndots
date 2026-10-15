@@ -149,6 +149,16 @@ GitHub Actions runs these checks on Windows and Ubuntu. The optional native comp
 
 MIT licensed. Dependencies and separately installed applications keep their own licenses; see [third-party notices](THIRD_PARTY_NOTICES.md).
 
+## Star history
+
+<a href="https://www.star-history.com/?repos=0mamiis%2Fdamndots&type=date&legend=top-left">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=0mamiis%2Fdamndots&type=date&legend=top-left&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=0mamiis%2Fdamndots&type=date&legend=top-left" />
+    <img alt="Star history of damndots" src="https://api.star-history.com/chart?repos=0mamiis%2Fdamndots&type=date&legend=top-left" width="800" />
+  </picture>
+</a>
+
 ## Version checks and updates
 
 The bottom of the sidebar shows the installed version and checks stable GitHub releases. Each release notification appears once. **Updates are never installed automatically.** Nothing changes until you press **Install update**; managed Git installations then stage, build and install it with startup verification and rollback. See [Updates](docs/UPDATES.md) for supported layouts and recovery.
