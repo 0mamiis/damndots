@@ -121,7 +121,7 @@ export async function buildServer(options:{config?:ServerConfig;store?:RecordSto
     admin.delete('/dots/:id',async req=>({deleted:runtime.deleteDot(idOf(req))}));
     admin.post('/dots/:id/pause',async req=>runtime.pauseDot(idOf(req)));admin.post('/dots/:id/resume',async req=>runtime.resumeDot(idOf(req)));
     admin.get('/dots/:id/messages',async req=>list(runtime.listMessages(idOf(req))));
-    admin.post('/dots/:id/messages',async req=>{const p=z.object({text:z.string().trim().min(1).max(200000),requestId:z.string().max(200).optional(),channel:z.string().optional(),computerId:z.string().nullable().optional(),attachments:taskSchema.shape.attachments}).parse(req.body);return runtime.submitMessage(idOf(req),{...p,attachments:p.attachments?.map(a=>blobs.forDot(a.id,idOf(req)))});});
+    admin.post('/dots/:id/messages',async req=>{const p=z.object({text:z.string().trim().max(200000).default(''),requestId:z.string().max(200).optional(),channel:z.string().optional(),computerId:z.string().nullable().optional(),attachments:taskSchema.shape.attachments}).parse(req.body);return runtime.submitMessage(idOf(req),{...p,attachments:p.attachments?.map(a=>blobs.forDot(a.id,idOf(req)))});});
     admin.post('/dots/:id/native-aliases',async req=>registerNativeAliases(store,runtime.getDot(idOf(req)),z.object({dotId:z.string().min(1).max(100).optional(),threadId:z.string().min(1).max(100).optional(),roomId:z.string().min(1).max(100).optional()}).parse(req.body)));
     admin.get('/dots/:id/avatar-assets/:fileId',async(req,reply)=>{
       const fileId=(req.params as any).fileId,dot=runtime.getDot(idOf(req));

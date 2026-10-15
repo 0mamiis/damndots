@@ -81,3 +81,39 @@ test('actual question answers and outputs flow through authenticated HTTP routes
   const output=(await f.request('GET','/outputs?taskId='+task.id)).json().items[0];const content=await f.request('GET','/outputs/'+output.id+'/content');assert.equal(content.statusCode,200);assert.equal(content.body,'real artifact bytes');
  }finally{await f.cleanup();}
 });
+
+test('attachment-only messages work through dashboard and native chat without inventing a caption',async()=>{
+  const seen:RunInput[]=[];
+  const f=await fixture({run:async(input)=>{seen.push(input);return {text:'Image received',threadId:'image-thread',turnId:'image-turn'};}});
+  try {
+    const dot=(await f.request('POST','/dots',{name:'Images'})).json();
+    const image=await f.blobs.put(Buffer.from('image bytes'),'photo.png','image/png',dot.id);
+    const other=f.runtime.createDot({name:'Other'});
+    const foreign=await f.blobs.put(Buffer.from('private image'),'private.png','image/png',other.id);
+    const headers={authorization:'Bearer '+f.auth.nativeTokens('image-client').access_token};
+    const native=(payload:any)=>f.app.inject({method:'POST',url:'/backend-api/messaging/rooms/'+dot.messagingRoomId+'/messages',headers,payload});
+    for(const body of [{text:''},{text:'   '},{}]) {
+      const empty=await f.request('POST','/dots/'+dot.id+'/messages',body);assert.equal(empty.statusCode,400);
+    }
+    assert.equal((await native({content:{text:'  '}})).statusCode,400);
+    assert.equal((await native({content:{attachments:[{file_id:foreign.id}]}})).statusCode,403);
+    assert.equal((await f.request('POST','/dots/'+dot.id+'/messages',{attachments:[foreign]})).statusCode,403);
+    assert.equal(f.runtime.listTasks().length,0,'rejected messages leave no tasks');
+
+    const first=await f.request('POST','/dots/'+dot.id+'/messages',{attachments:[{...image,path:'C:/Windows/forged',name:'forged'}],requestId:'image-only'});
+    assert.equal(first.statusCode,200);assert.equal(first.json().message.text,'');
+    const repeated=await f.request('POST','/dots/'+dot.id+'/messages',{text:'',attachments:[image],requestId:'image-only'});
+    assert.equal(repeated.json().task.id,first.json().task.id);
+    assert.equal(first.json().task.attachments[0].path,image.path);
+
+    const second=await native({content:{attachments:[{file_id:image.id}]},request_id:'native-image'});
+    assert.equal(second.statusCode,200);
+    const caption=await native({content:{text:'What is this?',attachments:[{file_id:image.id}]},request_id:'captioned-image'});
+    assert.equal(caption.statusCode,200);
+    assert.deepEqual(f.runtime.listMessages(dot.id).map(m=>m.text),['','','What is this?']);
+    f.runtime.start();await wait(()=>f.runtime.listTasks().every(t=>t.status==='completed'));
+    assert.equal(seen.length,3);
+    assert.deepEqual(seen.map(i=>i.task.input),['Review the attached files.','Review the attached files.','What is this?']);
+    for(const input of seen)assert.equal(input.task.attachments[0].id,image.id);
+  }finally{await f.cleanup();}
+});
