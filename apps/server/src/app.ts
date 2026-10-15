@@ -80,6 +80,7 @@ export async function buildServer(options:{config?:ServerConfig;store?:RecordSto
   const requireAdmin=async(req:any,reply:any)=>{if(!auth.verify(bearer(req.headers.authorization),['admin']))return reply.code(401).send({error:'Authentication required'});};
   const requireWorker=async(req:any,reply:any)=>{const c=auth.verify(bearer(req.headers.authorization),['worker']);if(!c)return reply.code(401).send({error:'Worker authentication required'});req.computerId=c.sub;};
   const updates=new UpdateService({dataDir:config.dataDir,fetch:options.releaseFetch,busy:()=>runtime.listTasks().some(t=>['running','queued','waiting_approval'].includes(t.status))||store.list<any>('worker_jobs').some(j=>['running','queued'].includes(j.status)),maintenance:value=>runtime.setMaintenance(value)});
+  await updates.syncMaintenance();
   const updateWatch=setInterval(()=>void updates.syncMaintenance().catch(()=>{}),2000);updateWatch.unref();
   app.addHook('onClose',async()=>{clearInterval(updateWatch);});
   app.get('/health',async()=>({ok:true,version:updates.currentVersion,connectionProtocol:1}));
