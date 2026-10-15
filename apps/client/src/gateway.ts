@@ -5,6 +5,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import {gatewayCertificates} from './certificates.js';
 import {allowsPlainHttp} from '@dots/contracts/network';
 import {readNativeIdentity,nativeIdentityRoute,projectNativeIdentity} from './native-identity.js';
+import {inspectRequest,requestTarget,guardMode,fingerprint} from './request-guard.js';
 import {isDotsRoute,isLocalFirstRoute,isStatsigRoute,isAccountCheckRoute,mergeStatsig,enableDotsAccount} from './native-upstream.js';
 interface Tokens {access_token:string;id_token:string;refresh_token:string;}
 export interface ClientState {clientId:string;server:string;tokens:Tokens;}
@@ -14,6 +15,7 @@ export class NativeGateway {
   server:https.Server|undefined;
   private wsServer=new WebSocketServer({noServer:true});
   private refreshPromise:Promise<void>|undefined;
+  private seen=new Set<string>();
   constructor(readonly options:GatewayOptions){const u=new URL(options.server);if(u.username||u.password||(u.protocol!=='https:'&&!allowsPlainHttp(u.hostname)))throw new Error('Remote server requires HTTPS, a local SSH tunnel or a Tailscale address');}
   private async save(){await writeFile(join(this.options.dataDir,'client.json'),JSON.stringify(this.state,null,2),{mode:0o600});if(this.options.writeCodexProfile===false)return;const codexHome=(this.options.codexHome??join(this.options.dataDir,'codex-home'));await mkdir(codexHome,{recursive:true});await writeFile(join(codexHome,'auth.json'),JSON.stringify({auth_mode:'chatgpt',OPENAI_API_KEY:null,tokens:{...this.state!.tokens,account_id:'acct_local_orbit'},last_refresh:new Date().toISOString()}),{mode:0o600});
     const configFile=join(codexHome,'config.toml');let config='';try{config=await readFile(configFile,'utf8');}catch{}const port=this.options.port||8000;const lines=[`chatgpt_base_url = "https://localhost:${port}/backend-api"`,`openai_base_url = "https://localhost:${port}/backend-api/codex"`];config=config.replace(/^\s*(?:chatgpt_base_url|openai_base_url)\s*=.*\r?\n/gm,'');await writeFile(configFile,lines.join('\n')+'\n'+config,{mode:0o600});}
@@ -33,7 +35,11 @@ export class NativeGateway {
     this.server=https.createServer({key:tls.key,cert:tls.cert},async(req,res)=>{try{
       if(req.url==='/health'&&req.method==='GET'){res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify({ok:true,service:'dots-native-gateway',clientId:this.state!.clientId,server:this.options.server}));return;}
       const connectionServer=this.options.server,connectionState=this.state!;
-      const url=new URL(req.url||'/',connectionServer);if(!(url.pathname.startsWith('/backend-api/')||url.pathname.startsWith('/auth/'))){res.writeHead(404);res.end();return;}
+      const url=requestTarget(req.url,connectionServer);if(!url){res.writeHead(400);res.end();return;}
+      const mode=guardMode(),verdict=mode==='off'?{block:false,reason:''}:inspectRequest(req.headers,url);
+      if(mode==='log'){const f=fingerprint(req.method,req.headers,url)+(verdict.block?' WOULD-BLOCK('+verdict.reason+')':'');if(!this.seen.has(f)){this.seen.add(f);console.error('Gateway guard: '+f);}}
+      else if(verdict.block){this.log('blocked '+req.method+' '+url.pathname+': '+verdict.reason);console.error('Gateway blocked a request ('+verdict.reason+')');res.writeHead(403,{'content-type':'application/json'});res.end(JSON.stringify({error:'Request blocked'}));return;}
+      if(!(url.pathname.startsWith('/backend-api/')||url.pathname.startsWith('/auth/'))){res.writeHead(404);res.end();return;}
       const buffers:Buffer[]=[];let size=0;for await(const piece of req){size+=piece.length;if(size>48*1024*1024)throw new Error('Request too large');buffers.push(piece);}
       const payload=['GET','HEAD'].includes(req.method||'GET')?undefined:Buffer.concat(buffers),appAuthorization=req.headers.authorization;
       const base=new Headers();for(const [key,value] of Object.entries(req.headers))if(value!==undefined&&!['host','connection','content-length','cookie','authorization','proxy-authorization','accept-encoding'].includes(key))base.set(key,Array.isArray(value)?value.join(','):value);
@@ -77,11 +83,15 @@ export class NativeGateway {
         if(url.pathname==='/celsius/ws/user'||url.pathname==='/backend-api/celsius/ws/user'){const body=await response.json();if(response.ok&&typeof body.websocket_url==='string'){const socketUrl=new URL(body.websocket_url);body.websocket_url=`wss://localhost:${port}${socketUrl.pathname}${socketUrl.search}`;}res.writeHead(response.status,responseHeaders);res.end(JSON.stringify(body));return;}
         if(this.options.identityHome&&response.ok&&nativeIdentityRoute(url.pathname)){const identity=await readNativeIdentity(this.options.identityHome);if(identity){res.writeHead(response.status,responseHeaders);res.end(JSON.stringify(projectNativeIdentity(await response.json(),identity)));return;}}
       }
-      if(this.options.trace&&/settings\/(user|voices)/.test(url.pathname)){try{this.log('RESP '+url.pathname+' '+(await response.clone().text()).slice(0,900));}catch{}}res.writeHead(response.status,responseHeaders);if(response.body){for await(const chunk of response.body as any){if(!res.write(Buffer.from(chunk)))await new Promise<void>(r=>res.once('drain',r));}}res.end();
+      if(this.options.trace&&/settings\/(user|voices)/.test(url.pathname)){try{this.log('RESP '+url.pathname+' '+(await response.clone().text()).slice(0,900));}catch{}}res.writeHead(response.status,responseHeaders);if(response.body){const closed=new Promise<void>(r=>res.once('close',r));for await(const chunk of response.body as any){if(res.destroyed)break;if(!res.write(Buffer.from(chunk)))await Promise.race([new Promise<void>(r=>res.once('drain',r)),closed]);}}res.end();
     }catch(error){if(!res.headersSent)res.writeHead(502,{'content-type':'application/json'});res.end(JSON.stringify({error:'Server gateway unavailable',detail:(error as Error).message}));}});
     this.server.on('upgrade',(req,socket,head)=>{
       // Yalnızca Codex RPC ve pubsub kanalları taşınır. Model yanıtı için gelen WebSocket denemeleri (/codex/responses) reddedilir; Codex bunu "desteklenmiyor" sayıp HTTP akışına geçer. Aksi halde cevap hiç gelmez ve arayüz "Thinking"de kalır.
-      const connectionServer=this.options.server,connectionState=this.state!,path=new URL(req.url||'/',connectionServer).pathname;
+      const connectionServer=this.options.server,connectionState=this.state!,target0=requestTarget(req.url,connectionServer);
+      const mode0=guardMode(),verdict=!target0?{block:true,reason:'invalid request target'}:mode0==='off'?{block:false,reason:''}:inspectRequest(req.headers,target0);
+      if(mode0==='log'&&target0){const f='UPGRADE '+fingerprint(req.method,req.headers,target0)+(verdict.block?' WOULD-BLOCK('+verdict.reason+')':'');if(!this.seen.has(f)){this.seen.add(f);console.error('Gateway guard: '+f);}}
+      if(verdict.block&&(mode0==='on'||!target0)){this.log('blocked upgrade: '+verdict.reason);console.error('Gateway blocked a WebSocket ('+verdict.reason+')');socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');return;}
+      const path=target0!.pathname;
       if(!path.startsWith('/native/app-server')&&!path.includes('celsius/ws')){socket.end('HTTP/1.1 426 Upgrade Required\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');return;}
       this.wsServer.handleUpgrade(req,socket,head,ws=>{void (async()=>{const p=new URL(req.url||'/',connectionServer),target=new URL(p.pathname.includes('celsius/ws')?'/native/pubsub':'/native/app-server',connectionServer);target.protocol=target.protocol==='https:'?'wss:':'ws:';target.search=p.search;
       const upstream=new WebSocket(target,{headers:{authorization:'Bearer '+await this.snapshotAccess(connectionState,connectionServer)}}),pending:{data:Buffer;binary:boolean}[]=[];ws.on('message',(data,binary)=>{if(upstream.readyState===WebSocket.OPEN)upstream.send(data,{binary});else if(pending.length<100)pending.push({data:Buffer.from(data as Buffer),binary});else ws.close(1008,'Request queue full');});upstream.on('open',()=>{for(const b of pending)upstream.send(b.data,{binary:b.binary});pending.length=0;});upstream.on('message',(data,binary)=>{if(ws.readyState===WebSocket.OPEN)ws.send(data,{binary});});upstream.on('error',()=>ws.close(1011,'Server unavailable'));upstream.on('close',()=>ws.close());ws.on('close',()=>upstream.close());})().catch(()=>ws.close(1011,'Client authentication failed'));});});

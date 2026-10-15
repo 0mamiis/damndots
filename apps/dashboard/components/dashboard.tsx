@@ -221,6 +221,8 @@ export function Dashboard({
       "output.created",
       "schedule.updated",
       "connector.reply.updated",
+      // Sent when a reconnecting dashboard missed more events than the server keeps.
+      "resync",
       "computer.registered",
       "computer.revoked",
       "settings.updated",

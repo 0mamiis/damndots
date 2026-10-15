@@ -11,10 +11,10 @@ async function fixture(){
  await writeFile(join(root,'package.json'),JSON.stringify({name:'damndots',version:'0.2.2'}));
  const git=(...args:string[])=>execFileSync('git',args,{cwd:root,stdio:'pipe',windowsHide:true});
  git('init');git('config','user.email','test@example.com');git('config','user.name','Test');git('add','package.json');git('commit','-m','initial');git('remote','add','origin',REPOSITORY+'.git');
- let busy=false,calls=0,maint=false,launches=0,time=100000;
+ let busy=false,calls=0,maint=false,launches=0,time=100000,busyCalls=0;
  let value:any=release(),fail=false;
- const service=new UpdateService({root,dataDir,stackPid:123,busy:()=>busy,maintenance:v=>maint=v,clock:()=>time,launch:async()=>{launches++;},fetch:async()=>{calls++;if(fail)throw Error('Network unavailable');return new Response(JSON.stringify(value));}});
- return {root,dataDir,service,git,get calls(){return calls;},get maint(){return maint;},get launches(){return launches;},busy:()=>{busy=true;},time:(v:number)=>{time=v;},fail:()=>{fail=true;},value:(v:any)=>{value=v;},close:()=>rm(root,{recursive:true,force:true})};
+ const service=new UpdateService({root,dataDir,stackPid:123,busy:()=>{busyCalls++;return busy;},maintenance:v=>maint=v,clock:()=>time,launch:async()=>{launches++;},fetch:async()=>{calls++;if(fail)throw Error('Network unavailable');return new Response(JSON.stringify(value));}});
+ return {root,dataDir,service,git,get calls(){return calls;},get maint(){return maint;},get launches(){return launches;},busy:()=>{busy=true;},time:(v:number)=>{time=v;},fail:(value=true)=>{fail=value;},get busyCalls(){return busyCalls;},value:(v:any)=>{value=v;},close:()=>rm(root,{recursive:true,force:true})};
 }
 test('stable release parsing is numeric, excludes prereleases/drafts and locks links to the official repository',()=>{
  assert.equal(newerVersion('v0.10.0','0.9.9'),true);assert.equal(newerVersion('v1.0.0','1.0.0'),false);assert.equal(newerVersion('v0.2.1','0.2.2'),false);
@@ -60,4 +60,25 @@ test('a failed updater launch releases its lock and maintenance state',async()=>
   await assert.rejects(s.start('v0.3.0'),/Cannot spawn/);assert.equal(maintenance,false);
   await assert.rejects(readFile(join(root,'.data/updates/update.lock')),{code:'ENOENT'});
  }finally{await rm(root,{recursive:true,force:true});}
+});
+test('a failed first check retries with a growing delay instead of waiting an hour',async()=>{
+ const f=await fixture();try{
+  f.fail();await f.service.status();assert.equal(f.calls,1);
+  await f.service.status();assert.equal(f.calls,1,'not retried immediately');
+  f.time(100000+29000);await f.service.status();assert.equal(f.calls,1);
+  f.time(100000+31000);await f.service.status();assert.equal(f.calls,2,'retried after 30 seconds');
+  f.time(100000+31000+59000);await f.service.status();assert.equal(f.calls,2,'the delay doubled');
+  f.fail(false);f.time(100000+31000+61000);const status=await f.service.status();assert.equal(f.calls,3);assert.equal(status.error,null);assert.equal(status.latest?.tag,'v0.3.0');
+  f.time(100000+31000+61000+59*60000);await f.service.status();assert.equal(f.calls,3,'success is cached for an hour');
+  f.time(100000+31000+61000+61*60000);await f.service.status();assert.equal(f.calls,4);
+ }finally{await f.close();}
+});
+test('task and source checks are only made when an update exists',async()=>{
+ const none=await fixture();try{
+  none.value(release('v0.2.2'));for(let i=0;i<5;i++)await none.service.status();
+  assert.equal(none.busyCalls,0,'idle polling does not touch the task tables');
+ }finally{await none.close();}
+ const some=await fixture();try{
+  await some.service.status();assert.ok(some.busyCalls>0);
+ }finally{await some.close();}
 });

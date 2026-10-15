@@ -3,6 +3,7 @@ import {z} from 'zod';
 import type {NativeContext} from './native.js';
 import {dotBrowserSession} from './browser-session.js';
 import {browserViewerPage} from './browser-viewer-page.js';
+import {query} from './storage.js';
 
 export function registerBrowserViewer(app:FastifyInstance,ctx:NativeContext){
   app.get('/tbo/:id/computer/viewer',async(req,reply)=>{
@@ -34,7 +35,7 @@ export function registerBrowserViewer(app:FastifyInstance,ctx:NativeContext){
   });
   app.get('/tbo/:id/computer/viewer/screenshots/:fileId',async(req,reply)=>{
     const c=grant(req),id=(req.params as any).fileId;
-    const matching=ctx.store.list<any>('worker_jobs').some(j=>j.computerId===c.computerId&&j.kind==='browser'&&j.payload?.viewerGrantId===c.jti&&j.result?.screenshotId===id);
+    const matching=query<any>(ctx.store,'worker_jobs',{where:{computerId:String(c.computerId),kind:'browser'},limit:500,newest:true}).some(j=>j.payload?.viewerGrantId===c.jti&&j.result?.screenshotId===id);
     if(!matching)throw Object.assign(new Error('Screenshot is outside viewer scope'),{statusCode:403});
     return reply.type('image/png').header('cache-control','no-store').send(await ctx.blobs.read(id));
   });

@@ -32,6 +32,8 @@ import {NetworkService} from './network.js';
 import {ComputerTransport} from './computer-transport.js';
 import {ComputerSetup} from './computer-setup.js';
 import {UpdateService} from './updates.js';
+import {query} from './storage.js';
+import {scheduleRetention} from './retention.js';
 /** Codex istek gövdesini zstd ile sıkıştırıp gönderir; JSON ayrıştırmadan önce açılır. */
 const decodeBody=(body:Buffer,encoding:unknown):Buffer=>{switch(String(encoding||'').toLowerCase()){case 'zstd':return zstdDecompressSync(body);case 'gzip':case 'x-gzip':return gunzipSync(body);case 'br':return brotliDecompressSync(body);case 'deflate':return inflateSync(body);default:return body;}};
 const object=z.record(z.string(),z.unknown());
@@ -79,16 +81,18 @@ export async function buildServer(options:{config?:ServerConfig;store?:RecordSto
   integrations=new IntegrationService(store,{encryptionKey:config.signingKey,inbound:async(dotId,text,channel,requestId)=>runtime.submitMessage(dotId,{text,channel,requestId}),emit:(t,d)=>external.publish(t,d),authorizeSend:async(c,name,args)=>{const input=toolContext.getStore();if(!input||input.task.source==='proactive')return false;return runtime.requestApproval(input.task.id,{kind:'external_send',title:`${c.name}: ${name}`,detail:JSON.stringify(args),request:{connectorId:c.id,tool:name,arguments:args}});}});
   const requireAdmin=async(req:any,reply:any)=>{if(!auth.verify(bearer(req.headers.authorization),['admin']))return reply.code(401).send({error:'Authentication required'});};
   const requireWorker=async(req:any,reply:any)=>{const c=auth.verify(bearer(req.headers.authorization),['worker']);if(!c)return reply.code(401).send({error:'Worker authentication required'});req.computerId=c.sub;};
-  const updates=new UpdateService({dataDir:config.dataDir,fetch:options.releaseFetch,busy:()=>runtime.listTasks().some(t=>['running','queued','waiting_approval'].includes(t.status))||store.list<any>('worker_jobs').some(j=>['running','queued'].includes(j.status)),maintenance:value=>runtime.setMaintenance(value)});
+  const busy=()=>['running','queued','waiting_approval'].some(status=>runtime.listTasks({status}).length>0)||['running','queued'].some(status=>query<object>(store,'worker_jobs',{where:{status},limit:1}).length>0);
+  const updates=new UpdateService({dataDir:config.dataDir,fetch:options.releaseFetch,busy,maintenance:value=>runtime.setMaintenance(value)});
   await updates.syncMaintenance();
+  const stopRetention=scheduleRetention(store,message=>app.log.info(message));
   const updateWatch=setInterval(()=>void updates.syncMaintenance().catch(()=>{}),2000);updateWatch.unref();
-  app.addHook('onClose',async()=>{clearInterval(updateWatch);});
+  app.addHook('onClose',async()=>{clearInterval(updateWatch);stopRetention();});
   app.get('/health',async()=>({ok:true,version:updates.currentVersion,connectionProtocol:1}));
   const loginAttempts=new Map<string,{count:number;until:number}>();
   app.post('/api/v1/session',async(req,reply)=>{const prior=loginAttempts.get(req.ip),attempts=prior&&prior.until>Date.now()?prior:{count:0,until:Date.now()+60000};if(attempts.count>=10)return reply.code(429).send({error:'Too many login attempts'});const body=z.object({token:z.string().max(500)}).parse(req.body),session=auth.login(body.token);if(session){loginAttempts.delete(req.ip);return session;}attempts.count++;if(loginAttempts.size>1000)loginAttempts.clear();loginAttempts.set(req.ip,attempts);return reply.code(401).send({error:'Invalid access key'});});
   await app.register(async admin=>{
     admin.addHook('preHandler',requireAdmin);
-    admin.get('/overview',async()=>({dots:runtime.listDots(),tasks:runtime.listTasks(),activity:runtime.listActivity().slice(-100),outputs:runtime.listOutputs(),computers:workers.list(),pendingApprovals:runtime.listApprovals().filter(a=>a.status==='pending').length,settings:settings()}));
+    admin.get('/overview',async()=>({dots:runtime.listDots(),tasks:runtime.listTasks(),activity:runtime.listActivity({},100),outputs:runtime.listOutputs(),computers:workers.list(),pendingApprovals:runtime.listApprovals().filter(a=>a.status==='pending').length,settings:settings()}));
     admin.get('/settings',async()=>settings());
     admin.get('/computer-transport',async()=>computerTransport.list());
     admin.put('/computer-transport',async req=>computerTransport.save(z.object({items:z.array(z.object({id:z.string().optional(),urls:z.array(z.string().max(2048)).min(1).max(8),username:z.string().max(1024).optional(),credential:z.string().max(2048).optional()})).max(8)}).parse(req.body).items));
@@ -145,7 +149,7 @@ export async function buildServer(options:{config?:ServerConfig;store?:RecordSto
     admin.post('/threads/attach',async req=>{const body=z.object({dotId:z.string(),threadId:z.string(),computerId:z.string().nullable().optional()}).parse(req.body);runtime.getDot(body.dotId);let result:any;if(body.computerId)result=await workers.execute(body.computerId,'rpc',{request:{method:'thread/read',params:{threadId:body.threadId,includeTurns:false}}});else{const rpc=new RpcClient({url:settings().appServerUrl});try{await rpc.connect();await rpc.request('initialize',{clientInfo:{name:'dots_attach',version:'0.1.0'},capabilities:{experimentalApi:true}});rpc.notify('initialized');result=await rpc.request('thread/read',{threadId:body.threadId,includeTurns:false});}finally{rpc.close();}}if(result.thread?.id!==body.threadId)throw Object.assign(new Error('Thread read did not match the requested conversation'),{statusCode:502});return runtime.attachThread(body.dotId,{threadId:body.threadId,computerId:body.computerId||null,title:result.thread.name||result.thread.preview||null,model:result.thread.model||null,reasoningEffort:result.thread.reasoningEffort||null,serviceTier:null,cwd:result.thread.cwd||null});});
     admin.post('/threads/:id/continue',async req=>{const body=z.object({dotId:z.string(),input:z.string().trim().min(1).max(200000),title:z.string().optional()}).parse(req.body);return runtime.continueThread(body.dotId,idOf(req),body);});
     admin.post('/tasks/:id/delegate',async req=>runtime.delegateTask(idOf(req),z.object({input:z.string().trim().min(1),title:z.string().optional(),computerId:z.string().nullable().optional()}).parse(req.body)));
-    admin.get('/activity',async req=>list(runtime.listActivity(filter(req))));admin.get('/outputs',async req=>list(runtime.listOutputs(filter(req))));
+    admin.get('/activity',async req=>list(runtime.listActivity(filter(req),Math.min(5000,Math.max(1,Math.floor(Number((req.query as any).limit))||1000)))));admin.get('/outputs',async req=>list(runtime.listOutputs(filter(req))));
     admin.get('/outputs/:id/content',async(req,reply)=>{const o=runtime.getOutput(idOf(req));let bytes:Buffer;
       if(o.computerId){const r=await workers.execute(o.computerId,'filesystem',{action:'read',path:o.path});bytes=Buffer.from(r.data,'base64');}
       else{const base=await realpath(join(config.dataDir,'workspaces')),p=await realpath(o.path),rel=relative(base,p);if(rel.startsWith('..')||isAbsolute(rel))throw Object.assign(new Error('Output is outside server workspaces'),{statusCode:403});if((await stat(p)).size>32*1024*1024)throw Object.assign(new Error('Output too large'),{statusCode:413});bytes=await readFile(p);}
@@ -167,7 +171,15 @@ export async function buildServer(options:{config?:ServerConfig;store?:RecordSto
     admin.post('/voice/transcribe',async req=>{const file=await req.file();if(!file)throw Object.assign(new Error('Audio required'),{statusCode:400});return integrations.transcribe(await file.toBuffer(),file.filename,file.mimetype,voiceVocabulary(runtime));});admin.post('/voice/speak',async(req,reply)=>{const b=z.object({text:z.string().trim().min(1).max(4096),voice:z.string().optional()}).parse(req.body),r=await integrations.speak(b.text,b.voice);return reply.type(r.mimeType).send(r.audio);});
     admin.post('/clients/enrollment',async()=>auth.enroll('client'));
     admin.post('/migration/legacy',async req=>importLegacy(z.object({directory:z.string().min(1)}).parse(req.body).directory,store,blobs));
-    admin.get('/events',async(req,reply)=>{reply.hijack();reply.raw.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache','connection':'keep-alive'});reply.raw.flushHeaders();let last=String(req.headers['last-event-id']||'');const write=(e:RuntimeEvent)=>{if(e.id<=last)return;last=e.id;reply.raw.write(`id: ${e.id}\nevent: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`);};for(const e of runtime.replay(last))write(e);const off=runtime.subscribe(write);external.on('event',write);const keep=setInterval(()=>reply.raw.write(': heartbeat\n\n'),15000);reply.raw.on('close',()=>{off();external.off('event',write);clearInterval(keep);});});
+    admin.get('/events',async(req,reply)=>{
+      reply.hijack();reply.raw.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache','connection':'keep-alive'});reply.raw.flushHeaders();
+      // A new connection only follows live events: the dashboard loads current state over REST, so replaying the whole history would send tens of MB.
+      const resumeFrom=String(req.headers['last-event-id']||'');let last=resumeFrom||runtime.latestEventId();
+      const write=(e:RuntimeEvent)=>{if(e.id<=last||reply.raw.destroyed)return;last=e.id;reply.raw.write(`id: ${e.id}\nevent: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`);if(reply.raw.writableLength>4*1024*1024)reply.raw.destroy();};
+      const off=runtime.subscribe(write);external.on('event',write);
+      if(resumeFrom){const missed=runtime.replay(resumeFrom,1001);if(missed.length>1000){reply.raw.write('event: resync\ndata: {}\n\n');last=runtime.latestEventId();}else for(const e of missed)write(e);}
+      const keep=setInterval(()=>{if(!reply.raw.destroyed)reply.raw.write(': heartbeat\n\n');},15000);reply.raw.on('close',()=>{off();external.off('event',write);clearInterval(keep);});
+    });
   },{prefix:'/api/v1'});
   app.post('/client/enroll',async(req,reply)=>{const b=z.object({token:z.string()}).parse(req.body),c=auth.consume(b.token,'enroll-client');if(!c)return reply.code(401).send({error:'Invalid enrollment token'});store.put('clients',{id:c.sub,createdAt:new Date().toISOString()});return {clientId:c.sub,tokens:auth.nativeTokens(c.sub)};});
   app.post('/integrations/:id/webhook',async(req,reply)=>{const r=await integrations.webhook(idOf(req),req.headers,(req as any).rawBody||Buffer.alloc(0));return reply.code(r.statusCode).send(r.body);});

@@ -1,4 +1,5 @@
 import { voiceEffort } from '../voice-text.js';
+import { query } from '../storage.js';
 import { randomUUID, createHash } from 'node:crypto';
 import { CronExpressionParser } from 'cron-parser';
 import Ajv from 'ajv';
@@ -77,7 +78,9 @@ export class OrbitRuntime {
     return event;
   }
   subscribe(listener:(event:RuntimeEvent)=>void):()=>void {this.listeners.add(listener);return ()=>this.listeners.delete(listener);}
-  replay(afterId?:string):RuntimeEvent[] {return this.store.list<RuntimeEvent>('events').filter(e=>!afterId || e.id>afterId).sort((a,b)=>a.id.localeCompare(b.id));}
+  /** Newest events after afterId (all retained events when omitted), oldest first. Asking for max+1 reveals a gap. */
+  replay(afterId?:string,max=1000):RuntimeEvent[] {return query<RuntimeEvent>(this.store,'events',{limit:max,newest:true}).filter(e=>!afterId||e.id>afterId);}
+  latestEventId():string {return query<RuntimeEvent>(this.store,'events',{limit:1,newest:true})[0]?.id??'';}
   start():void {
     if(this.started) return;
     this.started=true;
@@ -199,7 +202,7 @@ export class OrbitRuntime {
     const message=this.store.put<Message>('messages',{id:id(),dotId,role:'assistant',text:'⚠ No reply received: '+reason,attachments:[],taskId,channel:origin.channel??'dashboard',requestId:null,createdAt:this.now()});
     this.event('message.created',dotId,taskId,{message});
   }
-  listMessages(dotId:string):Message[] {this.getDot(dotId);return this.store.list<Message>('messages').filter(m=>m.dotId===dotId);}
+  listMessages(dotId:string):Message[] {this.getDot(dotId);return query<Message>(this.store,'messages',{where:{dotId}});}
   createTask(input:CreateTask):Task {
     if(this.maintenance)throw new RuntimeError('Dots is updating. Try again after the update finishes.',409);
     const dot=this.getDot(input.dotId);
@@ -218,7 +221,10 @@ export class OrbitRuntime {
     this.event('task.created',dot.id,task.id,{task});this.activity(dot.id,task.id,'task.queued',task.title);this.wake();return task;
   }
   getTask(taskId:string):Task {return this.must('tasks',taskId);}
-  listTasks(filter:{dotId?:string;status?:string;parentTaskId?:string}={}):Task[] {return this.store.list<Task>('tasks').filter(t=>(!filter.dotId||t.dotId===filter.dotId)&&(!filter.status||t.status===filter.status)&&(!filter.parentTaskId||t.parentTaskId===filter.parentTaskId));}
+  listTasks(filter:{dotId?:string;status?:string;parentTaskId?:string}={}):Task[] {
+    const where:Record<string,string>={};if(filter.dotId)where.dotId=filter.dotId;if(filter.status)where.status=filter.status;
+    return query<Task>(this.store,'tasks',{where}).filter(t=>!filter.parentTaskId||t.parentTaskId===filter.parentTaskId);
+  }
   private saveTask(task:Task):Task {const value=this.store.put('tasks',{...task,updatedAt:this.now()});this.event('task.updated',task.dotId,task.id,{task:value});return value;}
   cancelTask(taskId:string):Task {
     const task=this.getTask(taskId);
@@ -274,7 +280,11 @@ export class OrbitRuntime {
   activity(dotId:string,taskId:string|null,type:string,message:string,data:Record<string,unknown>={}):Activity {
     const activity=this.store.put<Activity>('activity',{id:id(),dotId,taskId,type,message,data,createdAt:this.now()});this.event('activity.created',dotId,taskId,{activity});return activity;
   }
-  listActivity(filter:{dotId?:string;taskId?:string}={}):Activity[] {return this.store.list<Activity>('activity').filter(a=>(!filter.dotId||a.dotId===filter.dotId)&&(!filter.taskId||a.taskId===filter.taskId));}
+  /** Newest first when limited; the result is always chronological. A taskId/dotId filter uses an index. */
+  listActivity(filter:{dotId?:string;taskId?:string}={},limit?:number):Activity[] {
+    const where:Record<string,string>={};if(filter.dotId)where.dotId=filter.dotId;if(filter.taskId)where.taskId=filter.taskId;
+    return query<Activity>(this.store,'activity',{where,limit,newest:limit!==undefined});
+  }
   listOutputs(filter:{dotId?:string;taskId?:string}={}):Output[] {return this.store.list<Output>('outputs').filter(o=>(!filter.dotId||o.dotId===filter.dotId)&&(!filter.taskId||o.taskId===filter.taskId));}
   getOutput(outputId:string):Output {return this.must('outputs',outputId);}
   registerOutput(taskId:string,input:Omit<Output,'id'|'dotId'|'taskId'|'createdAt'>):Output {
@@ -447,7 +457,7 @@ export class OrbitRuntime {
       const busyRooms=new Set([...this.active.keys()].map(taskId=>this.store.get<Task>('tasks',taskId)).filter((t):t is Task=>Boolean(t)).map(roomKey));
       const max=Math.max(1,Math.floor(this.options.settings?.().maxParallelTasks??this.options.maxParallelTasks??2));
       const order=(task:Task)=>this.store.get<{sequence:number}>('task_order',task.id)?.sequence??0;
-      for(const task of this.listTasks().filter(t=>t.status==='queued').sort((a,b)=>order(a)-order(b)||a.createdAt.localeCompare(b.createdAt))) {
+      for(const task of this.listTasks({status:'queued'}).sort((a,b)=>order(a)-order(b)||a.createdAt.localeCompare(b.createdAt))) {
         if(this.active.size>=max) break;
         // Thread migration may have completed after a follow-up was submitted.
         // Bind it to the original task's actual latest thread before taking a lock.
