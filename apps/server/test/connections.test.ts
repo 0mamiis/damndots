@@ -83,3 +83,11 @@ test('copying a Dot never overwrites a Dot with the same name on the target back
 });
 
 
+
+test('the active session follows the host that is active and only reads state',async()=>{
+ const f=fixture();try{
+  const local=await f.service.activeSession();assert.equal(local.profile.id,'local');assert.equal(local.session.accessToken,'controlled-session');
+  const p=f.service.create({name:'VPS',serverUrl:'https://dots.example.com',adminKey:'controlled-key'});f.service.update(p.id,{options:{workerRoots:['C:/Work']}});await f.service.activate(p.id);
+  const before=f.service.status().revision,remote=await f.service.activeSession();assert.equal(remote.profile.id,p.id);assert.equal(remote.profile.serverUrl,'https://dots.example.com');assert.equal(f.service.status().revision,before);
+ }finally{f.store.close();}
+});
