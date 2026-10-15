@@ -142,3 +142,7 @@ GitHub Actions runs these checks on Windows and Ubuntu. The optional native comp
 [Native connection](docs/MAIN-CODEX.md) · [Providers](docs/PROVIDERS.md) · [Dashboard](docs/dashboard.md) · [Integrations](docs/INTEGRATIONS.md) · [Voice](docs/NATIVE-VOICE.md)
 
 MIT licensed. Dependencies and separately installed applications keep their own licenses; see [third-party notices](THIRD_PARTY_NOTICES.md).
+
+## Version checks and updates
+
+The bottom of the sidebar shows the installed version and checks stable GitHub releases. Each release notification appears once. Managed Git installations can stage, build and install updates from the panel, with startup verification and rollback. See [Updates](docs/UPDATES.md) for supported layouts and recovery.

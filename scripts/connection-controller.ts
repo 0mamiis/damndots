@@ -34,7 +34,7 @@ export class ConnectionController {
   await this.tick();this.timer=setInterval(()=>void this.tick(),3000);
  }
  private startChild(kind:string,script:string,args:string[],env:NodeJS.ProcessEnv){const p=spawn(process.execPath,['--import','tsx',script,...args],{cwd:this.root,env:{...process.env,...env},windowsHide:true,stdio:'inherit'});this.children.set(kind,p);p.once('error',e=>console.error(kind+': '+e.message));p.once('exit',()=>{if(this.children.get(kind)===p)this.children.delete(kind);});return p;}
- private async stop(kind:string){const p=this.children.get(kind);if(!p)return;this.children.delete(kind);if(p.exitCode!==null)return;p.kill('SIGTERM');await new Promise<void>(r=>{const timer=setTimeout(r,6500);p.once('exit',()=>{clearTimeout(timer);r();});});}
+ private async stop(kind:string){const p=this.children.get(kind);if(!p)return;this.children.delete(kind);if(p.exitCode!==null)return;if(process.platform==='win32')await run('taskkill.exe',['/PID',String(p.pid),'/T','/F'],{windowsHide:true}).catch(()=>{});else p.kill('SIGTERM');await new Promise<void>(r=>{const timer=setTimeout(r,6500);p.once('exit',()=>{clearTimeout(timer);r();});});}
  private async apply(plan:HostPlan){
   const sameHost=this.applied?.id===plan.id;
   await this.stop('windows');await this.stop('linux');

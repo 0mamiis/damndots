@@ -55,6 +55,8 @@ export class OrbitRuntime {
   private timer:ReturnType<typeof setInterval>|undefined;
   private started = false;
   private pumping = false;
+  private maintenance = false;
+  setMaintenance(value:boolean):void {this.maintenance=value;if(!value)this.wake();}
   /** Chat messages whose live delivery to a running turn is in flight; the queue must not start them meanwhile. */
   private steering = new Set<string>();
   constructor(readonly store:RecordStore, readonly runner:TaskRunner, readonly options:RuntimeOptions = {}) {}
@@ -199,6 +201,7 @@ export class OrbitRuntime {
   }
   listMessages(dotId:string):Message[] {this.getDot(dotId);return this.store.list<Message>('messages').filter(m=>m.dotId===dotId);}
   createTask(input:CreateTask):Task {
+    if(this.maintenance)throw new RuntimeError('Dots is updating. Try again after the update finishes.',409);
     const dot=this.getDot(input.dotId);
     const prompt=requiredText(input.input,'input');
     const threadId=input.threadId==null?null:requiredText(input.threadId,'threadId');
@@ -334,7 +337,7 @@ export class OrbitRuntime {
   private proactiveEnabled():boolean {return this.options.settings?.().proactiveEnabled??this.options.proactiveEnabled??false;}
   /** Coalesce missed recurring ticks into one run; never replay a burst of stale executions. */
   tick():void {
-    if(!this.started) return;
+    if(!this.started||this.maintenance) return;
     const now=this.now();
     for(const schedule of this.listSchedules()) {
       if(!schedule.enabled||!schedule.nextRunAt||schedule.nextRunAt>now||this.getDot(schedule.dotId).paused||(schedule.proactive&&!this.proactiveEnabled())) continue;
@@ -437,7 +440,7 @@ export class OrbitRuntime {
   }
   private wake():void {queueMicrotask(()=>this.pump());}
   private pump():void {
-    if(!this.started||this.pumping) return;
+    if(!this.started||this.maintenance||this.pumping) return;
     this.pumping=true;
     try {
       const roomKey=(task:Task)=>this.roomKey(task);

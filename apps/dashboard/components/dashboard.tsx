@@ -35,6 +35,7 @@ import {
 } from "./system-panels";
 import { ThemeToggle } from "./theme";
 import {ConnectionPanel} from './connection-panel';
+import {UpdateFooter,useReleaseUpdates} from './update-footer';
 import {
   ClockIcon,
   ComputerIcon,
@@ -135,6 +136,7 @@ export function Dashboard({
   serverLocked?: boolean;
 }) {
   const [connected, setConnected] = useState(initialConnected);
+  const updates=useReleaseUpdates(connected);
   const [serverLabel, setServerLabel] = useState(initialLabel);
   const [page, setPageState] = useState<PageKey>("overview");
   const [revision, setRevision] = useState(0);
@@ -351,6 +353,7 @@ export function Dashboard({
           <div className="min-h-0 flex-1 overflow-y-auto">
             <Nav page={page} onSelect={setPage} />
           </div>
+          <UpdateFooter updates={updates} />
           <Separator />
           <Button
             variant="ghost"
@@ -378,6 +381,7 @@ export function Dashboard({
                   <Nav page={page} onSelect={setPage} />
                 </Drawer.Body>
                 <Drawer.Footer>
+                  <UpdateFooter updates={updates} />
                   <Button
                     variant="ghost"
                     onPress={async () => {
