@@ -238,6 +238,28 @@ export function Dashboard({
       if (timer) clearTimeout(timer);
     };
   }, [connected, refresh]);
+  // The panel shows the host that is active for Codex. If it was switched elsewhere, follow it.
+  useEffect(() => {
+    if (!connected) return;
+    let busy = false;
+    const follow = async () => {
+      if (busy || document.visibilityState !== "visible") return;
+      busy = true;
+      try {
+        const r = await fetch("/api/connections/active-session", { cache: "no-store" });
+        if (r.ok && ((await r.json()) as { changed?: boolean }).changed) window.location.reload();
+      } catch {} finally {
+        busy = false;
+      }
+    };
+    void follow();
+    const timer = setInterval(follow, 30000);
+    window.addEventListener("focus", follow);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", follow);
+    };
+  }, [connected]);
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
   }, [page]);

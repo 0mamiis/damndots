@@ -107,6 +107,7 @@ export async function buildServer(options:{config?:ServerConfig;store?:RecordSto
     admin.post('/connections/:id/test',async req=>connections.test(idOf(req)));
     admin.post('/connections/:id/activate',async req=>connections.activate(idOf(req)));
     admin.get('/connections/runtime-plan',async()=>connections.plan());
+    admin.get('/connections/active-session',async()=>connections.activeSession());
     admin.get('/connections/local-dots',async()=>connections.localDots());
     admin.get('/connections/:id/computers',async req=>connections.computers(idOf(req)));
     admin.post('/connections/:id/enrollment',async req=>connections.enrollment(idOf(req)));
