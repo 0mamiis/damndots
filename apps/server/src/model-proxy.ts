@@ -6,7 +6,9 @@ import { guardedResponses } from './response-stream.js';
 const hopByHop = new Set(['content-length', 'transfer-encoding', 'content-encoding', 'connection', 'set-cookie']);
 async function pipe(reply: FastifyReply, chunks: AsyncIterable<Uint8Array | string>, status: number, headers: Record<string, string>) {
   reply.hijack(); reply.raw.writeHead(status, headers);
-  try { for await (const chunk of chunks) if (!reply.raw.write(typeof chunk === 'string' ? chunk : Buffer.from(chunk))) await new Promise<void>(r => reply.raw.once('drain', r)); }
+  // A client that disconnects while the socket buffer is full never emits 'drain'; waiting on it alone would hold the provider stream open forever.
+  const closed = new Promise<void>(r => reply.raw.once('close', r));
+  try { for await (const chunk of chunks) { if (reply.raw.destroyed) break; if (!reply.raw.write(typeof chunk === 'string' ? chunk : Buffer.from(chunk))) await Promise.race([new Promise<void>(r => reply.raw.once('drain', r)), closed]); } }
   catch { /* kesilen akış: bağlantıyı kapat */ }
   finally { reply.raw.end(); }
 }

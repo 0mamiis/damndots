@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {mkdtemp,writeFile,readFile,rm} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
-import {performUpdate,verifyCheckout,validateJob} from '../update.mjs';
-import {execFileSync} from 'node:child_process';
+import {performUpdate,verifyCheckout,validateJob,needsInstall} from '../update.mjs';
+import {execFileSync,spawn} from 'node:child_process';
 test('rollback leaves source, settings and user files intact after a failed replacement health check',async()=>{
  const root=await mkdtemp(join(tmpdir(),'dots-real-rollback-')),jobFile=join(root,'job.json');
  await writeFile(jobFile,JSON.stringify({id:'recovery',target:'v0.3.0',status:'preparing'}));
@@ -60,4 +60,29 @@ test('updater refuses a custom repository and dirty source before any download',
 });
 test('job tag and process validation reject command injection and unintended paths',()=>{
  for(const target of ['v1.0.0; whoami','--help','v1.0.0/../../other'])assert.throws(()=>validateJob({id:'abc',target,stackPid:1},'/tmp/job.json','/tmp'));
+});
+
+test('dependency reinstall is only needed when a package definition changed', () => {
+  assert.equal(needsInstall(['apps/server/src/app.ts', 'docs/UPDATES.md']), false);
+  assert.equal(needsInstall(['apps/server/src/app.ts', 'package-lock.json']), true);
+  assert.equal(needsInstall(['apps/dashboard/package.json']), true);
+  assert.equal(needsInstall(['scripts/package.json.md', 'apps/x/not-package.json.ts']), false);
+  assert.equal(needsInstall(undefined), true, 'unknown means reinstall');
+});
+test('a detached updater survives the services that started it being stopped as a process tree', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dots-detach-')), pidFile = join(root, 'updater.pid');
+  const detach = join(process.cwd(), 'scripts/detach.mjs');
+  await writeFile(join(root, 'updater.cjs'), "require('fs').writeFileSync(process.argv[2],String(process.pid));setInterval(()=>{},1000);");
+  await writeFile(join(root, 'service.cjs'), "const {spawnSync}=require('child_process');const r=spawnSync(process.execPath,[process.argv[2],process.argv[3],process.argv[4],process.execPath,process.argv[5],process.argv[6]],{stdio:'ignore'});require('fs').writeFileSync(process.argv[7],String(r.status));setInterval(()=>{},1000);");
+  const status = join(root, 'launcher.status');
+  const service = spawn(process.execPath, [join(root, 'service.cjs'), detach, join(root, 'update.log'), root, join(root, 'updater.cjs'), pidFile, status], { stdio: 'ignore', windowsHide: true });
+  let updater = 0;
+  try {
+    for (let i = 0; i < 100 && !updater; i++) { try { updater = Number(await readFile(pidFile, 'utf8')); } catch { await new Promise(r => setTimeout(r, 100)); } }
+    assert.ok(updater > 0, 'the updater started');
+    assert.equal(await readFile(status, 'utf8'), '0', 'the launcher reports success');
+    if (process.platform === 'win32') execFileSync('taskkill.exe', ['/PID', String(service.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }); else service.kill('SIGKILL');
+    await new Promise(r => setTimeout(r, 700));
+    assert.doesNotThrow(() => process.kill(updater, 0), 'the updater is still running');
+  } finally { try { if (updater) process.kill(updater); } catch {} service.kill(); await new Promise(r => setTimeout(r, 300)); await rm(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 }); }
 });

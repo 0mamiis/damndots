@@ -8,7 +8,14 @@ import {randomUUID} from 'node:crypto';
 const exec=promisify(execFile);
 export const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const ROOT=resolve(dirname(fileURLToPath(import.meta.url)),'..');
-export async function atomic(path,value){const t=path+'.'+randomUUID()+'.tmp';await writeFile(t,JSON.stringify(value,null,2)+'\n',{mode:0o600});await rename(t,path);}
+/** Windows can refuse a rename for a moment while a scanner or reader holds the target; the status file must still be updated. */
+export async function renameWithRetry(from,to){
+  for(let attempt=0;;attempt++){
+    try{await rename(from,to);return;}
+    catch(error){if(!['EPERM','EBUSY','EACCES'].includes(error.code)||attempt>=10){await unlink(from).catch(()=>{});throw error;}await sleep(25*(attempt+1));}
+  }
+}
+export async function atomic(path,value){const t=path+'.'+randomUUID()+'.tmp';await writeFile(t,JSON.stringify(value,null,2)+'\n',{mode:0o600});await renameWithRetry(t,path);}
 export async function command(file,args,cwd){
   return new Promise((yes,no)=>{let timedOut=false;const child=spawn(file,args,{cwd,env:process.env,windowsHide:true,stdio:['ignore','inherit','inherit'],detached:process.platform!=='win32'});const timer=setTimeout(()=>{timedOut=true;void (async()=>{if(process.platform==='win32')await exec('taskkill.exe',['/PID',String(child.pid),'/T','/F'],{windowsHide:true}).catch(()=>{});else try{process.kill(-child.pid,'SIGKILL');}catch{}no(Error('Command timed out'));})();},15*60*1000);child.once('error',e=>{clearTimeout(timer);no(e);});child.once('exit',code=>{clearTimeout(timer);code===0&&!timedOut?yes():no(Error(timedOut?'Command timed out':'Command failed ('+code+')'));});});
 }
@@ -23,6 +30,13 @@ async function npmCli(){
   throw Error('npm CLI could not be found next to Node.js');
 }
 async function git(args,root){return (await exec('git',args,{cwd:root,windowsHide:true,maxBuffer:8*1024*1024})).stdout.trim();}
+/** True when any file that defines installed dependencies changed (or when that cannot be determined). */
+export function needsInstall(changedFiles){
+  return !Array.isArray(changedFiles)||changedFiles.some(f=>/(^|\/)package(-lock)?\.json$/.test(f));
+}
+async function dependenciesChanged(root,from,to){
+  try{return needsInstall((await git(['diff','--name-only',from,to],root)).split(/\r?\n/).filter(Boolean));}catch{return true;}
+}
 export async function verifyCheckout(root){
   const origin=(await git(['remote','get-url','origin'],root)).replace(/\.git$/,'');
   if(!['https://github.com/0mamiis/damndots','git@github.com:0mamiis/damndots'].includes(origin))throw Error('Unexpected Git origin');
@@ -116,7 +130,8 @@ async function main(){
       // Refuse concurrent user changes rather than discarding them.
       if(await git(['rev-parse','HEAD'],ROOT)!==previous)throw Error('The source changed while the update was preparing');
       await command('git',['merge','--ff-only',target],ROOT);
-      await runNpm(['ci','--no-audit','--no-fund'],ROOT);
+      // Reinstalling takes minutes while Dots is down; the staged copy already proved a clean install works.
+      if(await dependenciesChanged(ROOT,previous,target))await runNpm(['ci','--no-audit','--no-fund'],ROOT);
       await runNpm(['run','build'],ROOT);
     },
     restart,health,
@@ -133,7 +148,7 @@ async function main(){
       }catch(e){if(e.code!=='ENOENT')throw e;}
       // --keep refuses to overwrite user changes made while updating.
       await command('git',['reset','--keep',previous],ROOT);
-      await runNpm(['ci','--no-audit','--no-fund'],ROOT);
+      if(await dependenciesChanged(ROOT,previous,target))await runNpm(['ci','--no-audit','--no-fund'],ROOT);
       await runNpm(['run','build'],ROOT);
     }
   });} finally {

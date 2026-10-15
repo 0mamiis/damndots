@@ -47,6 +47,8 @@ const realCli = resolveRealCli(manifestPath, manifest);
 const env = {...process.env}; delete env.CODEX_CLI_PATH;
 const cli = spawn(realCli, args, {env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true});
 cli.stderr.pipe(process.stderr);
+// A request written just as the CLI exits must not crash the bridge with an unhandled EPIPE.
+cli.stdin.on('error',()=>{});
 // The real account reports chatgpt.com as its workspace backend, so the desktop app would send account, feature-flag and plugin
 // requests straight there and bypass the Dots gateway. Pointing that origin at the gateway keeps one routing point;
 // the gateway forwards everything that is not Dot-owned to the real service with the app's own credentials.

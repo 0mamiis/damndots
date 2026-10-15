@@ -21,7 +21,8 @@ export function useReleaseUpdates(enabled:boolean){
       const value:State=await updateRequest(force?'?refresh=1':'',undefined,signal);
       if(!alive.current)return;last.current=value;setState(value);setError('');
       const tag=value.latest?.tag;
-      if(value.available&&tag&&!requested.current.has(tag)){
+      // A tab nobody is looking at (for example restored in the background) must not use up the one-time notice.
+      if(value.available&&tag&&!requested.current.has(tag)&&document.visibilityState==='visible'){
         requested.current.add(tag);
         try {
           const notice=await updateRequest('/notice',{tag},signal);
@@ -39,9 +40,9 @@ export function useReleaseUpdates(enabled:boolean){
     alive.current=true;const controller=new AbortController();
     void refresh(false,controller.signal);
     const timer=setInterval(()=>{if(document.visibilityState==='visible')void refresh(false,controller.signal);},5000);
-    const focus=()=>void refresh(false,controller.signal);
-    window.addEventListener('focus',focus);
-    return()=>{alive.current=false;controller.abort();clearInterval(timer);window.removeEventListener('focus',focus);};
+    const focus=()=>{if(document.visibilityState==='visible')void refresh(false,controller.signal);};
+    window.addEventListener('focus',focus);document.addEventListener('visibilitychange',focus);
+    return()=>{alive.current=false;controller.abort();clearInterval(timer);window.removeEventListener('focus',focus);document.removeEventListener('visibilitychange',focus);};
   },[enabled,refresh]);
   const install=async()=>{
     const tag=last.current?.latest?.tag;if(!tag||pending)return;

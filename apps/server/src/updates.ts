@@ -29,6 +29,7 @@ export interface UpdateJob {id:string;target:string;status:string;step:string;st
 const active=new Set(['preparing','ready','applying','restarting','rolling_back']);
 export class UpdateService {
   private current:string;private cached?:ReleaseInfo;private checkedAt:number=0;private checking?:Promise<void>;private error:string|null=null;private starting=false;
+  private failures=0;private retryAt=0;
   private sourceCheck?:{time:number;reason:string|null};
   constructor(private options:{root?:string;dataDir:string;fetch?:typeof fetch;busy:()=>boolean;maintenance:(value:boolean)=>void;stackPid?:number;clock?:()=>number;launch?:(job:UpdateJob)=>Promise<void>}){
     const root=options.root||installationRoot;this.current=JSON.parse(requireText(join(root,'package.json'))).version;
@@ -42,14 +43,16 @@ export class UpdateService {
   }
   async check(force=false){
     if(this.checking)return this.checking;
-    if(this.checkedAt&&this.now()-this.checkedAt<(force?60000:60*60*1000))return;
+    // Success is cached for an hour. A failed check (for example right after boot, before the network is up) retries soon with a growing delay.
+    const wait=force?this.checkedAt+60000:this.error?this.retryAt:this.checkedAt+60*60*1000;
+    if(this.checkedAt&&this.now()<wait)return;
     this.checking=(async()=>{
       this.checkedAt=this.now();
       try{
         const r=await (this.options.fetch||fetch)(RELEASE_API,{headers:{accept:'application/vnd.github+json','user-agent':'damndots-updater'},redirect:'error',signal:AbortSignal.timeout(10000)});
         if(!r.ok)throw Error(r.status===403||r.status===429?'GitHub rate limit reached. The next check will retry.':'GitHub release check failed ('+r.status+')');
-        this.cached=releaseInfo(await r.json());this.error=null;
-      }catch(e){this.error=e instanceof Error?e.message:'Could not check releases';}
+        this.cached=releaseInfo(await r.json());this.error=null;this.failures=0;
+      }catch(e){this.error=e instanceof Error?e.message:'Could not check releases';this.retryAt=this.now()+Math.min(15*60000,30000*2**this.failures++);}
     })().finally(()=>{this.checking=undefined;});
     return this.checking;
   }
@@ -60,8 +63,10 @@ export class UpdateService {
     const pid=this.options.stackPid??Number(process.env.DOTS_MANAGED_STACK_PID);
     if(!Number.isSafeInteger(pid)||pid<1||(!this.options.launch&&process.env.DOTS_UPDATE_MANAGED!=='1'))blocked='Restart all Dots services together with Start-Dots to enable managed updates.';
     else if(!existsSync(join(this.root(),'.git')))blocked='This is a source archive installation. Use a Git checkout for in-app updates.';
-    else if(this.options.busy())blocked='Finish or cancel active tasks before updating.';
     else if(this.cached&&newerVersion(this.cached.version,this.current)){
+      // These checks only matter once there is something to install.
+      if(this.options.busy())blocked='Finish or cancel active tasks before updating.';
+      else {
       if(!this.sourceCheck||this.now()-this.sourceCheck.time>60000){
         let reason:string|null=null;
         try{
@@ -71,6 +76,7 @@ export class UpdateService {
         this.sourceCheck={time:this.now(),reason};
       }
       blocked=this.sourceCheck.reason;
+      }
     }
     return {current:this.current,latest:this.cached||null,available:!!this.cached&&newerVersion(this.cached.version,this.current),checkedAt:this.checkedAt?new Date(this.checkedAt).toISOString():null,error:this.error,blocked,job};
   }
@@ -100,11 +106,11 @@ export class UpdateService {
         this.options.maintenance(true);
         if(this.options.launch)await this.options.launch(job);
         else {
-          const log=await open(join(this.directory(),'update.log'),'a',0o600);
-          try {
-            const child=spawn(process.execPath,[join(this.root(),'scripts/update.mjs'),'--job',join(this.directory(),'job.json')],{cwd:this.root(),env:{...process.env,DOTS_UPDATE_DATA:this.options.dataDir},stdio:['ignore',log.fd,log.fd],windowsHide:true,detached:true});
-            await new Promise<void>((ok,no)=>{child.once('spawn',ok);child.once('error',no);});child.unref();
-          }finally{await log.close();}
+          // Through a short-lived launcher so the updater is not in this server's process tree: stopping the services must not stop it.
+          await new Promise<void>((ok,no)=>{
+            const launcher=spawn(process.execPath,[join(this.root(),'scripts/detach.mjs'),join(this.directory(),'update.log'),this.root(),process.execPath,join(this.root(),'scripts/update.mjs'),'--job',join(this.directory(),'job.json')],{cwd:this.root(),env:{...process.env,DOTS_UPDATE_DATA:this.options.dataDir},stdio:'ignore',windowsHide:true});
+            launcher.once('error',no);launcher.once('exit',code=>code===0?ok():no(Error('The updater could not be started')));
+          });
         }
         return job;
       }catch(e){
@@ -134,4 +140,11 @@ export class UpdateService {
   }
 }
 function requireText(path:string){return readFileSync(path,'utf8');}
-export async function atomicJson(path:string,value:unknown){const temp=path+'.'+randomUUID()+'.tmp';await writeFile(temp,JSON.stringify(value,null,2)+'\n',{mode:0o600});await rename(temp,path);}
+/** Windows can refuse a rename for a moment while a scanner or reader holds the target. */
+export async function atomicJson(path:string,value:unknown){
+  const temp=path+'.'+randomUUID()+'.tmp';await writeFile(temp,JSON.stringify(value,null,2)+'\n',{mode:0o600});
+  for(let attempt=0;;attempt++){
+    try{await rename(temp,path);return;}
+    catch(error){if(!['EPERM','EBUSY','EACCES'].includes((error as NodeJS.ErrnoException).code||'')||attempt>=10){await unlink(temp).catch(()=>{});throw error;}await new Promise(r=>setTimeout(r,25*(attempt+1)));}
+  }
+}

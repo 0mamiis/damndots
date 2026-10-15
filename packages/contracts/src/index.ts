@@ -21,6 +21,7 @@ export interface RunInput {task:Task; dot:Dot; memories:Memory[];fullAccess?:boo
 export interface RunnerHooks {onThread:(threadId:string)=>void; onTurn:(turnId:string)=>void; onDelta:(text:string)=>void; onActivity:(type:string,message:string,data?:Record<string,unknown>)=>void; onOutput:(output:Omit<Output,'id'|'dotId'|'taskId'|'createdAt'>)=>void; onApproval:(request:Omit<Approval,'id'|'dotId'|'taskId'|'createdAt'|'resolvedAt'|'status'>)=>Promise<boolean>;onUserInput?:(request:Omit<Approval,'id'|'dotId'|'taskId'|'createdAt'|'resolvedAt'|'status'>)=>Promise<Record<string,unknown>|null>;}
 export interface RunResult {text:string; threadId:string; turnId:string|null;}
 export interface TaskRunner {run(input:RunInput,hooks:RunnerHooks,signal:AbortSignal):Promise<RunResult>;}
-export interface RecordStore {get<T>(namespace:string,id:string):T|undefined; list<T>(namespace:string):T[]; put<T extends {id:string}>(namespace:string,value:T):T; delete(namespace:string,id:string):boolean; transaction<T>(fn:()=>T):T;}
+export interface ListOptions {where?:Record<string,string|number|boolean>; limit?:number; newest?:boolean;}
+export interface RecordStore {get<T>(namespace:string,id:string):T|undefined; list<T>(namespace:string,options?:ListOptions):T[]; put<T extends {id:string}>(namespace:string,value:T):T; delete(namespace:string,id:string):boolean; transaction<T>(fn:()=>T):T;}
 export interface ToolDefinition {name:string; description:string; inputSchema:Record<string,unknown>; connectorId?:string;}
 export interface ReplyOutbox {id:string;connectorId:string;taskId:string;status:'pending'|'approval_required'|'sending'|'sent'|'failed'|'delivery_unknown';attempts:number;lastError:string|null;createdAt:string;updatedAt:string;}
