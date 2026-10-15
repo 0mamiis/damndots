@@ -38,7 +38,7 @@ test('Dots native bootstrap keeps the app navigation rail alongside Dot features
 test('automatic command approval is an explicit persistent owner setting and applies to runtime requests',async()=>{
  const f=await fixture({run:async(input,hooks)=>{const ok=await hooks.onApproval({kind:'item/commandExecution/requestApproval',title:'Read directory',detail:'',request:{}});return {text:String(ok),threadId:'auto-api',turnId:'turn-auto'};}});
  try{
-  assert.equal((await f.request('GET','/settings')).json().autoApproveExecution,true);
+  assert.equal((await f.request('GET','/settings')).json().autoApproveExecution,false);
   const saved=await f.request('PATCH','/settings',{autoApproveExecution:true});assert.equal(saved.statusCode,200);assert.equal(saved.json().autoApproveExecution,true);assert.equal(f.store.get<any>('settings','owner')!.autoApproveExecution,true);
   const dot=(await f.request('POST','/dots',{name:'Auto'})).json();f.runtime.start();const submitted=(await f.request('POST','/dots/'+dot.id+'/messages',{text:'Read'})).json();await wait(()=>f.runtime.getTask(submitted.task.id).status==='completed');assert.equal(f.runtime.getTask(submitted.task.id).result,'true');assert.equal(f.runtime.listApprovals()[0].status,'approved');
  }finally{await f.cleanup();}

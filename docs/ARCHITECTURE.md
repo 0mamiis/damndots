@@ -1,20 +1,20 @@
-# Dots self-hosted hedefi ve sözleşme
+# Dots self-hosted goal and contract
 
-Tam kapsam: native Codex Your Dot uyumluluğu; gerçek görev kuyruğu, duraklatma/iptal, Activity ve Outputs; kalıcı hafıza; zamanlama ve proaktif araştırma; görev delegasyonu; bilgisayar ve tarayıcı yürütücüsü; Slack/Teams/email bağlantıları, genel app/MCP araçları ve ses; Next.js + HeroUI dashboard; aynı PC veya uzak server kurulumu; mevcut veriyi taşıma; yeniden başlatma ve sürüm uyumluluğu.
+Full scope: native Codex Your Dot compatibility; a real task queue, pause/cancel, Activity and Outputs; persistent memory; scheduling and proactive research; task delegation; a computer and browser executor; Slack/Teams/email connections, generic app/MCP tools and voice; a Next.js + HeroUI dashboard; same-PC or remote server installs; migrating existing data; restart and version compatibility.
 
-Bu uygulama kendi servislerini sağlar. OpenAI'nin bulut servis yetkilerini oluşturmaz. Ana Codex profiliyle açılış yedekli ve geri alınabilir bir başlatıcıyla yapılır (docs/MAIN-CODEX.md).
+This application provides its own services. It does not create entitlements to OpenAI's cloud services. Launching with the main Codex profile uses a backed-up, reversible launcher (docs/MAIN-CODEX.md).
 
-## Paketler ve sahiplik
+## Packages and ownership
 
 - apps/server: Fastify API, SQLite storage, runtime, Codex protocol bridge ve integrations.
-- apps/dashboard: Next.js App Router + HeroUI v3 + Tailwind v4. Türkçe yönetim arayüzü. Gerçek server API; boş sonuçları gösterir.
-- apps/worker: server'a dışarı doğru bağlanan bağımsız bilgisayar/tarayıcı yürütücüsü. Server ile aynı makinede başlatılabilir.
-- apps/client: native Codex için yerel gateway, Windows MSIX bağlantısı ve eski izole profil uyumluluğu. Server localhost veya uzak adreste olabilir.
-- packages/contracts: paylaşılan TypeScript DTO'lar.
+- apps/dashboard: Next.js App Router + HeroUI v3 + Tailwind v4. English admin interface. Real server API; empty results are shown as empty.
+- apps/worker: an independent computer/browser executor that connects outward to the server. It can run on the same machine as the server.
+- apps/client: the local gateway for native Codex, the Windows MSIX connection and the older isolated-profile compatibility. The server can be on localhost or a remote address.
+- packages/contracts: shared TypeScript DTOs.
 
 ## HTTP admin API
 
-Prefix `/api/v1`. Admin bootstrap token yalnız POST `/api/v1/session` isteğinde `{token}` gövdesiyle kullanılır. Başarılı cevap `{accessToken,expiresAt}`. Diğer API istekleri `Authorization: Bearer <accessToken>` ister. Dashboard kendi BFF'sinde bu token ve server URL'sini HttpOnly cookie'de tutar; provider sırları liste cevaplarında verilmez.
+Prefix `/api/v1`. The admin bootstrap token is used only in the POST `/api/v1/session` request, in the `{token}` body. A successful response is `{accessToken,expiresAt}`. Other API requests need `Authorization: Bearer <accessToken>`. The dashboard keeps this token and the server URL in an HttpOnly cookie in its own BFF; provider secrets are never returned in list responses.
 
 GET `/overview` -> Overview; GET/PATCH `/settings` -> Settings.
 GET `/dots` -> ApiList<Dot>; POST `/dots` {name,model?,instructions?,computerId?}; GET/PATCH/DELETE `/dots/:id`.

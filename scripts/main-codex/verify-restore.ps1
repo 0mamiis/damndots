@@ -10,6 +10,6 @@ try {
     $root = if ($e.area -eq 'codex-home') { Join-Path $t 'codex-home' } else { Join-Path $t 'app-data' }
     if ((Get-FileHash -LiteralPath (Join-Path $root $e.path) -Algorithm SHA256).Hash -ne $e.sha256) { $bad++ }
   }
-  Write-Output ("Doğrulama: {0}/{1} dosya özdeş, {2} uyuşmazlık" -f ($m.files.Count - $bad), $m.files.Count, $bad)
+  Write-Output ("Verification: {0}/{1} files identical, {2} mismatches" -f ($m.files.Count - $bad), $m.files.Count, $bad)
   if ($bad) { exit 1 }
 } finally { if (Test-Path -LiteralPath $t) { [IO.Directory]::Delete($t, $true) } }

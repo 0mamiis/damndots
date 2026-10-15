@@ -741,7 +741,7 @@ export function SettingsPanel() {
               <Check
                 name="autoApproveExecution"
                 label="Full access — do not ask for command approval"
-                checked={settings.data.autoApproveExecution ?? true}
+                checked={settings.data.autoApproveExecution ?? false}
               />
               <p className="text-sm text-muted">
                 When on, Codex tasks run with full access without asking for approval. Real user questions still need an answer.

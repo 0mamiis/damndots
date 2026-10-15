@@ -1,55 +1,55 @@
-# Ana Codex ile Dots
+# Dots with the main Codex app
 
-## Kullanım ve etki
+## Usage and effects
 
-`Start-Dots.cmd` yalnız backend, dashboard, worker ve gateway servislerini başlatır. Hiçbir Codex penceresi açılmaz. Servisler hazırken kurulu **orijinal Codex kısayolunu** kullanın. İlk etkinleştirmede açık Codex penceresini bir kez kapatıp yeniden açın.
+`Start-Dots.cmd` starts only the backend, dashboard, worker and gateway services. It never opens a Codex window. While the services are running, use the **original Codex shortcut** you already have. The first time the integration is active, close an open Codex window once and reopen it.
 
-Windows MSIX paket açılışına dört süreç ortam ayarı verilir: `CODEX_API_BASE_URL`, `CODEX_CLI_PATH`, `CODEX_APP_SERVER_FORCE_CLI`, `NODE_EXTRA_CA_CERTS`. `CODEX_HOME` değiştirilmez. Ana `auth.json/config.toml`, kısayollar ve WindowsApps uygulama dosyaları yeniden yazılmaz.
+The Windows MSIX package is launched with four process environment settings: `CODEX_API_BASE_URL`, `CODEX_CLI_PATH`, `CODEX_APP_SERVER_FORCE_CLI` and `NODE_EXTRA_CA_CERTS`. `CODEX_HOME` is not changed. The main `auth.json` and `config.toml`, shortcuts and the WindowsApps application files are not rewritten.
 
-Gateway HTTPS için özel bir yerel CA oluşturur. Native başlatıcı bu CA'yı **yalnız mevcut Windows kullanıcısının** güvenilir kök sertifika deposuna ekler. Sistem genelindeki sertifika deposu değiştirilmez. Private CA anahtarı ve gateway kimlik bilgileri `.data/local-stack/native` altında kalır; bu dizin kaynak dağıtımına dahil değildir.
+The gateway creates a private local CA for HTTPS. The native launcher adds this CA to the trusted root store of **the current Windows user only**. The system-wide certificate store is not modified. The private CA key and the gateway credentials stay under `.data/local-stack/native`, which is excluded from source distributions.
 
-## İstekler nasıl yönlenir?
+## How requests are routed
 
-`scripts/native-dots.ts` varsayılan `https://localhost:8000` gatewayini açar. Hesap, uygulama ayarları, eklentiler ve normal sohbetler gerçek uygulama/CLI yolunu kullanır. Dot'a ait uçlar yerel Dots backend'ine ayrı tokenle gider. Dosya uçları önce yerel Dot dosyalarını, bulunamazsa gerçek hesabı dener.
+`scripts/native-dots.ts` opens a gateway on `https://localhost:8000` by default. The account, app settings, plugins and normal chats use the real application and CLI path. Endpoints that belong to a Dot go to the local Dots backend with a separate token. File endpoints try local Dot files first and fall back to the real account if nothing is found.
 
-`scripts/native-cli-bridge.mjs`, app-server'ın `account/read` yanıtındaki `workspaceRouting.backendOrigin` değerini yalnız uygulamaya giden yanıtta yerel gateway adresine çevirir. Dot'a ait `thread/read`, `thread/resume` gibi istekler gerçek thread'in sahibi olan backend/worker'a yönlenir; normal Codex thread'leri gerçek kurulu CLI'de kalır.
+`scripts/native-cli-bridge.mjs` rewrites `workspaceRouting.backendOrigin` in the app-server `account/read` response to the local gateway address, only in the response sent to the app. Requests for a Dot such as `thread/read` and `thread/resume` are routed to the backend or worker that owns the thread. Normal Codex threads stay with the real installed CLI.
 
-Uygulamanın özellik bayrakları korunur; native Dot ekranının ihtiyaç duyduğu görünürlük/uyumluluk alanları yerel yanıta eklenir. Bu bir hesap planı yükseltmesi veya OpenAI bulut hizmeti yetkisi değildir. Native protokol sürümle değişebilir.
+The application's feature flags are preserved. The visibility and compatibility fields that the native Dot screen needs are added to the local response. This is not an account plan upgrade or an entitlement to OpenAI's cloud Dots service. The native protocol can change between versions.
 
-`scripts/main-codex/native-package.ps1` kurulu paketi izler ve bağlantı ayarlarını kaydeder. `native-resume.cs` bu Windows modunda bekleyen başlangıç iş parçacığını devam ettirir; ek uygulama kopyası açmaz. Yardımcı programlar yerelde derlenir; repoda Codex uygulaması/ASAR dosyaları dağıtılmaz.
+`scripts/main-codex/native-package.ps1` watches the installed package and stores the connection settings. `native-resume.cs` resumes the suspended start-up thread in this Windows mode and does not open a second copy of the app. The helpers are compiled locally; no Codex application or ASAR files are distributed in the repository.
 
-## Otomatik komut onayı
+## Command approval
 
-Dashboard **Ayarlar → Tam erişim — komut onayı isteme** seçimi kalıcıdır ve varsayılan açıktır. Codex thread/turn başlangıcında `never` ve `danger-full-access` uygulanır; worker görevleri de aynı politikayı alır. Eski yürütme izin talepleri bekletilmeden kabul edilir. Gerçek kullanıcı soruları cevap gerektirir ve proaktif araştırma salt okunur kalır. [Computer modları](COMPUTER-MODES.md) tam erişim sınırlarını açıklar.
+The dashboard setting **Settings → Full access** is persistent and **off by default**. When it is off, Codex threads and turns start with `on-request` approval and a workspace-write sandbox, and commands wait for your approval. When it is on, thread and turn starts use `never` and `danger-full-access`, and worker tasks receive the same policy. Pending permission requests are then accepted without waiting. Real user questions still need an answer and proactive research stays read-only. Installations that already saved this setting keep their saved choice. [Computer modes](COMPUTER-MODES.md) describe the limits of full access.
 
-## Linux bilgisayarı ve araçlar
+## Linux computer and tools
 
-İsteğe bağlı WSL2 bilgisayarı her Dot/bilgisayar için ayrı X11 ekranı ve Chromium profili açar. Native computer paneli 1280×800 tam masaüstünü gösterir: tarayıcı, terminal, dosyalar ve native uygulamalar aynı ekran içindedir.
+The optional WSL2 computer opens a separate X11 display and Chromium profile for each Dot or computer. The native computer panel shows the full 1280×800 desktop: browser, terminal, files and native applications share the same screen.
 
-**Take over** agent masaüstü/tarayıcı girdisini kilitler; **Return control** geri verir. Panel kapanınca kontrol Dot'a döner. Masaüstü koordinatları tüm ekranı, browser araçları sayfa içeriğini esas alır.
+**Take over** locks agent desktop and browser input; **Return control** gives it back. When the panel closes, control returns to the Dot. Desktop coordinates refer to the whole screen and browser tools work on page content.
 
-Ad/avatar/renk, yerel başlangıç sayfasına ve pencere temasına uygulanır. Tema OpenAI'ın kendi temasının kopyası değildir. Kurulum, uygulamalar, çalışma alanı ve grafik sınırları [LINUX-COMPUTER](LINUX-COMPUTER.md) içindedir.
+Name, avatar and colour are applied to the local start page and the window theme. The theme is not a copy of OpenAI's own theme. Installation, applications, workspace and graphics limits are described in [LINUX-COMPUTER](LINUX-COMPUTER.md).
 
-## Ses
+## Voice
 
-Proxy ses yolu ses tanıma → dashboardda seçili Dot modeli → seslendirme biçiminde çalışır. Modelin native Realtime API sağlaması gerekmez; STT ve TTS sağlayıcısı ayrıca yapılandırılır. Konuşma algılama kısa gürültüleri ve sessizlik kaynaklı sahte transkriptleri süzer; her arama ana yazılı sohbetten ayrı bir yürütme thread'i kullanır.
+The proxy voice path runs speech recognition, then the Dot model selected in the dashboard, then speech synthesis. The model does not need to provide a native Realtime API; the speech-to-text and text-to-speech providers are configured separately. Speech detection filters short noises and false transcripts caused by silence. Each call uses an execution thread separate from the main written chat.
 
-`followCodexVoice` etkinse desteklenen yerel uygulama/hesap koşullarında Codex'te seçili ses okunur ve uygulamanın konuşma hizmeti kullanılır. Ana hesabın oturum dosyası değiştirilmez. Başarılı voice-listesi isteğinden alınan yardımcı başlık dosyasında Authorization/Cookie saklanmaz. Bu yol hesabın kullanım sınırları ve hizmet/protokol sürümüne bağlıdır; reddedilen hizmet başka bir ses olarak gösterilmez.
+When `followCodexVoice` is enabled and the local app and account support it, the voice selected in Codex is read and the app's speech service is used. The main account's session file is not changed, and a helper header file taken from a successful voice-list request does not store Authorization or Cookie values. This path depends on the account's usage limits and on the service and protocol version. A voice that the service rejects is never shown as a different voice.
 
-## Kapatma / geri alma
+## Shutting down and undoing
 
-Dots servis konsolunu kapatın veya `Ctrl+C` ile durdurun. Paket etkinleştirme kaydı servis kapanışında bırakılır. Codex'i kapatıp orijinal kısayoldan açınca normal uygulama yolu kullanılır.
+Close the Dots service console or stop it with `Ctrl+C`. The package activation record is released when the services stop. If you close Codex and reopen it from the original shortcut, the normal application path is used.
 
-Beklenmedik kapanış sonrasında paket kaydı kalırsa, Dots servisleri kapalıyken proje kökünde:
+If the package record remains after an unexpected shutdown, run this in the project root while the Dots services are stopped:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/main-codex/native-disable.ps1
 ```
 
-Yerel CA otomatik silinmez; aynı kurulumun yeniden bağlanmasını sağlar. Tam kaldırmada önce servisleri durdurun, sonra mevcut kullanıcının sertifika yöneticisinde bu kurulumun CA dosyasına karşılık gelen **Dots private gateway CA** kaydını kaldırın.
+The local CA is not deleted automatically, so the same installation can reconnect. For a full removal, stop the services first, then remove the **Dots private gateway CA** entry that matches this installation's CA file from the current user's certificate manager.
 
-`Restore-Main-Profile.cmd` yalnız eski profil değiştirme yönteminden kalan kaydı geri almak içindir; yeni native bağlantının etkinleştirme aracı değildir. Yedekler `.data` altında özel kalmalıdır.
+`Restore-Main-Profile.cmd` only reverts records left by the older profile-replacement method. It does not enable or disable the new native connection. Keep backups private under `.data`.
 
-## Test kapsamı
+## Test scope
 
-Doğrulanan yerel Codex MSIX sürümü ve kontroller [ACCEPTANCE](ACCEPTANCE.md) içindedir. Windows API mekanizması: [EnableDebugging](https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-ipackagedebugsettings-enabledebugging). Diğer Codex sürümlerinde gerçek native açılış ayrıca kontrol edilmelidir.
+The verified local Codex MSIX versions and checks are in [ACCEPTANCE](ACCEPTANCE.md). Windows API mechanism: [EnableDebugging](https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-ipackagedebugsettings-enabledebugging). Verify the real native launch separately on other Codex versions.

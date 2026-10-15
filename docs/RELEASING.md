@@ -1,8 +1,8 @@
-# GitHub yayını
+# Publishing on GitHub
 
-Kaynaklar MIT lisansıyla paylaşılır. Repo anahtar, hesap, tarayıcı profili, sohbet/iş veritabanı, avatar veya Codex uygulamasının çıkarılmış dosyalarını içermez. Yerel verileri silmeden dağıtılabilir kaynak paketi oluşturulur.
+The sources are shared under the MIT licence. The repository contains no keys, accounts, browser profiles, chat/job databases, avatars or extracted Codex application files. A distributable source package is created without deleting any local data.
 
-## Kontrol
+## Checks
 
 ```sh
 npm ci
@@ -15,15 +15,15 @@ npm audit --audit-level=moderate
 npm run release:source
 ```
 
-GitHub Actions Windows ve Ubuntu'da aynı kontrolleri yapacak biçimde hazırlanmıştır. Workflow henüz GitHub'da çalıştırılmadıysa yerel sonuçları GitHub CI sonucu olarak sunmayın. Native Codex testi özel istemci dosyaları verilmezse açıkça atlanır.
+GitHub Actions runs the same checks on Windows and Ubuntu. If the workflow has not run on GitHub yet, do not present local results as a GitHub CI result. The native Codex test is skipped explicitly when the private client files are not provided.
 
-`release:check` dağıtılacak kaynakları tarar. Repo bir Git checkout'ıysa indekste/commit'te bulunan dosyaları da kontrol eder; `.gitignore` daha önce takip edilen sırları kaldırmaz. Eski commit geçmişini otomatik taramaz. Daha önce bir sır yayınlandıysa sadece silmek yetmez: ilgili anahtarı iptal edin ve geçmişi ayrıca inceleyin.
+`release:check` scans the sources to be distributed. If the repository is a Git checkout, it also checks the files in the index and in the commit; `.gitignore` does not remove secrets that were tracked earlier. It does not scan old commit history automatically. If a secret was ever published, deleting it is not enough: revoke the key and review the history separately.
 
-`release:source` paket metadata'sındaki `releaseTag` ile adlandırılmış kaynak ZIP'i ve dosya hashlerini içeren `manifest.json` üretir. v0.2.0 için yol `.data/releases/damndots-v0.2.0-source.zip` olur. Paket otomatik olarak GitHub'a yüklenmez. Yeni bir sürüm için yeni tag ve paket kullanın; önceki tag'in ZIP içeriğini değiştirmeyin.
+`release:source` produces a source ZIP named after the `releaseTag` in the package metadata and a `manifest.json` with the file hashes. For v0.2.0 the path is `.data/releases/damndots-v0.2.0-source.zip`. The package is not uploaded to GitHub automatically. Use a new tag and package for every new version; do not change the ZIP contents of an earlier tag.
 
-## İlk repo
+## First repository
 
-Arşivi **yeni, boş bir dizine** çıkarın ve yalnız o temiz kaynak dizinini GitHub'a gönderin. Böylece bu geliştirme klasörünün runtime verileri ve test yardımcıları repoya girmez.
+Extract the archive into a **new, empty directory** and push only that clean source directory to GitHub. This keeps the runtime data and test helpers of this development folder out of the repository.
 
 ```sh
 git init -b main
@@ -34,14 +34,14 @@ npm run release:check
 git commit -m "Initial self-hosted Dots source"
 ```
 
-GitHub'da repo adını/görünürlüğünü seçip oluşturduktan sonra o reponun verdiği remote komutlarını kullanın. Kaynak paketi, yerel `.data` dizininin yedeği değildir.
+After you choose the repository name and visibility on GitHub and create it, use the remote commands that GitHub gives you. The source package is not a backup of the local `.data` directory.
 
-## Yayın notlarında belirtilecek sınırlar
+## Limits to state in release notes
 
-- Native entegrasyon deneysel ve Windows MSIX/Codex sürümüne bağlıdır. Bilinen yerel kabul sürümü [ACCEPTANCE](ACCEPTANCE.md) içindedir.
-- Linux masaüstü yerel Debian kurulumudur; OpenAI'ın kendi bulut imajı dağıtılmaz.
-- Dashboard tek yönetici içindir. İnternete açılacaksa HTTPS ve izin verilen backend adresleri ayarlanmalıdır.
-- Slack/Teams/e-posta/GitHub için kontrollü protokol testleri, gerçek hesaplarda tam kabul anlamına gelmez.
-- Docker imajları ayrı doğrulanmalıdır; Docker kurulu olmayan makinede yalnız dosya incelemesiyle "Docker test edildi" denmez.
+- The native integration is experimental and depends on the Windows MSIX and Codex version. The known locally accepted version is in [ACCEPTANCE](ACCEPTANCE.md).
+- The Linux desktop is a local Debian install; OpenAI's own cloud image is not distributed.
+- The dashboard is for a single administrator. If it is exposed to the internet, HTTPS and allowed backend addresses must be configured.
+- Controlled protocol tests for Slack, Teams, email and GitHub do not mean full acceptance on real accounts.
+- Docker images must be verified separately; do not say "Docker tested" based only on reading files on a machine without Docker.
 
-GitHub repo ayarlarında private vulnerability reporting'i açın. Otomatik CI ve Dependabot dosyaları kaynak dağıtımına dahildir.
+Enable private vulnerability reporting in the GitHub repository settings. The automatic CI and Dependabot files are included in the source distribution.
