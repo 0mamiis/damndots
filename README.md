@@ -2,7 +2,9 @@
 
 Self-hosted Dots for the Codex desktop app. Run the backend on your PC or a server, choose your own model provider, and use the existing **Your dot** interface in Codex.
 
-**v0.2** is an experimental release. The native integration was tested with Codex MSIX **26.930.2377.0** and **26.930.3930.0** (CLI **0.160.0**) on Windows. It depends on desktop protocols that can change between Codex releases. This project is independent of OpenAI and does not grant access to OpenAI's cloud Dots service.
+**Experimental software.** The native integration was tested with Codex MSIX **26.930.2377.0** and **26.930.3930.0** (CLI **0.160.0**) on Windows. It depends on desktop protocols that can change between Codex releases, so a Codex update can break it until this project is updated. This project is independent of OpenAI and does not grant access to OpenAI's cloud Dots service.
+
+**Read before installing.** The Windows integration adds a local certificate authority to your user trust store and starts the Codex process it manages with Chromium's `--ignore-certificate-errors`. Dot tasks ask for command approval by default; full access is an opt-in setting. See [Security notes](SECURITY.md).
 
 ## What works
 
@@ -17,7 +19,11 @@ Self-hosted Dots for the Codex desktop app. Run the backend on your PC or a serv
 
 Slack, Teams, email, GitHub, MCP and signed webhooks have adapters. Their protocol tests use controlled services; real account setup is still required. See [the verification record](docs/ACCEPTANCE.md) for what was actually tested.
 
-## Start on Windows
+## Recommended: let a coding agent install it
+
+The setup has many steps (Node.js 24, dependencies, Playwright, a dashboard build, a certificate, Codex integration, a provider). Do not do them by hand if you can avoid it. Open Codex, Claude Code or another coding agent with shell access on the target PC and paste the prompt from [docs/AGENT-INSTALL.md](docs/AGENT-INSTALL.md). The agent checks your Codex version, installs and builds, starts the services, verifies that **Your dot** works and asks you only when it needs a decision, for example a provider key. Agent-assisted install is the recommended path; the manual steps below are for people who want to control each step.
+
+## Manual install (advanced)
 
 You need Node.js **24**, npm, the Codex **MSIX** desktop app, and a model provider with tool calling support. The app's installed CLI is detected automatically. Set `DOTS_CODEX_CLI` if you need to point to another executable.
 
@@ -106,11 +112,11 @@ The backend runs from `C:\Dots\server-data` as a `DotsServer` task. It has no da
 
 Once the host is added, its card on **Servers** can issue a computer enrollment code together with the install command for the machine to attach (run it on the VPS itself for a Dot that runs on and controls the VPS), and can copy a Dot's name, model, instructions and avatar files to the new backend. Cached profile, room and root identifiers remain linked to the copied Dot. Chat history is not copied. Existing profile settings are preserved; a missing avatar from an earlier copy can be restored. Then press **Use this host** with the computer mode set to **Computer connected to the server**.
 
-## Execution access
+## Execution access (off by default)
 
-Dot tasks default to Codex `danger-full-access` with `approvalPolicy: never`, including resumed threads and worker tasks. Commands run with the operating-system permissions of the worker user. Workspace roots identify starting directories and constrain file/output APIs; they are not a shell sandbox in full-access mode.
+New installations ask for approval before commands run (`approvalPolicy: on-request`, workspace-write sandbox). Turning on **Settings → Full access** switches Codex tasks to `danger-full-access` with `approvalPolicy: never`, including resumed threads and worker tasks. With full access, commands run with the operating-system permissions of the worker user, and workspace roots identify starting directories and constrain file/output APIs without acting as a shell sandbox. Installations that already saved this setting keep their saved choice.
 
-The dashboard can change this setting. Actual questions still need an answer, proactive research stays read-only, and app tools remain subject to configured connector scopes. [Security notes](SECURITY.md) describe the deployment boundaries.
+Actual questions still need an answer, proactive research stays read-only, and app tools remain subject to configured connector scopes. [Security notes](SECURITY.md) describe the deployment boundaries.
 
 ## Hosting
 
@@ -145,4 +151,4 @@ MIT licensed. Dependencies and separately installed applications keep their own 
 
 ## Version checks and updates
 
-The bottom of the sidebar shows the installed version and checks stable GitHub releases. Each release notification appears once. Managed Git installations can stage, build and install updates from the panel, with startup verification and rollback. See [Updates](docs/UPDATES.md) for supported layouts and recovery.
+The bottom of the sidebar shows the installed version and checks stable GitHub releases. Each release notification appears once. **Updates are never installed automatically.** Nothing changes until you press **Install update**; managed Git installations then stage, build and install it with startup verification and rollback. See [Updates](docs/UPDATES.md) for supported layouts and recovery.

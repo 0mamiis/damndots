@@ -1,4 +1,4 @@
 @echo off
-rem Eski dosya adi: artik yalniz Dots servislerini baslatir. Codex penceresi acmaz.
+rem Legacy file name: it now only starts the Dots services and does not open Codex.
 cd /d "%~dp0"
 call Start-Dots.cmd

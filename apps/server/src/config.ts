@@ -17,5 +17,5 @@ export function loadConfig(env:NodeJS.ProcessEnv=process.env):ServerConfig {
     }
     return readFileSync(file,'utf8').trim();
   };
-  return {host:env.DOTS_HOST||'127.0.0.1',port:Number(env.DOTS_PORT||9340),dataDir,adminKey:env.DOTS_ADMIN_KEY||key('admin.key'),signingKey:Buffer.from(key('signing.key'),'hex'),modelBaseUrl:env.DOTS_MODEL_BASE||'http://127.0.0.1:10100/v1',modelApiKey:env.DOTS_MODEL_API_KEY||'',appServerUrl:env.DOTS_APPSERVER_URL||'ws://127.0.0.1:9912',model:env.DOTS_MODEL||null,reasoningEffort:env.DOTS_REASONING_EFFORT||'high',serviceTier:env.DOTS_SERVICE_TIER||null,tlsCert:env.DOTS_TLS_CERT,tlsKey:env.DOTS_TLS_KEY,workerOnlineMs:45000};
+  return {host:env.DOTS_HOST||'127.0.0.1',port:Number(env.DOTS_PORT||9340),dataDir,adminKey:env.DOTS_ADMIN_KEY||key('admin.key'),signingKey:Buffer.from(key('signing.key'),'hex'),modelBaseUrl:env.DOTS_MODEL_BASE||'http://127.0.0.1:10100/v1',modelApiKey:env.DOTS_MODEL_API_KEY||'',appServerUrl:env.DOTS_APPSERVER_URL||'ws://127.0.0.1:9912',model:env.DOTS_MODEL||null,reasoningEffort:env.DOTS_REASONING_EFFORT||'medium',serviceTier:env.DOTS_SERVICE_TIER||null,tlsCert:env.DOTS_TLS_CERT,tlsKey:env.DOTS_TLS_KEY,workerOnlineMs:45000};
 }

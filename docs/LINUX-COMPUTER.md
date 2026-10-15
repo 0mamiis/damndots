@@ -1,47 +1,47 @@
-# Yerel Dot Linux bilgisayarı
+# Local Dot Linux computer
 
-İsteğe bağlı **Dots-Computer-Debian** WSL2 dağıtımı gerçek Debian 13 (trixie) masaüstünü çalıştırır. Dots servisleri bilgisayarı başlatır; Codex penceresi açmaz. Orijinal Codex kısayolunu kullanın ve Dot'a dashboarddan bu bilgisayarı atayın.
+The optional **Dots-Computer-Debian** WSL2 distribution runs a real Debian 13 (trixie) desktop. The Dots services start the computer; they do not open a Codex window. Use the original Codex shortcut and assign this computer to a Dot from the dashboard.
 
-Dosyalar `/home/dot/Workspace` içindedir. Windows'tan `\\wsl.localhost\Dots-Computer-Debian\home\dot\Workspace` yoluyla erişilebilir. Dot normal Linux kullanıcısıdır; sudo yoktur ve Windows sürücüleri bağlanmaz.
+Files live in `/home/dot/Workspace`. From Windows they are reachable at `\\wsl.localhost\Dots-Computer-Debian\home\dot\Workspace`. The Dot is a normal Linux user: there is no sudo and Windows drives are not mounted.
 
-## Kurulum ve güncelleme
+## Installing and updating
 
-WSL2 etkin, Dots servisleri kapalıyken:
+With WSL2 enabled and the Dots services stopped:
 
 ```powershell
 node scripts/setup-linux-computer.mjs
 ```
 
-Komut resmî Debian kök dosya sistemini indirir, katman hashini OCI manifestiyle doğrular ve ayrı WSL2 dağıtımına aktarır. Paketleri, Node/Codex CLI'yi, private yerel SSH tünelini ve worker kaynaklarını kurar. Başka amaçla oluşturulmuş aynı adlı bir dağıtımı değiştirmez; yeni ad için kurulumda `DOTS_LINUX_DISTRO` kullanın. Özel ad kullanıyorsanız servisleri başlatırken de aynı değişkeni ayarlayın.
+The command downloads the official Debian root file system, verifies the layer hash against the OCI manifest and imports it into a separate WSL2 distribution. It installs packages, Node and the Codex CLI, a private local SSH tunnel and the worker sources. It does not replace an existing distribution of the same name created for another purpose; use `DOTS_LINUX_DISTRO` at install time for a new name. If you use a custom name, set the same variable when you start the services.
 
-Chromium, terminal, dosya yöneticisi, Blender, GIMP, Draw, Go, FreeCAD, Godot, Inkscape, Kdenlive, KiCad, Code, Writer/Calc, QGIS, ParaView, OpenSCAD ve 3D Slicer kurulur. Sürümler repo/sürüm indirmelerine bağlıdır; Godot ve Slicer indirmelerinin hashleri doğrulanır. Kurulum birkaç GB disk ve internet gerektirir.
+Chromium, a terminal, a file manager, Blender, GIMP, Draw, Go, FreeCAD, Godot, Inkscape, Kdenlive, KiCad, Code, Writer/Calc, QGIS, ParaView, OpenSCAD and 3D Slicer are installed. Versions depend on repository and release downloads; the hashes of the Godot and Slicer downloads are verified. Installation needs several GB of disk space and an internet connection.
 
-Kaynak güncellemesi için:
+To update the sources:
 
 ```powershell
 node scripts/sync-linux-computer.mjs
-# Lockfile / bağımlılıklar değiştiyse bunun yerine --install-deps ekleyin.
+# If the lockfile or dependencies changed, add --install-deps instead.
 node scripts/restart-linux-worker.mjs
 ```
 
-Yeniden başlatmayı Dot'un çalışan görevi yokken yapın. Dots servisleri açıksa supervisor worker'ı yeniden başlatır. Codex computer panelini kapatıp açın. Etkin dağıtım `.data/linux-computer/active-distro` veya `DOTS_LINUX_DISTRO` ile seçilir.
+Restart only when the Dot has no running task. If the Dots services are running, the supervisor restarts the worker. Close and reopen the Codex computer panel. The active distribution is selected by `.data/linux-computer/active-distro` or `DOTS_LINUX_DISTRO`.
 
-## Ekran ve kontrol
+## Screen and control
 
-Her Dot/bilgisayar ayrı X11 ekranı ve Chromium profili kullanır. Native Codex video paneli tam masaüstünü 1280×800 olarak gösterir. **Take over** kullanıcıya kontrol verir; **Return control** Dot'a geri verir. Kontrol devrinde agent masaüstü/tarayıcı girdileri engellenir.
+Each Dot or computer uses its own X11 display and Chromium profile. The native Codex video panel shows the full desktop at 1280×800. **Take over** gives control to the user; **Return control** gives it back to the Dot. While the user has control, agent desktop and browser input is blocked.
 
-Başlangıç sayfası Dot'un kaydedilmiş adı, avatarı ve rengine göre değişir. Bu proje kendi temasını uygular; OpenAI'ın resmî tema/ISO/imaj dosyası dağıtılmaz. PC kapalıyken bu yerel bilgisayar çalışmaz. Grafikler yazılımla çizilir; ağır 3B işler için donanım GPU performansı beklenmemelidir.
+The start page changes with the Dot's saved name, avatar and colour. This project applies its own theme; no official OpenAI theme, ISO or image file is distributed. This local computer does not run while the PC is off. Graphics are rendered in software, so do not expect hardware GPU performance for heavy 3D work.
 
-## Akış performansı
+## Streaming performance
 
-Masaüstü 30 FPS hedefiyle yakalanır; gerçek hız PC yüküne göre değişir. FFmpeg başlangıç analizini bekletmez ve her JPEG karesini hemen aktarır. Tuval yeni kare çizilince `requestFrame()` kullanır; ayrı 15 FPS zamanlayıcısı yoktur ([captureStream](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/captureStream)).
+The desktop is captured with a 30 FPS target; the real rate depends on PC load. FFmpeg does not delay the start for analysis and forwards each JPEG frame immediately. The canvas uses `requestFrame()` when a new frame is drawn; there is no separate 15 FPS timer ([captureStream](https://developer.mozilla.org/en-US/docs/Web/API/HTMLCanvasElement/captureStream)).
 
-Yalnız arka arkaya bekleyen fare konumları birleştirilir; tıklama/tuş/kaydırma/kontrol sınırları korunur. `xdotool mousemove --sync` beklemesi kaldırılmıştır. Unicode tuşlarında X11'in geçici eşlemeyi görebilmesi için kısa gecikme korunur.
+Only consecutive pending mouse positions are merged; click, key, scroll and control boundaries are preserved. The `xdotool mousemove --sync` wait was removed. A short delay is kept for Unicode keys so that X11 can see the temporary mapping.
 
-2026-10-02 yerel sentetik testinde, 200 fare hareketi sonrası tıklama 1728 ms'den 246 ms'ye indi; güncel video 28,7 FPS, normal tıklamalar 117–145 ms ölçüldü. `abcçışğ` girdisi de doğrulandı. Ölçüm her uygulama için garanti değildir.
+In a local synthetic test on 2026-10-02, a click after 200 mouse moves dropped from 1728 ms to 246 ms; the live video ran at 28.7 FPS and normal clicks measured 117–145 ms. Typing `abcçışğ` was also verified. The measurement is not a guarantee for every application.
 
-## Eski kurulumlar
+## Older installations
 
-Ubuntu **Dots-Computer** dağıtımı eski kurulumda varsa korunabilir. Etkin dağıtımı değiştirip worker'ı yeniden başlatmadan önce görevleri bitirin. Aynı anda yalnız bir Dots Linux dağıtımı çalışmalıdır; yerel SSH portu 22444'tür.
+An Ubuntu **Dots-Computer** distribution from an older installation can be kept. Finish running tasks before you change the active distribution and restart the worker. Only one Dots Linux distribution should run at a time; the local SSH port is 22444.
 
-`scripts/migrate-linux-state.mjs <kaynak>` eski bilgisayar kimliği, thread ve çalışma dosyalarını taşıyabilir. Tarayıcı profili kopyalanmaz; gerekirse tarayıcıda yeniden giriş yapılır. Kaynak dağıtımın silinmesi bu komutun parçası değildir. `wsl --unregister` dağıtım verilerini kalıcı siler; kaynak güncellemesi için kullanılmaz.
+`scripts/migrate-linux-state.mjs <source>` can move the old computer identity, threads and work files. The browser profile is not copied; sign in again in the browser if needed. Deleting the source distribution is not part of this command. `wsl --unregister` permanently deletes distribution data and is not used for source updates.

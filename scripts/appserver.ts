@@ -6,7 +6,7 @@ import { appServerProvider } from './appserver-config.js';
 const dir=resolve(process.env.DOTS_CODEX_HOME||'.data/appserver');await mkdir(dir,{recursive:true});
 // Model istekleri Dots sunucusunun ağ geçidinden geçer: sağlayıcı (URL/anahtar/biçim) çalışırken panelden değiştirilebilir, bu süreç yeniden başlamaz.
 const {base,key:gatewaySecret}=appServerProvider();
-const config=`model_provider = "dots_provider"\n${process.env.DOTS_MODEL?`model = ${JSON.stringify(process.env.DOTS_MODEL)}\n`:''}model_reasoning_effort = "high"\n[model_providers.dots_provider]\nname = "Dots model provider"\nbase_url = ${JSON.stringify(base)}\nwire_api = "responses"\nrequires_openai_auth = false\n${gatewaySecret?'env_key = "DOTS_MODEL_API_KEY"\n':''}`;
+const config=`model_provider = "dots_provider"\n${process.env.DOTS_MODEL?`model = ${JSON.stringify(process.env.DOTS_MODEL)}\n`:''}model_reasoning_effort = ${JSON.stringify(process.env.DOTS_REASONING_EFFORT||'medium')}\n[model_providers.dots_provider]\nname = "Dots model provider"\nbase_url = ${JSON.stringify(base)}\nwire_api = "responses"\nrequires_openai_auth = false\n${gatewaySecret?'env_key = "DOTS_MODEL_API_KEY"\n':''}`;
 await writeFile(join(dir,'config.toml'),config,{mode:0o600});
 const env={...process.env,CODEX_HOME:dir,...gatewaySecret?{DOTS_MODEL_API_KEY:gatewaySecret}:{}};for(const key of Object.keys(env))if(key.startsWith('CODEX')&&key!=='CODEX_HOME')delete (env as any)[key];
 // Kullanıcının kendi pencere/PATH'inde 'codex' olmayabilir: önce ayar, sonra Codex uygulamasının kendi kurduğu CLI, en son PATH.

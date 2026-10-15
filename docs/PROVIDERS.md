@@ -1,29 +1,29 @@
-# Model sağlayıcıları (özel API)
+# Model providers (custom API)
 
-Dots, Codex'in model isteklerini kendi **model ağ geçidinden** (`/model-gateway/responses`) geçirir. Sağlayıcı (API adresi, anahtar, API biçimi) çalışırken **Ayarlar → Model sağlayıcıları** bölümünden değiştirilir; Codex app-server'ın yeniden başlatılması gerekmez.
+Dots routes Codex's model requests through its own **model gateway** (`/model-gateway/responses`). The provider (API address, key, API format) can be changed while Dots is running under **Settings → Model providers**; the Codex app-server does not need to restart.
 
-## Sağlayıcı ekleme
+## Adding a provider
 
-1. Ayarlar → **+ Sağlayıcı ekle**: ad, API adresi (örn. `https://api.openai.com/v1`), API anahtarı, API biçimi.
-2. Kayıtta `GET {adres}/models` ile modeller otomatik çekilir. Adres `/v1` olmadan girildiyse `/v1` otomatik denenir. Liste çekilemezse modeller elle yazılabilir.
-3. **Bağlantıyı dene** hem `/responses` hem `/chat/completions` için küçük bir istek yollar ve hangi biçimin çalıştığını söyler; uygun biçimi tek tıkla uygular.
-4. **Bunu kullan** sağlayıcıyı etkinleştirir (yeni istekler hemen bu sağlayıcıya gider).
+1. Settings → **+ Add provider**: name, API address (for example `https://api.openai.com/v1`), API key and API format.
+2. On save, models are fetched automatically with `GET {address}/models`. If the address was entered without `/v1`, `/v1` is tried automatically. If the list cannot be fetched, you can type the models by hand.
+3. **Test connection** sends a small request to both `/responses` and `/chat/completions`, reports which format works and applies the suitable one with one click.
+4. **Use this** activates the provider; new requests go to it immediately.
 
-## API biçimleri
+## API formats
 
-- **Responses API**: istekler olduğu gibi iletilir.
-- **Chat Completions**: Codex'in Responses isteği sunucuda `/chat/completions` isteğine çevrilir; akış (SSE), araç çağrıları (function ve serbest biçimli araçlar), akıl yürütme metni ve kullanım bilgisi Responses olaylarına geri çevrilir. Chat karşılığı olmayan araç türleri (web_search, local_shell) bu biçimde gönderilmez. Bir model yanıtı yalnızca akıl yürütme alanına yazarsa o metin yanıt olarak gösterilir.
+- **Responses API**: requests are forwarded unchanged.
+- **Chat Completions**: Codex's Responses request is translated on the server into a `/chat/completions` request. Streaming (SSE), tool calls (function and free-form tools), reasoning text and usage information are translated back into Responses events. Tool types with no chat equivalent (web_search, local_shell) are not sent in this format. If a model writes its answer only into the reasoning field, that text is shown as the answer.
 
-## Model, düşünme düzeyi ve Hızlı mod
+## Model, reasoning level and Fast mode
 
-- Model seçimi her yerde çekilen listeden yapılır (Ayarlar, Dot profili, yeni Dot, yeni görev); "Özel model adı yaz…" ile listede olmayan bir ad girilebilir.
-- Düşünme düzeyi seçenekleri sağlayıcının model başına bildirdiği düzeylerdir (örn. `reasoning_efforts`); bildirmezse low/medium/high sunulur, desteklemediğini bildiren modellerde seçim kapanır.
-- **Hızlı mod** (`service_tier=priority`) yalnızca GPT model kimliklerinde sunulur. Sunucu da GPT olmayan modele Hızlı mod atanmasını reddeder; bir Dot/ayar GPT olmayan modele geçirilirse Hızlı mod otomatik kapanır.
+- The model is chosen from the fetched list everywhere (Settings, Dot profile, new Dot, new task). "Type a custom model name…" lets you enter a name that is not in the list.
+- Reasoning level options are the levels the provider reports per model (for example `reasoning_efforts`). If it reports none, low/medium/high are offered, and the choice is disabled for models that say they do not support it.
+- **Fast mode** (`service_tier=priority`) is offered only for GPT model IDs. The server also refuses to assign Fast mode to a non-GPT model; if a Dot or setting moves to a non-GPT model, Fast mode turns off automatically.
 
-## Güvenlik
+## Security
 
-- API anahtarı AES-256-GCM ile şifrelenip saklanır, hiçbir API yanıtında geri dönmez (`hasKey` bilgisi verilir) ve günlüklenmez.
-- Uzak sağlayıcı adresleri HTTPS gerektirir; yerel adresler HTTP olabilir. Yönlendirmeler reddedilir.
-- Model ağ geçidi, imza anahtarından türetilen ayrı bir anahtarla yetkilendirilir (yönetici anahtarı kullanılmaz).
+- The API key is stored encrypted with AES-256-GCM, is never returned in any API response (only a `hasKey` flag) and is never logged.
+- Remote provider addresses require HTTPS; local addresses may use HTTP. Redirects are rejected.
+- The model gateway is authorized with a separate key derived from the signing key (the admin key is not used).
 
-Sağlayıcıya ait yapılandırma `apps/server/test/providers.test.ts` ile doğrulanır (şifreleme, gizleme, model keşfi, biçim çevirisi, Hızlı mod kuralı).
+Provider configuration is verified by `apps/server/test/providers.test.ts` (encryption, redaction, model discovery, format translation, the Fast mode rule).
