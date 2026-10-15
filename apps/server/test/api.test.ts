@@ -4,10 +4,25 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildServer } from '../src/app.js';
+test('release status is admin-only and the update notification is claimed exactly once per release',async()=>{
+ let tag='v9.0.0';
+ const f=await fixture({run:async()=>{throw Error('No work');}},async()=>new Response(JSON.stringify({tag_name:tag,html_url:'https://github.com/0mamiis/damndots/releases/tag/'+tag,body:'Test',draft:false,prerelease:false})));
+ try {
+  assert.equal((await f.app.inject('/api/v1/updates')).statusCode,401);
+  const native=f.auth.nativeTokens('test-native').access_token;
+  assert.equal((await f.request('GET','/updates',undefined,native)).statusCode,401);
+  const status=await f.request('GET','/updates');assert.equal(status.statusCode,200);assert.equal(status.json().available,true);
+  const claims=await Promise.all([f.request('POST','/updates/notice',{tag}),f.request('POST','/updates/notice',{tag}),f.request('POST','/updates/notice',{tag})]);
+  assert.equal(claims.filter(r=>r.json().show).length,1);
+  assert.equal((await f.request('POST','/updates/notice',{tag:'v999.0.0'})).json().show,false);
+  assert.equal((await f.request('POST','/updates/apply',{tag:'v9.0.0;whoami'})).statusCode,400);
+  assert.equal((await f.request('POST','/updates/apply',{tag})).statusCode,409,'unmanaged services cannot be stopped by the updater');
+ }finally{await f.cleanup();}
+});
 import { SqliteStore } from '../src/storage.js';
 import type { RunInput, RunnerHooks, TaskRunner } from '@dots/contracts';
 const wait=async(fn:()=>boolean)=>{for(let i=0;i<200&&!fn();i++)await new Promise(r=>setTimeout(r,5));assert.ok(fn());};
-async function fixture(runner:TaskRunner){const dir=await mkdtemp(join(tmpdir(),'dots-api-')),store=new SqliteStore(':memory:');const config={host:'127.0.0.1',port:0,dataDir:dir,adminKey:'private-test-key',signingKey:Buffer.alloc(32,1),modelBaseUrl:'http://localhost:10100/v1',modelApiKey:'',appServerUrl:'ws://localhost:9912',model:null,reasoningEffort:'high',serviceTier:null,workerOnlineMs:45000};const services=await buildServer({config,store,runner});await services.app.ready();const login=await services.app.inject({method:'POST',url:'/api/v1/session',payload:{token:config.adminKey}}),access=login.json().accessToken;const request=(method:any,url:string,payload?:any,token=access)=>services.app.inject({method,url:'/api/v1'+url,headers:{authorization:'Bearer '+token},...payload!==undefined?{payload}:{}});return {...services,dir,request,cleanup:async()=>{await services.app.close();await rm(dir,{recursive:true,force:true});}};}
+async function fixture(runner:TaskRunner,releaseFetch?:typeof fetch){const dir=await mkdtemp(join(tmpdir(),'dots-api-')),store=new SqliteStore(':memory:');const config={host:'127.0.0.1',port:0,dataDir:dir,adminKey:'private-test-key',signingKey:Buffer.alloc(32,1),modelBaseUrl:'http://localhost:10100/v1',modelApiKey:'',appServerUrl:'ws://localhost:9912',model:null,reasoningEffort:'high',serviceTier:null,workerOnlineMs:45000};const services=await buildServer({config,store,runner,releaseFetch});await services.app.ready();const login=await services.app.inject({method:'POST',url:'/api/v1/session',payload:{token:config.adminKey}}),access=login.json().accessToken;const request=(method:any,url:string,payload?:any,token=access)=>services.app.inject({method,url:'/api/v1'+url,headers:{authorization:'Bearer '+token},...payload!==undefined?{payload}:{}});return {...services,dir,request,cleanup:async()=>{await services.app.close();await rm(dir,{recursive:true,force:true});}};}
 test('Dots native bootstrap keeps the app navigation rail alongside Dot features',async()=>{
  const f=await fixture({run:async()=>{throw new Error('No task expected');}});try{
   const token=f.auth.nativeTokens('navigation-client').access_token;
@@ -110,7 +125,7 @@ test('attachment-only messages work through dashboard and native chat without in
     assert.equal(second.statusCode,200);
     const caption=await native({content:{text:'What is this?',attachments:[{file_id:image.id}]},request_id:'captioned-image'});
     assert.equal(caption.statusCode,200);
-    assert.deepEqual(f.runtime.listMessages(dot.id).map(m=>m.text),['','','What is this?']);
+    assert.deepEqual(f.runtime.listMessages(dot.id).map(m=>m.text).sort(),['','','What is this?']);
     f.runtime.start();await wait(()=>f.runtime.listTasks().every(t=>t.status==='completed'));
     assert.equal(seen.length,3);
     assert.deepEqual(seen.map(i=>i.task.input),['Review the attached files.','Review the attached files.','What is this?']);

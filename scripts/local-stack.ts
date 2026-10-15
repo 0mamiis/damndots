@@ -1,4 +1,4 @@
-import {spawn} from 'node:child_process';
+import {spawn,execFile} from 'node:child_process';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import net from 'node:net';
@@ -6,6 +6,7 @@ import {existsSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {acquireLaunchLock} from '../apps/client/src/launch-policy.js';
 import {ConnectionController} from './connection-controller.js';
+import {watchUpdateStop} from './update-supervisor.js';
 const root=resolve(fileURLToPath(new URL('..',import.meta.url)));
 const data=resolve(process.env.DOTS_STACK_DIR||join(root,'.data/local-stack'));await mkdir(data,{recursive:true});
 if(process.argv.includes('--launch')||process.argv.includes('--main-profile'))throw new Error('This script only starts services. The Codex app is opened from the Codex icon on the desktop.');
@@ -21,6 +22,11 @@ if(!release){
   process.exit(0);
 }
 process.once('exit',()=>{void release();});
+process.env.DOTS_MANAGED_STACK_PID=String(process.pid);
+process.env.DOTS_MANAGED_STACK_ARGS=JSON.stringify(process.argv.slice(2));
+process.env.DOTS_STACK_DIR=data;
+// Updating needs ownership of both services; an independently launched dashboard cannot be restarted safely.
+process.env.DOTS_UPDATE_MANAGED=(!await open(serverPort)&&!await open(dashboardPort))?'1':'0';
 const children:ReturnType<typeof spawn>[]=[];
 const start=(script:string,args:string[],extra:NodeJS.ProcessEnv={})=>{const child=spawn(process.execPath,['--import','tsx',script,...args],{cwd:root,env:{...process.env,...extra},stdio:'inherit',windowsHide:true});children.push(child);child.once('error',e=>console.error(e.message));return child;};
 const url=`http://127.0.0.1:${serverPort}`,serverData=resolve(process.env.DOTS_DATA_DIR||join(root,'apps/server/.data/server'));
@@ -34,8 +40,25 @@ const controller=new ConnectionController(root,data,url,admin,appServerPort,main
 await controller.start();
 if(!await open(dashboardPort)){const script=join(root,'apps/dashboard/scripts/start.mjs');start(script,['--port',String(dashboardPort)]);}
 await writeFile(join(data,'processes.json'),JSON.stringify(children.map(c=>({pid:c.pid,startedAt:new Date().toISOString()}))),{mode:0o600});
-for(const sig of ['SIGINT','SIGTERM'] as const)process.once(sig,()=>{void controller.close().then(()=>{for(const c of children)c.kill();void release();});});
+
+let shuttingDown:Promise<void>|undefined;
+const shutdown=()=>shuttingDown??=(async()=>{
+  await controller.close();
+  await Promise.all(children.map(child=>new Promise<void>(done=>{
+    if(child.exitCode!==null){done();return;}
+    const timer=setTimeout(()=>{if(child.exitCode===null)child.kill('SIGKILL');done();},10000);
+    child.once('exit',()=>{clearTimeout(timer);done();});
+    if(process.platform==='win32')execFile('taskkill.exe',['/PID',String(child.pid),'/T','/F'],{windowsHide:true},()=>{});
+    else child.kill('SIGTERM');
+  })));
+  await release();
+})();
+const stopWatcher=watchUpdateStop({data,updates:join(serverData,'updates'),pid:process.pid,shutdown});
+await writeFile(join(data,'supervisor.json'),JSON.stringify({pid:process.pid,startedAt:new Date().toISOString()}),{mode:0o600});
+for(const sig of ['SIGINT','SIGTERM'] as const)process.once(sig,()=>{stopWatcher();void shutdown().then(()=>process.exit(0));});
+
 let missing=await unavailable();
 for(let i=0;i<80&&missing.length;i++){await new Promise(r=>setTimeout(r,250));missing=await unavailable();}
 if(missing.length)console.error('Dots startup could not be completed. Services that are not ready: '+missing.join(', '));
 else console.log(`The Dots services are ready. Panel: http://127.0.0.1:${dashboardPort}. The Codex window was not opened.`);
+if(!missing.length)await writeFile(join(data,'ready.json'),JSON.stringify({pid:process.pid,readyAt:new Date().toISOString()}),{mode:0o600});

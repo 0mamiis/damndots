@@ -31,6 +31,7 @@ import {HostConnections} from './connections.js';
 import {NetworkService} from './network.js';
 import {ComputerTransport} from './computer-transport.js';
 import {ComputerSetup} from './computer-setup.js';
+import {UpdateService} from './updates.js';
 /** Codex istek gövdesini zstd ile sıkıştırıp gönderir; JSON ayrıştırmadan önce açılır. */
 const decodeBody=(body:Buffer,encoding:unknown):Buffer=>{switch(String(encoding||'').toLowerCase()){case 'zstd':return zstdDecompressSync(body);case 'gzip':case 'x-gzip':return gunzipSync(body);case 'br':return brotliDecompressSync(body);case 'deflate':return inflateSync(body);default:return body;}};
 const object=z.record(z.string(),z.unknown());
@@ -42,7 +43,7 @@ const connectorSchema=z.object({kind:z.enum(['slack','teams','email','mcp','webh
 const idOf=(req:any)=>String(req.params.id);
 const filter=(req:any)=>({dotId:typeof req.query.dotId==='string'?req.query.dotId:undefined,taskId:typeof req.query.taskId==='string'?req.query.taskId:undefined,status:typeof req.query.status==='string'?req.query.status:undefined});
 const list=<T>(items:T[])=>({items,cursor:null});
-export async function buildServer(options:{config?:ServerConfig;store?:RecordStore;runner?:TaskRunner;logger?:boolean}={}){
+export async function buildServer(options:{config?:ServerConfig;store?:RecordStore;runner?:TaskRunner;logger?:boolean;releaseFetch?:typeof fetch}={}){
   const config=options.config||loadConfig(),store=options.store||new SqliteStore(join(config.dataDir,'dots.sqlite'));
   const network=new NetworkService({host:config.host,port:config.port}),connections=new HostConnections(store,new SecretVault(config.signingKey),{url:'http://127.0.0.1:'+config.port,adminKey:config.adminKey});
   const computerTransport=new ComputerTransport(store,new SecretVault(config.signingKey));
@@ -78,7 +79,10 @@ export async function buildServer(options:{config?:ServerConfig;store?:RecordSto
   integrations=new IntegrationService(store,{encryptionKey:config.signingKey,inbound:async(dotId,text,channel,requestId)=>runtime.submitMessage(dotId,{text,channel,requestId}),emit:(t,d)=>external.publish(t,d),authorizeSend:async(c,name,args)=>{const input=toolContext.getStore();if(!input||input.task.source==='proactive')return false;return runtime.requestApproval(input.task.id,{kind:'external_send',title:`${c.name}: ${name}`,detail:JSON.stringify(args),request:{connectorId:c.id,tool:name,arguments:args}});}});
   const requireAdmin=async(req:any,reply:any)=>{if(!auth.verify(bearer(req.headers.authorization),['admin']))return reply.code(401).send({error:'Authentication required'});};
   const requireWorker=async(req:any,reply:any)=>{const c=auth.verify(bearer(req.headers.authorization),['worker']);if(!c)return reply.code(401).send({error:'Worker authentication required'});req.computerId=c.sub;};
-  app.get('/health',async()=>({ok:true,version:'0.2.2',connectionProtocol:1}));
+  const updates=new UpdateService({dataDir:config.dataDir,fetch:options.releaseFetch,busy:()=>runtime.listTasks().some(t=>['running','queued','waiting_approval'].includes(t.status))||store.list<any>('worker_jobs').some(j=>['running','queued'].includes(j.status)),maintenance:value=>runtime.setMaintenance(value)});
+  const updateWatch=setInterval(()=>void updates.syncMaintenance().catch(()=>{}),2000);updateWatch.unref();
+  app.addHook('onClose',async()=>{clearInterval(updateWatch);});
+  app.get('/health',async()=>({ok:true,version:updates.currentVersion,connectionProtocol:1}));
   const loginAttempts=new Map<string,{count:number;until:number}>();
   app.post('/api/v1/session',async(req,reply)=>{const prior=loginAttempts.get(req.ip),attempts=prior&&prior.until>Date.now()?prior:{count:0,until:Date.now()+60000};if(attempts.count>=10)return reply.code(429).send({error:'Too many login attempts'});const body=z.object({token:z.string().max(500)}).parse(req.body),session=auth.login(body.token);if(session){loginAttempts.delete(req.ip);return session;}attempts.count++;if(loginAttempts.size>1000)loginAttempts.clear();loginAttempts.set(req.ip,attempts);return reply.code(401).send({error:'Invalid access key'});});
   await app.register(async admin=>{
@@ -114,6 +118,9 @@ export async function buildServer(options:{config?:ServerConfig;store?:RecordSto
     admin.post('/providers/:id/refresh-models',async req=>providers.refreshModels(idOf(req)));
     admin.post('/providers/:id/test',async req=>providers.test(idOf(req),z.object({model:z.string().max(300).optional()}).parse(req.body||{}).model));
     admin.get('/models',async req=>providers.models(typeof (req.query as any).providerId==='string'?(req.query as any).providerId:undefined));
+    admin.get('/updates',async req=>updates.status((req.query as any)?.refresh==='1'));
+    admin.post('/updates/notice',async req=>{const {tag}=z.object({tag:z.string()}).parse(req.body),state=await updates.status();if(!state.available||tag!==state.latest?.tag)return {show:false};return store.transaction(()=>{if(store.get('update_notices',tag))return {show:false};store.put('update_notices',{id:tag,seenAt:new Date().toISOString()});return {show:true};});});
+    admin.post('/updates/apply',async req=>updates.start(z.object({tag:z.string().regex(/^v\d+\.\d+\.\d+$/)}).parse(req.body).tag));
     admin.get('/dots',async()=>list(runtime.listDots()));
     admin.post('/dots',async req=>{const p=dotSchema.parse(req.body),s=settings();return runtime.createDot({...p,model:p.model??null,reasoningEffort:p.reasoningEffort??null,serviceTier:tierFor(p.model??s.model,p.serviceTier,!!p.serviceTier)});});
     admin.get('/dots/:id',async req=>runtime.getDot(idOf(req)));
