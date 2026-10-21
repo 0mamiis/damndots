@@ -2,7 +2,7 @@
 
 Self-hosted Dots for the Codex desktop app. Run the backend on your PC or a server, choose your own model provider, and use the existing **Your dot** interface in Codex.
 
-**Experimental software.** The native integration was tested with Codex MSIX **26.930.2377.0** and **26.930.3930.0** (CLI **0.160.0**), and the **Your dot** entry was checked on **26.1013.3656.0** (CLI **0.163.0-alpha.10.2**), on Windows. It depends on desktop protocols that can change between Codex releases, so a Codex update can break it until this project is updated. This project is independent of OpenAI and does not grant access to OpenAI's cloud Dots service.
+**Experimental software.** The native integration was tested with Codex MSIX **26.930.2377.0** and **26.930.3930.0** (CLI **0.160.0**), and the **Your dot** entry was checked on **26.1013.3656.0** (CLI **0.163.0-alpha.10.2**) and **26.1016.6573.0** (CLI **0.163.0-alpha.11**), on Windows. It depends on desktop protocols that can change between Codex releases, so a Codex update can break it until this project is updated. This project is independent of OpenAI and does not grant access to OpenAI's cloud Dots service.
 
 **Read before installing.** The Windows integration adds a local certificate authority to your user trust store and starts the Codex process it manages with Chromium's `--ignore-certificate-errors`. Dot tasks ask for command approval by default; full access is an opt-in setting. See [Security notes](SECURITY.md).
 
