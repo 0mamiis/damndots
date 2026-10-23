@@ -34,6 +34,7 @@ import {ComputerSetup} from './computer-setup.js';
 import {UpdateService} from './updates.js';
 import {query} from './storage.js';
 import {scheduleRetention} from './retention.js';
+import {TelegramService} from './telegram.js';
 /** Codex istek gövdesini zstd ile sıkıştırıp gönderir; JSON ayrıştırmadan önce açılır. */
 const decodeBody=(body:Buffer,encoding:unknown):Buffer=>{switch(String(encoding||'').toLowerCase()){case 'zstd':return zstdDecompressSync(body);case 'gzip':case 'x-gzip':return gunzipSync(body);case 'br':return brotliDecompressSync(body);case 'deflate':return inflateSync(body);default:return body;}};
 const object=z.record(z.string(),z.unknown());
@@ -45,7 +46,7 @@ const connectorSchema=z.object({kind:z.enum(['slack','teams','email','mcp','webh
 const idOf=(req:any)=>String(req.params.id);
 const filter=(req:any)=>({dotId:typeof req.query.dotId==='string'?req.query.dotId:undefined,taskId:typeof req.query.taskId==='string'?req.query.taskId:undefined,status:typeof req.query.status==='string'?req.query.status:undefined});
 const list=<T>(items:T[])=>({items,cursor:null});
-export async function buildServer(options:{config?:ServerConfig;store?:RecordStore;runner?:TaskRunner;logger?:boolean;releaseFetch?:typeof fetch}={}){
+export async function buildServer(options:{config?:ServerConfig;store?:RecordStore;runner?:TaskRunner;logger?:boolean;releaseFetch?:typeof fetch;telegramFetch?:typeof fetch}={}){
   const config=options.config||loadConfig(),store=options.store||new SqliteStore(join(config.dataDir,'dots.sqlite'));
   const network=new NetworkService({host:config.host,port:config.port}),connections=new HostConnections(store,new SecretVault(config.signingKey),{url:'http://127.0.0.1:'+config.port,adminKey:config.adminKey});
   const computerTransport=new ComputerTransport(store,new SecretVault(config.signingKey));
@@ -79,6 +80,8 @@ export async function buildServer(options:{config?:ServerConfig;store?:RecordSto
   }};
   runtime=new OrbitRuntime(store,runner,{settings,defaultCwd:join(config.dataDir,'workspaces'),steer:async(task,text)=>{const params={threadId:task.threadId,expectedTurnId:task.turnId,input:[{type:'text',text,text_elements:[]}]};if(task.computerId){await workers.execute(task.computerId,'rpc',{request:{method:'turn/steer',params}});return true;}const rpc=new RpcClient({url:settings().appServerUrl});try{await rpc.connect();await rpc.request('initialize',{clientInfo:{name:'dots_steer',version:'0.1.0'},capabilities:{experimentalApi:true}});rpc.notify('initialized');await rpc.request('turn/steer',params);return true;}finally{rpc.close();}},defaultComputerId:()=>store.get<any>('settings','owner')?.defaultComputerId||workers.list().find(c=>c.state==='online'&&c.platform==='win32')?.id||null});
   integrations=new IntegrationService(store,{encryptionKey:config.signingKey,inbound:async(dotId,text,channel,requestId)=>runtime.submitMessage(dotId,{text,channel,requestId}),emit:(t,d)=>external.publish(t,d),authorizeSend:async(c,name,args)=>{const input=toolContext.getStore();if(!input||input.task.source==='proactive')return false;return runtime.requestApproval(input.task.id,{kind:'external_send',title:`${c.name}: ${name}`,detail:JSON.stringify(args),request:{connectorId:c.id,tool:name,arguments:args}});}});
+  const telegram=new TelegramService(store,runtime,new SecretVault(config.signingKey),options.telegramFetch);
+  app.addHook('onReady',async()=>{telegram.start();});
   const requireAdmin=async(req:any,reply:any)=>{if(!auth.verify(bearer(req.headers.authorization),['admin']))return reply.code(401).send({error:'Authentication required'});};
   const requireWorker=async(req:any,reply:any)=>{const c=auth.verify(bearer(req.headers.authorization),['worker']);if(!c)return reply.code(401).send({error:'Worker authentication required'});req.computerId=c.sub;};
   const busy=()=>['running','queued','waiting_approval'].some(status=>runtime.listTasks({status}).length>0)||['running','queued'].some(status=>query<object>(store,'worker_jobs',{where:{status},limit:1}).length>0);
@@ -94,6 +97,11 @@ export async function buildServer(options:{config?:ServerConfig;store?:RecordSto
     admin.addHook('preHandler',requireAdmin);
     admin.get('/overview',async()=>({dots:runtime.listDots(),tasks:runtime.listTasks(),activity:runtime.listActivity({},100),outputs:runtime.listOutputs(),computers:workers.list(),pendingApprovals:runtime.listApprovals().filter(a=>a.status==='pending').length,settings:settings()}));
     admin.get('/settings',async()=>settings());
+    admin.get('/telegram',async()=>telegram.settings());
+    admin.patch('/telegram',async req=>telegram.update(z.object({enabled:z.boolean().optional(),botToken:z.string().trim().max(250).optional(),ownerUserId:z.string().trim().max(20).optional(),dotId:z.string().max(100).nullable().optional(),mirrorUserMessages:z.boolean().optional(),mirrorReplies:z.boolean().optional()}).strict().parse(req.body)));
+    admin.delete('/telegram',async()=>telegram.disconnect());
+    admin.post('/telegram/test',async()=>telegram.test());
+    admin.post('/telegram/test-message',async()=>telegram.testMessage());
     admin.get('/computer-transport',async()=>computerTransport.list());
     admin.put('/computer-transport',async req=>computerTransport.save(z.object({items:z.array(z.object({id:z.string().optional(),urls:z.array(z.string().max(2048)).min(1).max(8),username:z.string().max(1024).optional(),credential:z.string().max(2048).optional()})).max(8)}).parse(req.body).items));
     admin.get('/connections',async()=>connections.status());
@@ -200,6 +208,6 @@ export async function buildServer(options:{config?:ServerConfig;store?:RecordSto
   app.all('/model-gateway/:endpoint',async(req,reply)=>{if(!auth.equals(bearer(req.headers.authorization)||'',gatewayKey(config.signingKey)))return reply.code(401).send({error:'Model gateway key required'});return modelProxy(req,reply,providers,(req.params as any).endpoint);});
   await registerNative(app,{config,providers,store,runtime,auth,blobs,workers,integrations,external});
   const repliesOff=runtime.subscribe(event=>{if(event.type!=='task.updated')return;const task=event.data.task as any;if(task?.status!=='completed'||!task.result||store.get('manual_tool_calls',task.id))return;void integrations.enqueueReply(task.id,task.result).then(outbox=>{if(!outbox||outbox.status!=='approval_required'||store.get('outbox_tasks',outbox.id))return;const delivery=runtime.createTask({dotId:task.dotId,title:'Reply delivery',input:'Review and deliver the channel reply',source:'manual'});store.put('manual_tool_calls',{id:delivery.id,outboxId:outbox.id});store.put('outbox_tasks',{id:outbox.id,taskId:delivery.id});}).catch(()=>runtime.activity(task.dotId,task.id,'channel.reply_failed','Reply could not be queued'));});
-  app.addHook('onClose',async()=>{repliesOff();tools.close();const closing=integrations.stop();workers.close();await runtime.stop();await closing;if(store instanceof SqliteStore)store.close();});
+  app.addHook('onClose',async()=>{await telegram.stop();repliesOff();tools.close();const closing=integrations.stop();workers.close();await runtime.stop();await closing;if(store instanceof SqliteStore)store.close();});
   return {app,config,providers,store,auth,runtime,workers,integrations,blobs,external,settings};
 }

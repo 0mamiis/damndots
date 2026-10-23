@@ -2,6 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DotTools} from '../src/tools.js';
 import {SqliteStore} from '../src/storage.js';
+import {LocalCodex} from '../src/local-codex.js';
+
+test('local chat creation forwards the requested model without changing the local target',async()=>{
+ const client=new LocalCodex();let captured:any;
+ (client as any).request=async(tool:string,args:any)=>{captured={tool,args};return {ok:true};};
+ await client.call('local_codex_thread_start',{projectId:'project',message:'hello',model:'  selected/model  ',name:'Test'});
+ assert.equal(captured.tool,'create_thread');assert.equal(captured.args.model,'selected/model');assert.deepEqual(captured.args.target,{type:'project',projectId:'project',environment:{type:'local'}});
+ await client.call('local_codex_thread_start',{projectId:'project',message:'hello'});assert.ok(!('model' in captured.args));
+});
 
 test('restricted local dispatch requires explicit approval before any desktop request',async()=>{
  const store=new SqliteStore(':memory:');let dispatched=0,requested=0;

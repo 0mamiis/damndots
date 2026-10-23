@@ -38,7 +38,7 @@ function requestPipe(pipePath,method,params){
 }
 async function resolvePipe(){
  if(pipe){try{await requestPipe(pipe,'tools/list',{threadStartKind:'all'});return pipe;}catch{pipe=null;}}
- const names=fs.readdirSync('\\\\.\\pipe\\').filter(n=>n.startsWith('codex-browser-use-')).reverse();
+ const names=fs.readdirSync('\\\\.\\pipe\\').filter(n=>n.startsWith('codex-app-tools-')||n.startsWith('codex-browser-use-')).sort((a,b)=>Number(b.startsWith('codex-app-tools-'))-Number(a.startsWith('codex-app-tools-')));
  for(const name of names){
   try{const candidate='\\\\.\\pipe\\'+name;
    const result=await requestPipe(candidate,'tools/list',{threadStartKind:'all'});
