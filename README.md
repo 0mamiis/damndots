@@ -17,6 +17,8 @@ Self-hosted Dots for the Codex desktop app. Run the backend on your PC or a serv
 - Optional Codex chat coordination: inspect projects, create requested tasks, send follow-ups as your Dot and read real results on a backend or a connected Windows PC. See [setup and permission behavior](docs/DOT-CODEX-CHAT-MANAGEMENT.md).
 - A voice pipeline using speech recognition, the selected Dot model and speech synthesis. The installed Codex voice can be used when the account and service support it.
 
+Telegram private chat is configured on the **Telegram** sidebar page, including an owner-only allowlist and desktop/reply mirroring. See [Telegram setup](docs/TELEGRAM.md).
+
 Slack, Teams, email, GitHub, MCP and signed webhooks have adapters. Their protocol tests use controlled services; real account setup is still required. See [the verification record](docs/ACCEPTANCE.md) for what was actually tested.
 
 ## Recommended: let a coding agent install it

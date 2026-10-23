@@ -17,6 +17,7 @@ const allowed = new Set([
   "browser",
   "connectors",
   "voice",
+  "telegram",
   "providers",
   "models",
   "events",

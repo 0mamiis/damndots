@@ -34,6 +34,7 @@ import {
   VoicePanel,
 } from "./system-panels";
 import { ThemeToggle } from "./theme";
+import { TelegramPanel } from "./telegram-panel";
 import {ConnectionPanel} from './connection-panel';
 import {UpdateFooter,useReleaseUpdates} from './update-footer';
 import {
@@ -64,6 +65,7 @@ type PageKey =
   | "connectors"
   | "approvals"
   | "voice"
+  | "telegram"
   | "servers"
   | "settings";
 // Local host management remains available when the data backend is remote.
@@ -79,6 +81,7 @@ const pages: [PageKey, string, ReactElement][] = [
   ["connectors", "Connections", <PlugIcon key="i" />],
   ["approvals", "Approvals", <ShieldIcon key="i" />],
   ["voice", "Voice", <MicIcon key="i" />],
+  ["telegram", "Telegram", <svg key="telegram" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m21 3-7 18-4-7-7-4 18-7Z"/><path d="m10 14 5-5"/></svg>],
   ["settings", "Settings", <GearIcon key="i" />],
 ];
 const isPage = (value: string): value is PageKey =>
@@ -486,6 +489,8 @@ export function Dashboard({
               <ConnectionPanel />
             ) : page === "connectors" ? (
               <ConnectorPanel />
+            ) : page === "telegram" ? (
+              <><PageHeading eyebrow="Your private chat" title="Telegram" description="Connect your Telegram account and choose which messages to mirror." /><TelegramPanel /></>
             ) : page === "settings" ? (
               <SettingsPanel />
             ) : (
