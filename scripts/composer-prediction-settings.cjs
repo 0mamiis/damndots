@@ -1,5 +1,5 @@
 'use strict';
-const fs=require('fs'),path=require('path');
+const fs=require('fs'),path=require('path'),crypto=require('crypto');
 function validate(value){if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(k=>!['enabled','model','effort','fast'].includes(k))||typeof value.enabled!=='boolean'||value.model!==undefined&&value.model!==null&&(typeof value.model!=='string'||!value.model.trim()||value.model.length>300||/[\r\n\x00]/.test(value.model))||value.effort!=null&&!['none','minimal','low','medium','high','xhigh','max','ultra'].includes(value.effort)||value.fast!==undefined&&typeof value.fast!=='boolean')throw new Error('Invalid composer preferences');return {...value,enabled:value.enabled,...typeof value.model==='string'?{model:value.model.trim()}:{}};}
 function read(dir,appRoot){
  let preference={},status={},manifest={},installation={};
@@ -15,5 +15,8 @@ function read(dir,appRoot){
  const effort=preference.effort??null,fast=preference.fast===true;
  return {enabled,model,effort,fast,installed,connected,restartRequired:installation.state==='waiting-for-app-close',applied:connected&&status.enabled===enabled&&(status.model??null)===model&&(status.effort??null)===effort&&(status.fast===true)===fast,remoteEnabled:connected&&typeof status.remoteEnabled==='boolean'?status.remoteEnabled:null,updatedAt:connected?status.updatedAt:null};
 }
-function write(dir,patch){const value=validate(patch);fs.mkdirSync(dir,{recursive:true});const file=path.join(dir,'composer-predictions.json'),temporary=file+'.tmp';let previous={};try{previous=JSON.parse(fs.readFileSync(file,'utf8'));}catch{}fs.writeFileSync(temporary,JSON.stringify({enabled:value.enabled,model:value.model===undefined?previous.model??null:value.model,effort:value.effort===undefined?previous.effort??null:value.effort,fast:value.fast===undefined?previous.fast===true:value.fast,revision:Date.now()}),{mode:0o600});fs.renameSync(temporary,file);return value;}
+function write(dir,patch){const value=validate(patch);fs.mkdirSync(dir,{recursive:true});const file=path.join(dir,'composer-predictions.json'),temporary=file+'.tmp-'+crypto.randomUUID();let previous={};try{previous=JSON.parse(fs.readFileSync(file,'utf8'));}catch{}
+ try{fs.writeFileSync(temporary,JSON.stringify({enabled:value.enabled,model:value.model===undefined?previous.model??null:value.model,effort:value.effort===undefined?previous.effort??null:value.effort,fast:value.fast===undefined?previous.fast===true:value.fast,revision:Date.now()}),{mode:0o600,flag:'wx'});
+  for(let attempt=0;;attempt++){try{fs.renameSync(temporary,file);break;}catch(error){if(!['EPERM','EACCES','EBUSY'].includes(error.code)||attempt>=4)throw error;Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,20*(attempt+1));}}
+ }finally{try{fs.unlinkSync(temporary);}catch{}}return value;}
 module.exports={validate,read,write};
