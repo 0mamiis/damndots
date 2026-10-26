@@ -1,4 +1,6 @@
 import {existsSync,readFileSync} from 'node:fs';
+import {homedir} from 'node:os';
+import {join} from 'node:path';
 import type {ToolDefinition} from '@dots/contracts';
 import type {CodexSender} from './codex-sender.js';
 const str={type:'string'},num={type:'number'};
@@ -24,6 +26,15 @@ export class LocalCodex {
  private tokenFile=process.env.DOTS_LOCAL_CODEX_TOKEN_FILE||'C:\\ProgramData\\DotsCodexBridge\\local-token.txt';
  private url=process.env.DOTS_LOCAL_CODEX_URL||'http://127.0.0.1:9914';
  definitions(){return process.env.DOTS_LOCAL_CODEX_DISABLE!=='1'&&existsSync(this.tokenFile)?tools:[];}
+ async composerPreferences(patch?:{enabled:boolean;model?:string|null;effort?:string|null;fast?:boolean},models=false,timeoutMs=8000):Promise<unknown>{
+  const file=process.env.DOTS_LOCAL_CODEX_TOKEN_FILE||(process.platform==='win32'?join(homedir(),'.codex','dots-local-bridge','token.txt'):this.tokenFile);
+  const url=process.env.DOTS_LOCAL_CODEX_URL||(process.platform==='win32'?'http://127.0.0.1:9915':this.url);
+  if(!existsSync(file))throw Object.assign(new Error('The PC settings bridge is not configured on this server.'),{statusCode:503});
+  let r:Response;
+  try{r=await fetch(url+(models?'/composer-prediction-models':'/composer-predictions'),{method:patch?'PATCH':'GET',redirect:'error',headers:{'content-type':'application/json',authorization:'Bearer '+readFileSync(file,'utf8').trim()},...(patch?{body:JSON.stringify(patch)}:{}),signal:AbortSignal.timeout(timeoutMs)});}catch{throw Object.assign(new Error('The PC settings bridge is offline. Start the Codex proxy on your PC.'),{statusCode:503});}
+  if(!r.ok)throw Object.assign(new Error('The PC settings bridge needs updating (HTTP '+r.status+').'),{statusCode:502});
+  return r.json();
+ }
  private async request(tool:string,args:Record<string,unknown>,signal?:AbortSignal,sender?:CodexSender):Promise<any>{
   let response:Response;
   try{response=await fetch(this.url+'/call',{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+readFileSync(this.tokenFile,'utf8').trim()},body:JSON.stringify({tool,arguments:args,...sender?{sender}:{}}),signal:signal?AbortSignal.any([signal,AbortSignal.timeout(75000)]):AbortSignal.timeout(75000)});}

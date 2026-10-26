@@ -164,3 +164,7 @@ MIT licensed. Dependencies and separately installed applications keep their own 
 ## Version checks and updates
 
 The bottom of the sidebar shows the installed version and checks stable GitHub releases. Each release notification appears once. **Updates are never installed automatically.** Nothing changes until you press **Install update**; managed Git installations then stage, build and install it with startup verification and rollback. See [Updates](docs/UPDATES.md) for supported layouts and recovery.
+
+## Composer predictions
+
+The optional **Composer settings** page controls next-message suggestions inside Codex, including the OpenCodex model and thinking level. It is off until enabled and requires a compatible private Codex copy plus the local settings bridge. Ask a coding agent to follow [the setup and compatibility notes](docs/COMPOSER-PREDICTIONS.md).

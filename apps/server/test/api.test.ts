@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createServer } from 'node:http';
 import { buildServer } from '../src/app.js';
 test('release status is admin-only and the update notification is claimed exactly once per release',async()=>{
  let tag='v9.0.0';
@@ -34,6 +35,28 @@ test('Dots native bootstrap keeps the app navigation rail alongside Dot features
   assert.equal(payload.feature_gates['970190263'].value,true);
   assert.equal(payload.hash_used,'djb2');
  }finally{await f.cleanup();}
+});
+test('native composer predictions require an installed patch and explicit opt-in',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'dots-composer-'));const tokenFile=join(dir,'bridge-token');await writeFile(tokenFile,'test-bridge-token');
+ const previousUrl=process.env.DOTS_LOCAL_CODEX_URL,previousToken=process.env.DOTS_LOCAL_CODEX_TOKEN_FILE;
+ let state={enabled:false,installed:false};
+ const bridge=createServer((req,res)=>{assert.equal(req.headers.authorization,'Bearer test-bridge-token');res.setHeader('content-type','application/json');res.end(JSON.stringify(state));});
+ await new Promise<void>(resolve=>bridge.listen(0,'127.0.0.1',resolve));
+ process.env.DOTS_LOCAL_CODEX_URL='http://127.0.0.1:'+(bridge.address() as any).port;process.env.DOTS_LOCAL_CODEX_TOKEN_FILE=tokenFile;
+ let f:Awaited<ReturnType<typeof fixture>>|undefined;
+ try{
+  f=await fixture({run:async()=>{throw new Error('No task expected');}});
+  const url='/backend-api/wham/predictions/config';assert.equal((await f.app.inject(url)).statusCode,401);
+  const headers={authorization:'Bearer '+f.auth.nativeTokens('composer-client').access_token};
+  const check=async()=>{const r=await f!.app.inject({url,headers});assert.equal(r.statusCode,200);return r.json().is_enabled;};
+  assert.equal(await check(),false);state={enabled:true,installed:false};assert.equal(await check(),false);
+  state={enabled:true,installed:true};assert.equal(await check(),true);state={enabled:false,installed:true};assert.equal(await check(),false);
+ }finally{
+  if(f)await f.cleanup();await new Promise<void>(resolve=>bridge.close(()=>resolve()));
+  if(previousUrl===undefined)delete process.env.DOTS_LOCAL_CODEX_URL;else process.env.DOTS_LOCAL_CODEX_URL=previousUrl;
+  if(previousToken===undefined)delete process.env.DOTS_LOCAL_CODEX_TOKEN_FILE;else process.env.DOTS_LOCAL_CODEX_TOKEN_FILE=previousToken;
+  await rm(dir,{recursive:true,force:true});
+ }
 });
 test('automatic command approval is an explicit persistent owner setting and applies to runtime requests',async()=>{
  const f=await fixture({run:async(input,hooks)=>{const ok=await hooks.onApproval({kind:'item/commandExecution/requestApproval',title:'Read directory',detail:'',request:{}});return {text:String(ok),threadId:'auto-api',turnId:'turn-auto'};}});

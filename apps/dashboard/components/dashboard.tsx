@@ -35,6 +35,7 @@ import {
 } from "./system-panels";
 import { ThemeToggle } from "./theme";
 import { TelegramPanel } from "./telegram-panel";
+import { ChatSuggestionsPanel } from "./chat-suggestions-panel";
 import {ConnectionPanel} from './connection-panel';
 import {UpdateFooter,useReleaseUpdates} from './update-footer';
 import {
@@ -66,6 +67,7 @@ type PageKey =
   | "approvals"
   | "voice"
   | "telegram"
+  | "chat-suggestions"
   | "servers"
   | "settings";
 // Local host management remains available when the data backend is remote.
@@ -81,6 +83,7 @@ const pages: [PageKey, string, ReactElement][] = [
   ["connectors", "Connections", <PlugIcon key="i" />],
   ["approvals", "Approvals", <ShieldIcon key="i" />],
   ["voice", "Voice", <MicIcon key="i" />],
+  ["chat-suggestions", "Composer settings", <GearIcon key="suggestions" />],
   ["telegram", "Telegram", <svg key="telegram" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m21 3-7 18-4-7-7-4 18-7Z"/><path d="m10 14 5-5"/></svg>],
   ["settings", "Settings", <GearIcon key="i" />],
 ];
@@ -489,6 +492,8 @@ export function Dashboard({
               <ConnectionPanel />
             ) : page === "connectors" ? (
               <ConnectorPanel />
+            ) : page === "chat-suggestions" ? (
+              <><PageHeading eyebrow="Codex preferences" title="Composer settings" description="Configure suggestions shown inside the Codex chat input." /><ChatSuggestionsPanel /></>
             ) : page === "telegram" ? (
               <><PageHeading eyebrow="Your private chat" title="Telegram" description="Connect your Telegram account and choose which messages to mirror." /><TelegramPanel /></>
             ) : page === "settings" ? (

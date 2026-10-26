@@ -10,6 +10,8 @@ export function isDotsRoute(path:string):boolean{
 export function isLocalFirstRoute(path:string):boolean{return path.startsWith('/backend-api/files/download/')||path.startsWith('/backend-api/files/content/');}
 export const isStatsigRoute=(method:string|undefined,path:string)=>method==='POST'&&path==='/backend-api/wham/statsig/bootstrap';
 export const isAccountCheckRoute=(method:string|undefined,path:string)=>method==='GET'&&path.startsWith('/backend-api/accounts/check/');
+/** Composer predictions use the local Dots configuration, not the signed-in account's upstream configuration. */
+export const isComposerPredictionConfigRoute=(method:string|undefined,path:string)=>method==='GET'&&path==='/backend-api/wham/predictions/config';
 
 const object=(value:unknown):Record<string,any>|undefined=>value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,any>:undefined;
 /** Keeps the real account's feature flags and adds only the flags Dots needs. Returns undefined when hashes are incompatible. */

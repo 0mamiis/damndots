@@ -6,7 +6,7 @@ const config=JSON.parse(fs.readFileSync(path.join(dir,'config.json'),'utf8').rep
 const token=fs.readFileSync(path.join(dir,'token.txt'),'utf8').trim();
 const localPort=Number(config.localPort||9915),remotePort=Number(config.remotePort||9914);
 if([localPort,remotePort].some(p=>!Number.isInteger(p)||p<1||p>65535))throw new Error('Invalid bridge port');
-if(typeof config.sshHost!=='string'||!config.sshHost||config.sshHost.startsWith('-')||/[\s\r\n]/.test(config.sshHost))throw new Error('Configure an existing SSH host alias');
+if(!config.localOnly&&(typeof config.sshHost!=='string'||!config.sshHost||config.sshHost.startsWith('-')||/[\s\r\n]/.test(config.sshHost)))throw new Error('Configure an existing SSH host alias');
 if(token.length<32)throw new Error('Bridge token is too short');
 const gatewayUrl=new URL(config.nativeGateway);
 if(gatewayUrl.protocol!=='https:'||!['localhost','127.0.0.1','[::1]'].includes(gatewayUrl.hostname)||gatewayUrl.username||gatewayUrl.password)throw new Error('Native gateway must use local HTTPS');
@@ -53,6 +53,18 @@ const server=http.createServer(async(req,res)=>{
  const digest=x=>crypto.createHash('sha256').update(x).digest();
  const given=(req.headers.authorization||'').replace(/^Bearer /,'');
  if(!given||!crypto.timingSafeEqual(digest(given),digest(token)))return respond(401,{error:'Unauthorized'});
+ if(req.url==='/composer-prediction-models'&&req.method==='GET'){
+  try{return respond(200,await require('./composer-prediction-models.cjs').load());}
+  catch{return respond(503,{error:'OpenCodex is offline or its active model catalog is unavailable.'});}
+ }
+ if(req.url==='/composer-predictions'){
+  const preferences=require('./composer-prediction-settings.cjs'),appRoot=config.composerAppRoot||path.join(homedir(),'CodexPatched','app');
+  if(!path.isAbsolute(appRoot))return respond(500,{error:'The Codex application path must be absolute'});
+  if(req.method==='GET')return respond(200,preferences.read(dir,appRoot));
+  if(req.method!=='PATCH')return respond(405,{error:'Method not allowed'});
+  try{let value='';for await(const chunk of req){value+=chunk.toString();if(value.length>1024)return respond(413,{error:'Settings body is too large'});}preferences.write(dir,JSON.parse(value));return respond(200,preferences.read(dir,appRoot));}
+  catch{return respond(400,{error:'Expected only {enabled:boolean}'});}
+ }
  if(req.method!=='POST'||req.url!=='/call')return respond(404,{error:'Not found'});
  if(active>=8)return respond(429,{error:'Too many requests'});
  active++;let text='';
@@ -85,5 +97,5 @@ function connectTunnel(){
  ssh.stderr.on('data',d=>log(String(d).trim().slice(0,300)));
  ssh.on('error',e=>log(e.message));ssh.on('close',()=>{if(!closing)retry=setTimeout(connectTunnel,10000);});
 }
-server.listen(localPort,'127.0.0.1',()=>{log('Local bridge listening on 127.0.0.1:'+localPort);connectTunnel();});
+server.listen(localPort,'127.0.0.1',()=>{log('Local bridge listening on 127.0.0.1:'+localPort);if(!config.localOnly)connectTunnel();});
 for(const sig of ['SIGINT','SIGTERM'])process.on(sig,()=>{closing=true;clearTimeout(retry);ssh?.kill();server.close();process.exit(0)});

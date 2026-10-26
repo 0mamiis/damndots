@@ -35,6 +35,7 @@ import {UpdateService} from './updates.js';
 import {query} from './storage.js';
 import {scheduleRetention} from './retention.js';
 import {TelegramService} from './telegram.js';
+import {LocalCodex} from './local-codex.js';
 /** Codex istek gövdesini zstd ile sıkıştırıp gönderir; JSON ayrıştırmadan önce açılır. */
 const decodeBody=(body:Buffer,encoding:unknown):Buffer=>{switch(String(encoding||'').toLowerCase()){case 'zstd':return zstdDecompressSync(body);case 'gzip':case 'x-gzip':return gunzipSync(body);case 'br':return brotliDecompressSync(body);case 'deflate':return inflateSync(body);default:return body;}};
 const object=z.record(z.string(),z.unknown());
@@ -81,6 +82,7 @@ export async function buildServer(options:{config?:ServerConfig;store?:RecordSto
   runtime=new OrbitRuntime(store,runner,{settings,defaultCwd:join(config.dataDir,'workspaces'),steer:async(task,text)=>{const params={threadId:task.threadId,expectedTurnId:task.turnId,input:[{type:'text',text,text_elements:[]}]};if(task.computerId){await workers.execute(task.computerId,'rpc',{request:{method:'turn/steer',params}});return true;}const rpc=new RpcClient({url:settings().appServerUrl});try{await rpc.connect();await rpc.request('initialize',{clientInfo:{name:'dots_steer',version:'0.1.0'},capabilities:{experimentalApi:true}});rpc.notify('initialized');await rpc.request('turn/steer',params);return true;}finally{rpc.close();}},defaultComputerId:()=>store.get<any>('settings','owner')?.defaultComputerId||workers.list().find(c=>c.state==='online'&&c.platform==='win32')?.id||null});
   integrations=new IntegrationService(store,{encryptionKey:config.signingKey,inbound:async(dotId,text,channel,requestId)=>runtime.submitMessage(dotId,{text,channel,requestId}),emit:(t,d)=>external.publish(t,d),authorizeSend:async(c,name,args)=>{const input=toolContext.getStore();if(!input||input.task.source==='proactive')return false;return runtime.requestApproval(input.task.id,{kind:'external_send',title:`${c.name}: ${name}`,detail:JSON.stringify(args),request:{connectorId:c.id,tool:name,arguments:args}});}});
   const telegram=new TelegramService(store,runtime,new SecretVault(config.signingKey),options.telegramFetch);
+  const composerPreferences=new LocalCodex();
   app.addHook('onReady',async()=>{telegram.start();});
   const requireAdmin=async(req:any,reply:any)=>{if(!auth.verify(bearer(req.headers.authorization),['admin']))return reply.code(401).send({error:'Authentication required'});};
   const requireWorker=async(req:any,reply:any)=>{const c=auth.verify(bearer(req.headers.authorization),['worker']);if(!c)return reply.code(401).send({error:'Worker authentication required'});req.computerId=c.sub;};
@@ -97,6 +99,9 @@ export async function buildServer(options:{config?:ServerConfig;store?:RecordSto
     admin.addHook('preHandler',requireAdmin);
     admin.get('/overview',async()=>({dots:runtime.listDots(),tasks:runtime.listTasks(),activity:runtime.listActivity({},100),outputs:runtime.listOutputs(),computers:workers.list(),pendingApprovals:runtime.listApprovals().filter(a=>a.status==='pending').length,settings:settings()}));
     admin.get('/settings',async()=>settings());
+    admin.get('/chat-suggestions',async()=>composerPreferences.composerPreferences());
+    admin.get('/chat-suggestions/models',async()=>composerPreferences.composerPreferences(undefined,true));
+    admin.patch('/chat-suggestions',async req=>{const value=z.object({enabled:z.boolean(),model:z.string().trim().min(1).max(300).nullable().optional(),effort:z.enum(['none','minimal','low','medium','high','xhigh','max','ultra']).nullable().optional(),fast:z.boolean().optional()}).strict().parse(req.body);if(value.fast&&!isGptModel(value.model))throw Object.assign(new Error('Select a GPT prediction model to enable Fast.'),{statusCode:400});return composerPreferences.composerPreferences(value);});
     admin.get('/telegram',async()=>telegram.settings());
     admin.patch('/telegram',async req=>telegram.update(z.object({enabled:z.boolean().optional(),botToken:z.string().trim().max(250).optional(),ownerUserId:z.string().trim().max(20).optional(),dotId:z.string().max(100).nullable().optional(),mirrorUserMessages:z.boolean().optional(),mirrorReplies:z.boolean().optional()}).strict().parse(req.body)));
     admin.delete('/telegram',async()=>telegram.disconnect());

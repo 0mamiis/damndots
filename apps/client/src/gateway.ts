@@ -6,7 +6,7 @@ import {gatewayCertificates} from './certificates.js';
 import {allowsPlainHttp} from '@dots/contracts/network';
 import {readNativeIdentity,nativeIdentityRoute,projectNativeIdentity} from './native-identity.js';
 import {inspectRequest,requestTarget,guardMode,fingerprint} from './request-guard.js';
-import {isDotsRoute,isLocalFirstRoute,isStatsigRoute,isAccountCheckRoute,mergeStatsig,enableDotsAccount} from './native-upstream.js';
+import {isDotsRoute,isLocalFirstRoute,isStatsigRoute,isAccountCheckRoute,isComposerPredictionConfigRoute,mergeStatsig,enableDotsAccount} from './native-upstream.js';
 interface Tokens {access_token:string;id_token:string;refresh_token:string;}
 export interface ClientState {clientId:string;server:string;tokens:Tokens;}
 export interface GatewayOptions {server:string;enrollment?:string;dataDir:string;codexHome?:string;port?:number;appServerPort?:number;writeCodexProfile?:boolean;identityHome?:string;upstream?:string;logFile?:string;trace?:boolean;}
@@ -49,7 +49,7 @@ export class NativeGateway {
       const sendJson=(response:Response,body:unknown)=>{res.writeHead(response.status,headersOf(response));res.end(JSON.stringify(body));};
       const localDownload=(body:any)=>{const download=new URL(body.download_url);body.download_url=`https://localhost:${port}${download.pathname}${download.search}`;return body;};
       if(this.options.trace)this.log('request '+req.method+' '+url.pathname);if(this.options.trace&&/voice|realtime|settings/.test(url.pathname)&&payload){this.log('BODY '+url.pathname+' ct='+req.headers['content-type']+' '+payload.toString('utf8').replace(/a=[^\r\n]*|[a-z]=[^\r\n]{0,0}/g,'').slice(0,500).replace(/\s+/g,' '));}
-      let response:Response;const real=!!this.options.upstream&&url.pathname.startsWith('/backend-api/')&&!isDotsRoute(url.pathname);
+      let response:Response;const real=!!this.options.upstream&&url.pathname.startsWith('/backend-api/')&&!isDotsRoute(url.pathname)&&!isComposerPredictionConfigRoute(req.method,url.pathname);
       if(real&&isStatsigRoute(req.method,url.pathname)){
         // The real account keeps its own feature flags; Dots adds the few flags its screens need.
         const [realResponse,localResponse]=await Promise.allSettled([toReal(),toDots()]);
