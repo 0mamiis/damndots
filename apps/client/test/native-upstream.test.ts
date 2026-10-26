@@ -1,11 +1,14 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {createServer} from 'node:http';import {mkdtemp,rm,readFile} from 'node:fs/promises';import {tmpdir} from 'node:os';import {join} from 'node:path';import https from 'node:https';
 import {NativeGateway} from '../src/gateway.js';
-import {isDotsRoute,isLocalFirstRoute,mergeStatsig,enableDotsAccount} from '../src/native-upstream.js';
+import {isDotsRoute,isLocalFirstRoute,isComposerPredictionConfigRoute,mergeStatsig,enableDotsAccount} from '../src/native-upstream.js';
 const token=(body:unknown)=>'h.'+Buffer.from(JSON.stringify(body)).toString('base64url')+'.s';
 test('Dot routes are the only local routes; account, plugin and settings routes stay real',()=>{
  for(const path of ['/backend-api/tbo','/backend-api/tbo/one/computer/sessions','/backend-api/messaging/rooms/one/messages','/backend-api/cloud-aeons/primary','/backend-api/celsius/ws/user'])assert.equal(isDotsRoute(path),true,path);
  for(const path of ['/backend-api/settings/user','/backend-api/ps/plugins/list','/backend-api/connectors/directory/list','/backend-api/accounts/check/v4','/backend-api/automations','/backend-api/wham/tasks/list','/backend-api/tbofake'])assert.equal(isDotsRoute(path),false,path);
  assert.equal(isLocalFirstRoute('/backend-api/files/download/file_1'),true);
+ assert.equal(isComposerPredictionConfigRoute('GET','/backend-api/wham/predictions/config'),true);
+ assert.equal(isComposerPredictionConfigRoute('POST','/backend-api/wham/predictions/config'),false);
+ assert.equal(isComposerPredictionConfigRoute('GET','/backend-api/wham/predictions/config/other'),false);
 });
 test('real feature flags are preserved while Dots flags and availability are added; incompatible hashes never fabricate flags',()=>{
  const real={statsigPayload:JSON.stringify({hash_used:'djb2',feature_gates:{real:{value:true},shared:{value:false}},user:{userID:'actual'}})},local={statsigPayload:JSON.stringify({hash_used:'djb2',feature_gates:{dots:{value:true},shared:{value:true}},user:{userID:'local'}})};
@@ -30,6 +33,8 @@ test('gateway sends Dot traffic to Dots with its local token and everything else
   await gateway.start();const ca=await readFile(join(dir,'certs/ca.pem'));
   const call=(path:string,method='GET')=>new Promise<any>((resolve,reject)=>{const r=https.request('https://localhost:'+port+path,{method,ca,headers:{authorization:'Bearer desktop-login'}},res=>{let s='';res.on('data',b=>s+=b);res.on('end',()=>resolve(JSON.parse(s)));});r.on('error',reject);r.end(method==='POST'?'{}':undefined);});
   assert.equal((await call('/backend-api/tbo')).service,'dots');
+  assert.equal((await call('/backend-api/wham/predictions/config')).service,'dots');
+  assert.equal((await call('/backend-api/wham/predictions/config','POST')).service,'real');
   assert.equal((await call('/backend-api/ps/plugins/list')).service,'real');
   assert.equal((await call('/backend-api/settings/voices')).service,'real');
   const speechContext=JSON.parse(await readFile(join(dir,'codex-speech-headers.json'),'utf8'));
