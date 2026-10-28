@@ -99,6 +99,11 @@ export async function buildServer(options:{config?:ServerConfig;store?:RecordSto
     admin.addHook('preHandler',requireAdmin);
     admin.get('/overview',async()=>({dots:runtime.listDots(),tasks:runtime.listTasks(),activity:runtime.listActivity({},100),outputs:runtime.listOutputs(),computers:workers.list(),pendingApprovals:runtime.listApprovals().filter(a=>a.status==='pending').length,settings:settings()}));
     admin.get('/settings',async()=>settings());
+    admin.get('/orchestrator',async()=>composerPreferences.orchestratorPreferences());
+    admin.get('/orchestrator/models',async()=>composerPreferences.orchestratorPreferences(undefined,true));
+    admin.patch('/orchestrator',async req=>composerPreferences.orchestratorPreferences(z.object({mode:z.enum(['off','lead','plan','explore','verify','fix','subagents']),model:z.string().trim().min(1).max(300).nullable(),effort:z.enum(['none','minimal','low','medium','high','xhigh','max','ultra']).nullable(),fast:z.boolean()}).strict().parse(req.body)));
+    admin.get('/token-speed',async()=>composerPreferences.tokenSpeedPreferences());
+    admin.patch('/token-speed',async req=>composerPreferences.tokenSpeedPreferences(z.object({enabled:z.boolean(),aggregation:z.enum(['latest','average']),decimals:z.number().int().min(0).max(2),animate:z.boolean()}).strict().parse(req.body)));
     admin.get('/chat-suggestions',async()=>composerPreferences.composerPreferences());
     admin.get('/chat-suggestions/models',async()=>composerPreferences.composerPreferences(undefined,true));
     admin.patch('/chat-suggestions',async req=>{const value=z.object({enabled:z.boolean(),model:z.string().trim().min(1).max(300).nullable().optional(),effort:z.enum(['none','minimal','low','medium','high','xhigh','max','ultra']).nullable().optional(),fast:z.boolean().optional()}).strict().parse(req.body);if(value.fast&&!isGptModel(value.model))throw Object.assign(new Error('Select a GPT prediction model to enable Fast.'),{statusCode:400});return composerPreferences.composerPreferences(value);});

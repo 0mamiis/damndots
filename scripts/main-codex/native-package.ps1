@@ -45,6 +45,33 @@ if(-not(Test-Path -LiteralPath $cliExe) -or -not(Test-Path -LiteralPath $cliHash
 }
 $enabled=$null
 $enabledEnvironment=$null
+$taskbarSource=Join-Path $PSScriptRoot 'taskbar-identity.cs'
+$taskbarExe=Join-Path $data 'taskbar-identity.exe'
+$taskbarHash=(Get-FileHash -LiteralPath $taskbarSource -Algorithm SHA256).Hash
+$taskbarHashFile=Join-Path $data 'taskbar-identity.source-hash'
+if(-not(Test-Path $taskbarExe) -or -not(Test-Path $taskbarHashFile) -or (Get-Content $taskbarHashFile -Raw).Trim() -ne $taskbarHash){
+ if(Test-Path $taskbarExe){Remove-Item -LiteralPath $taskbarExe}
+ Add-Type -TypeDefinition ([IO.File]::ReadAllText($taskbarSource)) -OutputAssembly $taskbarExe -OutputType WindowsApplication
+ [IO.File]::WriteAllText($taskbarHashFile,$taskbarHash)
+}
+# A stable icon and the official package identity keep the managed window on its existing pin.
+$iconFile=Join-Path $data 'codex.ico'
+$iconPackage=Get-AppxPackage -Name OpenAI.Codex|Select-Object -First 1
+$iconPng=Join-Path $iconPackage.InstallLocation 'assets/Square44x44Logo.targetsize-256_altform-unplated.png'
+if(Test-Path $iconPng){
+ # ICO supports PNG image entries. Preserve the package's full-resolution artwork.
+ $png=[IO.File]::ReadAllBytes($iconPng)
+ $memory=New-Object IO.MemoryStream
+ $writer=New-Object IO.BinaryWriter($memory)
+ try{
+  $writer.Write([uint16]0);$writer.Write([uint16]1);$writer.Write([uint16]1)
+  $writer.Write([byte]0);$writer.Write([byte]0);$writer.Write([byte]0);$writer.Write([byte]0)
+  $writer.Write([uint16]1);$writer.Write([uint16]32);$writer.Write([uint32]$png.Length);$writer.Write([uint32]22);$writer.Write($png)
+  [IO.File]::WriteAllBytes($iconFile,$memory.ToArray())
+ }finally{$writer.Dispose();$memory.Dispose()}
+}
+$taskbarProcess=$null
+if(-not $CheckOnly){$taskbarProcess=Start-Process -FilePath $taskbarExe -ArgumentList 'watch' -WindowStyle Hidden -PassThru}
 try{
   do{
    $inputState=Get-Content -LiteralPath $EnvironmentFile -Raw|ConvertFrom-Json
@@ -66,6 +93,7 @@ try{
   Start-Sleep -Seconds 2
  }while((Get-Process -Id $ParentPid -ErrorAction SilentlyContinue) -and -not(Test-Path -LiteralPath $stopFile))
 }finally{
+ if($taskbarProcess -and -not $taskbarProcess.HasExited){Stop-Process -Id $taskbarProcess.Id -ErrorAction SilentlyContinue}
  if($enabled){[void]$settings.Disable($enabled)}
  $settings.Dispose()
  Remove-Item -LiteralPath (Join-Path $data 'package-ready.json') -ErrorAction SilentlyContinue

@@ -7,7 +7,7 @@ export const projectRoot=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const rootFiles=['.gitignore','.dockerignore','.gitattributes','.env.example','.node-version','LICENSE','README.md','SECURITY.md','CONTRIBUTING.md','THIRD_PARTY_NOTICES.md','Dockerfile','compose.yaml','package.json','package-lock.json','tsconfig.base.json','Start-Dots.cmd','Start-Dots-Main.cmd','Open-Codex.cmd','Restore-Main-Profile.cmd'];
 const ignoredDirectories=new Set(['node_modules','.next','.data','.git','work','instance','dist','coverage','playwright-report','test-results']);
 const localHelpers=new Set(['browser-check.ts','cancel-test-task.ts','download-output.ts','grep-asset.cjs','inspect-state.ts','legacy-context-check.ts','native-profile-check.ts','pending-approvals.ts','probe-models.ts','resolve-test-approval.ts','restart-test-server.ps1']);
-const extensions=new Set(['.ts','.tsx','.mjs','.cjs','.js','.json','.md','.html','.css','.svg','.ps1','.cs','.sh','.cmd','.vbs','.yaml','.yml']);
+const extensions=new Set(['.ts','.tsx','.mjs','.cjs','.js','.json','.md','.html','.css','.svg','.ps1','.cs','.sh','.cmd','.vbs','.yaml','.yml','.toml']);
 export function excludedPath(path){
  const parts=path.replaceAll('\\','/').split('/'),name=parts.at(-1);
  return parts.some(p=>ignoredDirectories.has(p))||/^\.env(?:\.|$)/.test(name)&&name!=='.env.example'||/\.(?:log|tsbuildinfo|sqlite(?:-.+)?|db(?:-.+)?|key|pem|p12|pfx|crt|zip|tar|gz|wsl|iso|exe|dll)$/i.test(name)||['auth.json','client.json','computer.json'].includes(name)||name.startsWith('id_ed25519')||parts[0]==='scripts'&&(name.startsWith('live-')||localHelpers.has(name));

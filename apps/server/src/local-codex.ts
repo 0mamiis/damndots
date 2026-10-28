@@ -26,6 +26,21 @@ export class LocalCodex {
  private tokenFile=process.env.DOTS_LOCAL_CODEX_TOKEN_FILE||'C:\\ProgramData\\DotsCodexBridge\\local-token.txt';
  private url=process.env.DOTS_LOCAL_CODEX_URL||'http://127.0.0.1:9914';
  definitions(){return process.env.DOTS_LOCAL_CODEX_DISABLE!=='1'&&existsSync(this.tokenFile)?tools:[];}
+ async orchestratorPreferences(patch?:unknown,models=false):Promise<unknown>{
+  const file=process.env.DOTS_LOCAL_CODEX_TOKEN_FILE||(process.platform==='win32'?join(homedir(),'.codex','dots-local-bridge','token.txt'):this.tokenFile);
+  const url=process.env.DOTS_LOCAL_CODEX_URL||(process.platform==='win32'?'http://127.0.0.1:9915':this.url);
+  if(!existsSync(file))throw Object.assign(new Error('The PC settings bridge is not configured.'),{statusCode:503});
+  let r:Response;try{r=await fetch(url+'/orchestrator'+(models?'/models':''),{method:patch?'PATCH':'GET',headers:{'content-type':'application/json',authorization:'Bearer '+readFileSync(file,'utf8').trim()},...(patch?{body:JSON.stringify(patch)}:{}),redirect:'error',signal:AbortSignal.timeout(8000)});}catch{throw Object.assign(new Error('The PC settings bridge is offline.'),{statusCode:503});}
+  if(!r.ok)throw Object.assign(new Error('Orchestrator settings bridge failed (HTTP '+r.status+').'),{statusCode:502});return r.json();
+ }
+ async tokenSpeedPreferences(patch?:{enabled:boolean;aggregation:'latest'|'average';decimals:number;animate:boolean}):Promise<unknown>{
+  const file=process.env.DOTS_LOCAL_CODEX_TOKEN_FILE||(process.platform==='win32'?join(homedir(),'.codex','dots-local-bridge','token.txt'):this.tokenFile);
+  const url=process.env.DOTS_LOCAL_CODEX_URL||(process.platform==='win32'?'http://127.0.0.1:9915':this.url);
+  if(!existsSync(file))throw Object.assign(new Error('The PC settings bridge is not configured.'),{statusCode:503});
+  let r:Response;try{r=await fetch(url+'/token-speed',{method:patch?'PATCH':'GET',headers:{'content-type':'application/json',authorization:'Bearer '+readFileSync(file,'utf8').trim()},...(patch?{body:JSON.stringify(patch)}:{}),redirect:'error',signal:AbortSignal.timeout(8000)});}catch{throw Object.assign(new Error('The PC settings bridge is offline.'),{statusCode:503});}
+  if(!r.ok)throw Object.assign(new Error('Token speed settings bridge failed (HTTP '+r.status+').'),{statusCode:502});
+  return r.json();
+ }
  async composerPreferences(patch?:{enabled:boolean;model?:string|null;effort?:string|null;fast?:boolean},models=false,timeoutMs=8000):Promise<unknown>{
   const file=process.env.DOTS_LOCAL_CODEX_TOKEN_FILE||(process.platform==='win32'?join(homedir(),'.codex','dots-local-bridge','token.txt'):this.tokenFile);
   const url=process.env.DOTS_LOCAL_CODEX_URL||(process.platform==='win32'?'http://127.0.0.1:9915':this.url);

@@ -20,3 +20,11 @@ test('embedded secrets are reported by category without printing their values',(
  assert.deepEqual(inspectSource('fixture.ts','https://admin:password@dots.example.com'),[]);
  const dummy='real-secret';assert(inspectSource('source.ts','https://admin:'+dummy+'@service.invalid').includes('source.ts: credential in URL'));
 });
+test('source export includes bundled native agent definitions',async()=>{
+ const root=await mkdtemp(join(tmpdir(),'dots-release-agents-'));
+ try{
+  const dir=join(root,'scripts/desktop-features/agents');await mkdir(dir,{recursive:true});
+  await writeFile(join(dir,'lead.toml'),'name = "lead"\n');
+  assert.deepEqual(await collectReleaseFiles(root),['scripts/desktop-features/agents/lead.toml']);
+ }finally{await rm(root,{recursive:true,force:true});}
+});
