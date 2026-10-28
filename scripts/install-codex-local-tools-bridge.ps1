@@ -24,7 +24,7 @@ $grant='*'+$sid+':(OI)(CI)F'
 & icacls $Directory /inheritance:r /grant:r $grant '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null
 if($LASTEXITCODE -ne 0){throw 'Could not restrict the bridge directory permissions.'}
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'codex-local-tools-bridge.cjs') -Destination (Join-Path $Directory 'bridge.cjs') -Force
-foreach($helper in @('composer-prediction-settings.cjs','composer-prediction-models.cjs')){
+foreach($helper in @('composer-prediction-settings.cjs','composer-prediction-models.cjs','token-speed-settings.cjs','orchestrator-settings.cjs')){
  Copy-Item -LiteralPath (Join-Path $PSScriptRoot $helper) -Destination (Join-Path $Directory $helper) -Force
 }
 $tokenFile=Join-Path $Directory 'token.txt'

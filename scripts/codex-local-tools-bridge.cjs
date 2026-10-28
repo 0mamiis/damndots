@@ -10,6 +10,7 @@ if(!config.localOnly&&(typeof config.sshHost!=='string'||!config.sshHost||config
 if(token.length<32)throw new Error('Bridge token is too short');
 const gatewayUrl=new URL(config.nativeGateway);
 if(gatewayUrl.protocol!=='https:'||!['localhost','127.0.0.1','[::1]'].includes(gatewayUrl.hostname)||gatewayUrl.username||gatewayUrl.password)throw new Error('Native gateway must use local HTTPS');
+function managedAppRoot(){try{const current=JSON.parse(fs.readFileSync(path.join(dir,'config.json'),'utf8').replace(/^\uFEFF/,''));return current.composerAppRoot||path.join(homedir(),'CodexPatched','app');}catch{return config.composerAppRoot||path.join(homedir(),'CodexPatched','app');}}
 const allowed=new Set(['list_projects','list_threads','read_thread','create_thread','send_message_to_thread','wait_threads']);
 const log=text=>{try{const f=path.join(dir,'bridge.log');if(fs.existsSync(f)&&fs.statSync(f).size>262144)fs.writeFileSync(f,'');fs.appendFileSync(f,new Date().toISOString()+' '+text+'\n');}catch{}};
 let pipe=config.pipePath;
@@ -57,8 +58,24 @@ const server=http.createServer(async(req,res)=>{
   try{return respond(200,await require('./composer-prediction-models.cjs').load());}
   catch{return respond(503,{error:'OpenCodex is offline or its active model catalog is unavailable.'});}
  }
+ if(req.url==='/orchestrator/models'&&req.method==='GET'){
+  try{return respond(200,await require('./composer-prediction-models.cjs').load());}catch{return respond(503,{error:'OpenCodex model catalog is unavailable'});}
+ }
+ if(req.url==='/orchestrator'){
+  const preferences=require('./orchestrator-settings.cjs'),appRoot=managedAppRoot();
+  if(req.method==='GET')return respond(200,preferences.read(dir,appRoot));
+  if(req.method!=='PATCH')return respond(405,{error:'Method not allowed'});
+  try{let value='';for await(const chunk of req){value+=chunk.toString();if(value.length>1024)return respond(413,{error:'Settings body is too large'});}preferences.write(dir,JSON.parse(value));return respond(200,preferences.read(dir,appRoot));}catch{return respond(400,{error:'Invalid orchestrator preferences'});}
+ }
+ if(req.url==='/token-speed'){
+  const preferences=require('./token-speed-settings.cjs'),appRoot=managedAppRoot();
+  if(req.method==='GET')return respond(200,preferences.read(dir,appRoot));
+  if(req.method!=='PATCH')return respond(405,{error:'Method not allowed'});
+  try{let value='';for await(const chunk of req){value+=chunk.toString();if(value.length>1024)return respond(413,{error:'Settings body is too large'});}preferences.write(dir,JSON.parse(value));return respond(200,preferences.read(dir,appRoot));}
+  catch{return respond(400,{error:'Invalid token speed preferences'});}
+ }
  if(req.url==='/composer-predictions'){
-  const preferences=require('./composer-prediction-settings.cjs'),appRoot=config.composerAppRoot||path.join(homedir(),'CodexPatched','app');
+  const preferences=require('./composer-prediction-settings.cjs'),appRoot=managedAppRoot();
   if(!path.isAbsolute(appRoot))return respond(500,{error:'The Codex application path must be absolute'});
   if(req.method==='GET')return respond(200,preferences.read(dir,appRoot));
   if(req.method!=='PATCH')return respond(405,{error:'Method not allowed'});

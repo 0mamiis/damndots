@@ -19,6 +19,8 @@ Self-hosted Dots for the Codex desktop app. Run the backend on your PC or a serv
 
 Telegram private chat is configured on the **Telegram** sidebar page, including an owner-only allowlist and desktop/reply mirroring. See [Telegram setup](docs/TELEGRAM.md).
 
+**Token speed** and **Orchestrator** have separate dashboard pages. Their Codex UI, native-agent templates, settings bridge and version adapter are bundled and installed by the normal Damndots native startup; no separate manual patch workspace is needed. See [managed Codex desktop features](docs/CODEX-DESKTOP-FEATURES.md) for the supported version, lifecycle and migration behavior.
+
 Slack, Teams, email, GitHub, MCP and signed webhooks have adapters. Their protocol tests use controlled services; real account setup is still required. See [the verification record](docs/ACCEPTANCE.md) for what was actually tested.
 
 ## Recommended: let a coding agent install it

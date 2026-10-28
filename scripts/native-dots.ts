@@ -1,5 +1,6 @@
 // Original MSIX activation uses process-scoped API settings and the existing Codex home.
 // No primary OAuth/config file, shortcut or installed application file is rewritten.
+import net from 'node:net';
 import {NativeGateway} from '../apps/client/src/gateway.js';
 import {UPSTREAM_ORIGIN} from '../apps/client/src/native-upstream.js';
 import {acquireLaunchLock} from '../apps/client/src/launch-policy.js';
@@ -9,6 +10,8 @@ import {join,resolve} from 'node:path';
 import {homedir} from 'node:os';
 import {spawn,execFile} from 'node:child_process';
 import {promisify} from 'node:util';
+// @ts-ignore Bundled JavaScript desktop compatibility manager.
+import {ensureFeatures,provisionFeatureBridge} from './desktop-feature-manager.mjs';
 const root=resolve(import.meta.dirname,'..'),stack=resolve(process.env.DOTS_STACK_DIR||join(root,'.data/local-stack'));
 const data=join(stack,'native'),main=process.env.DOTS_MAIN_CODEX_HOME||join(homedir(),'.codex');
 if(existsSync(join(data,'disabled')))process.exit(0);
@@ -17,6 +20,10 @@ if(!release){console.log('The original Codex connection is already ready.');proc
 process.once('exit',()=>{void release();});
 const check=process.argv.includes('--check-only');
 await mkdir(data,{recursive:true});
+let managedFeatures:any;try{managedFeatures=ensureFeatures({nativeDir:data});}catch(error){console.error('Codex desktop features unavailable: '+(error as Error).message);}
+const featureHeartbeat=join(data,'desktop-features','heartbeat');
+const updateFeatureHeartbeat=()=>writeFile(featureHeartbeat,String(Date.now())).catch(()=>{});
+await updateFeatureHeartbeat();const featureTimer=setInterval(()=>void updateFeatureHeartbeat(),4000);featureTimer.unref();
 let target:any;try{target=JSON.parse(await readFile(join(data,'connection-target.json'),'utf8'));}catch{}
 if(target?.client)await writeFile(join(data,'client.json'),JSON.stringify(target.client),{mode:0o600});
 else if(!existsSync(join(data,'client.json')))await copyFile(join(stack,'client-main/client.json'),join(data,'client.json'));
@@ -41,11 +48,19 @@ const environment={
  NODE_EXTRA_CA_CERTS:certificate
 };
 await writeFile(join(data,'environment.json'),JSON.stringify({environment},null,2),{mode:0o600});
+let featureBridge:ReturnType<typeof spawn>|undefined;
+if(managedFeatures?.state==='ready'){
+ try{const bridge=provisionFeatureBridge(data,managedFeatures.app);const listening=await new Promise<boolean>(resolve=>{const socket=net.connect(bridge.port,'127.0.0.1');socket.once('connect',()=>{socket.destroy();resolve(true);});socket.once('error',()=>resolve(false));socket.setTimeout(1000,()=>{socket.destroy();resolve(false);});});
+ if(!listening)featureBridge=spawn(process.execPath,[bridge.script],{cwd:root,env:process.env,stdio:'inherit',windowsHide:true});
+ }catch(error){console.error('Codex preference bridge unavailable: '+(error as Error).message);}
+}
 const helper=spawn('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',join(root,'scripts/main-codex/native-package.ps1'),'-EnvironmentFile',join(data,'environment.json'),'-ParentPid',String(process.pid),...check?['-CheckOnly']:[]],{windowsHide:true,stdio:'inherit',env:{...process.env,PSModulePath:undefined}});
 let closing=false;
 async function close(){
  if(closing)return;closing=true;
  clearInterval(targetWatch);
+ if(featureBridge&&featureBridge.exitCode===null)featureBridge.kill();
+ clearInterval(featureTimer);await rm(featureHeartbeat,{force:true});
  if(helper.exitCode===null){
   await writeFile(join(data,'package-stop'),'stop');
   await new Promise<void>(resolve=>{const timeout=setTimeout(resolve,6000);helper.once('exit',()=>{clearTimeout(timeout);resolve();});});
