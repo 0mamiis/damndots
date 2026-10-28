@@ -1,7 +1,7 @@
 // Subagent model picker: reuse the native composer model picker component with subagent-scoped storage.
 module.exports=function(s,lit,sub){
  const BT=String.fromCharCode(96);
- const head=[...s.matchAll(/function ([\w$]+)\(e\)\{let t=\(0,[\w$]+\.c\)\(\d+\),\{serviceTierDefaults:n,conversationId:r,hideLabel:i,home:a,permissionsCwdOverride:o,permissionsHostId:s\}=e,c=[\w$]+\([\w$]+\),l=\(0,([\w$]+)\.useRef\)\(null\)/g)];
+ const head=[...s.matchAll(/function ([\w$]+)\(e\)\{let t=\(0,[\w$]+\.c\)\(\d+\),\{serviceTierDefaults:n,conversationId:r,hideLabel:i,home:a,permissionsCwdOverride:o,permissionsHostId:s\}=e,c=[\w$]+\([\w$]+\),(?:[\w$]+=\(0,[\w$]+\.use\)\([\w$]+\)!=null,)?[\w$]+=\(0,([\w$]+)\.useRef\)\(null\)/g)];
  if(head.length!==1)throw Error('composer model picker header matched '+head.length);
  const [hm,picker,R]=head[0];const start=head[0].index;
  const endRe=/return [\w$]+\}function Wet\(|,([\w$]+)\}function [\w$]+\(e\)\{let\{reasoningEffort:t\}=e;return t===\x60persistent\x60\}/g;endRe.lastIndex=start;const em=endRe.exec(s);if(!em)throw Error('composer model picker end missing');

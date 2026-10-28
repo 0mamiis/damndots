@@ -45,6 +45,7 @@ if(-not(Test-Path -LiteralPath $cliExe) -or -not(Test-Path -LiteralPath $cliHash
 }
 $enabled=$null
 $enabledEnvironment=$null
+& (Join-Path $PSScriptRoot 'install-desktop-launcher.ps1') -Data $data
 $taskbarSource=Join-Path $PSScriptRoot 'taskbar-identity.cs'
 $taskbarExe=Join-Path $data 'taskbar-identity.exe'
 $taskbarHash=(Get-FileHash -LiteralPath $taskbarSource -Algorithm SHA256).Hash
