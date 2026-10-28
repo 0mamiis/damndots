@@ -72,7 +72,9 @@ public static class DotsNativeResume {
    using(var sha=System.Security.Cryptography.SHA256.Create())using(var stream=File.OpenRead(exe)){
     string actual=BitConverter.ToString(sha.ComputeHash(stream)).Replace("-","").ToLowerInvariant();if(actual!=expectedHash)return false;
    }
-   var start=new System.Diagnostics.ProcessStartInfo(exe){UseShellExecute=false,WorkingDirectory=Path.GetDirectoryName(exe)};
+   string launcher=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"desktop-launcher.exe");
+   var start=new System.Diagnostics.ProcessStartInfo(File.Exists(launcher)?launcher:exe){UseShellExecute=false,WorkingDirectory=Path.GetDirectoryName(exe)};
+   if(File.Exists(launcher))start.Arguments="--managed";
    string file=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"environment.json");
    if(File.Exists(file)){string json=File.ReadAllText(file);int at=json.IndexOf("\"environment\"",StringComparison.Ordinal);if(at>=0)foreach(var pair in ReadPairs(json.Substring(at+13)))start.EnvironmentVariables[pair.Key]=pair.Value;}
    if(System.Diagnostics.Process.Start(start)==null)return false;
