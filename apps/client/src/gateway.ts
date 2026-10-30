@@ -6,7 +6,7 @@ import {gatewayCertificates} from './certificates.js';
 import {allowsPlainHttp} from '@dots/contracts/network';
 import {readNativeIdentity,nativeIdentityRoute,projectNativeIdentity} from './native-identity.js';
 import {inspectRequest,requestTarget,guardMode,fingerprint} from './request-guard.js';
-import {isDotsRoute,isLocalFirstRoute,isStatsigRoute,isAccountCheckRoute,isComposerPredictionConfigRoute,mergeStatsig,enableDotsAccount} from './native-upstream.js';
+import {isDotsRoute,isLocalFirstRoute,isStatsigRoute,isAccountCheckRoute,isWhamAccountCheckRoute,isComposerPredictionConfigRoute,mergeStatsig,enableDotsAccount,enableDotsWhamAccounts} from './native-upstream.js';
 interface Tokens {access_token:string;id_token:string;refresh_token:string;}
 export interface ClientState {clientId:string;server:string;tokens:Tokens;}
 export interface GatewayOptions {server:string;enrollment?:string;dataDir:string;codexHome?:string;port?:number;appServerPort?:number;writeCodexProfile?:boolean;identityHome?:string;upstream?:string;logFile?:string;trace?:boolean;}
@@ -36,6 +36,9 @@ export class NativeGateway {
       if(req.url==='/health'&&req.method==='GET'){res.writeHead(200,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify({ok:true,service:'dots-native-gateway',clientId:this.state!.clientId,server:this.options.server}));return;}
       const connectionServer=this.options.server,connectionState=this.state!;
       const url=requestTarget(req.url,connectionServer);if(!url){res.writeHead(400);res.end();return;}
+      // The 26.1027 computer viewer posts SDP to its cloud CUA URL. Its local adapter sends the same body to
+      // this alias with aeon_id in the query; Dots serves the session under the Dot id.
+      if(url.pathname==='/backend-api/tbo/computer/sessions'){const aeon=url.searchParams.get('aeon_id');if(aeon){url.pathname='/backend-api/tbo/'+encodeURIComponent(aeon)+'/computer/sessions';url.searchParams.delete('aeon_id');}}
       const mode=guardMode(),verdict=mode==='off'?{block:false,reason:''}:inspectRequest(req.headers,url);
       if(mode==='log'){const f=fingerprint(req.method,req.headers,url)+(verdict.block?' WOULD-BLOCK('+verdict.reason+')':'');if(!this.seen.has(f)){this.seen.add(f);console.error('Gateway guard: '+f);}}
       else if(verdict.block){this.log('blocked '+req.method+' '+url.pathname+': '+verdict.reason);console.error('Gateway blocked a request ('+verdict.reason+')');res.writeHead(403,{'content-type':'application/json'});res.end(JSON.stringify({error:'Request blocked'}));return;}
@@ -65,6 +68,10 @@ export class NativeGateway {
         const upstream=await toReal();
         if(upstream.ok){sendJson(upstream,enableDotsAccount(await upstream.json()));return;}
         this.log('account check real status '+upstream.status);response=upstream;
+      }else if(real&&isWhamAccountCheckRoute(req.method,url.pathname)){
+        const upstream=await toReal();
+        if(upstream.ok){sendJson(upstream,enableDotsWhamAccounts(await upstream.json()));return;}
+        this.log('wham account check real status '+upstream.status);response=upstream;
       }else if(real&&isLocalFirstRoute(url.pathname)){
         const local=await toDots().catch(()=>undefined);
         if(local&&local.ok)response=local;else{if(local)await local.arrayBuffer().catch(()=>undefined);response=await toReal();}
@@ -72,6 +79,7 @@ export class NativeGateway {
         response=await toReal();
         if(response.status>=500||response.status===401||response.status===403)this.log('real '+req.method+' '+url.pathname+' status '+response.status+(response.headers.get('cf-mitigated')?' (Cloudflare challenge)':''));
       }else response=await toDots();
+      if(this.options.trace&&!real)this.log('dots '+req.method+' '+url.pathname+' status '+response.status);
       if(real&&response.ok&&url.pathname==='/backend-api/settings/voices'&&appAuthorization){
         const allowed=['chatgpt-account-id','oai-did','oai-language','originator','sec-ch-ua','sec-ch-ua-mobile','sec-ch-ua-platform','user-agent','x-oai-mcp-form-version','x-openai-codex-window-type','x-openai-web-frontend','sec-fetch-site','sec-fetch-mode','sec-fetch-dest','accept-language'];
         const context=Object.fromEntries(allowed.filter(k=>typeof req.headers[k]==='string').map(k=>[k,req.headers[k]]));
@@ -92,6 +100,7 @@ export class NativeGateway {
       if(mode0==='log'&&target0){const f='UPGRADE '+fingerprint(req.method,req.headers,target0)+(verdict.block?' WOULD-BLOCK('+verdict.reason+')':'');if(!this.seen.has(f)){this.seen.add(f);console.error('Gateway guard: '+f);}}
       if(verdict.block&&(mode0==='on'||!target0)){this.log('blocked upgrade: '+verdict.reason);console.error('Gateway blocked a WebSocket ('+verdict.reason+')');socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');return;}
       const path=target0!.pathname;
+      if(this.options.trace)this.log('upgrade '+path);
       if(!path.startsWith('/native/app-server')&&!path.includes('celsius/ws')){socket.end('HTTP/1.1 426 Upgrade Required\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');return;}
       this.wsServer.handleUpgrade(req,socket,head,ws=>{void (async()=>{const p=new URL(req.url||'/',connectionServer),target=new URL(p.pathname.includes('celsius/ws')?'/native/pubsub':'/native/app-server',connectionServer);target.protocol=target.protocol==='https:'?'wss:':'ws:';target.search=p.search;
       const upstream=new WebSocket(target,{headers:{authorization:'Bearer '+await this.snapshotAccess(connectionState,connectionServer)}}),pending:{data:Buffer;binary:boolean}[]=[];ws.on('message',(data,binary)=>{if(upstream.readyState===WebSocket.OPEN)upstream.send(data,{binary});else if(pending.length<100)pending.push({data:Buffer.from(data as Buffer),binary});else ws.close(1008,'Request queue full');});upstream.on('open',()=>{for(const b of pending)upstream.send(b.data,{binary:b.binary});pending.length=0;});upstream.on('message',(data,binary)=>{if(ws.readyState===WebSocket.OPEN)ws.send(data,{binary});});upstream.on('error',()=>ws.close(1011,'Server unavailable'));upstream.on('close',()=>ws.close());ws.on('close',()=>upstream.close());})().catch(()=>ws.close(1011,'Client authentication failed'));});});

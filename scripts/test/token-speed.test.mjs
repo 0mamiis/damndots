@@ -19,8 +19,8 @@ test('renderer settings refresh once per poll and stops after unmount',async()=>
  const stop=context.damndotsWatchTpsPreferences();await new Promise(r=>setImmediate(r));assert.equal(context.damndotsTpsPreferences.enabled,false);assert.equal(events,1);await callback();assert.equal(events,1);stop();await callback();assert.equal(calls,2);assert.equal(stopped,true);
 });
 test('native preference IPC rejects untrusted frames and only returns allowlisted settings',()=>{
- const dir=fs.mkdtempSync(path.join(os.tmpdir(),'dots-tps-ipc-'));let handler;
- const nativeRequire=id=>id==='electron'?{ipcMain:{handle:(_name,fn)=>handler=fn}}:id==='node:os'?{homedir:()=>dir}:require(id);
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'dots-tps-ipc-'));const handlers={};
+ const nativeRequire=id=>id==='electron'?{ipcMain:{handle:(name,fn)=>handlers[name]=fn}}:id==='node:os'?{homedir:()=>dir}:require(id);
  const context=vm.createContext({require:nativeRequire,process:{pid:process.pid},Date,JSON});
- try{vm.runInContext(fs.readFileSync(new URL('../token-speed-runtime.js',import.meta.url),'utf8'),context);assert.equal(handler({senderFrame:{url:'https://evil.example/'}}),null);const result=handler({senderFrame:{url:'app://-/index.html'}});assert.deepEqual(Object.keys(result).sort(),['aggregation','animate','decimals','enabled']);assert.equal(result.enabled,true);}finally{fs.rmSync(dir,{recursive:true,force:true});}
+ try{vm.runInContext(fs.readFileSync(new URL('../token-speed-runtime.js',import.meta.url),'utf8'),context);const handler=handlers['damndots:token-speed'];assert.equal(typeof handler,'function');assert.equal(handler({senderFrame:{url:'https://evil.example/'}}),null);const result=handler({senderFrame:{url:'app://-/index.html'}});assert.deepEqual(Object.keys(result).sort(),['aggregation','animate','decimals','enabled','measurements']);assert.equal(result.enabled,true);assert.equal(typeof result.measurements,'object');}finally{fs.rmSync(dir,{recursive:true,force:true});}
 });

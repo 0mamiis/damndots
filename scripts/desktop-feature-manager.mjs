@@ -6,7 +6,7 @@ import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 const repo=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
-export const SUPPORTED=['26.1021.3705.0','26.1023.6621.0'];
+export const SUPPORTED=['26.1021.3705.0','26.1023.6621.0','26.1027.3384.0'];
 export function provisionFeatureBridge(nativeDir,appRoot){
  const dir=path.join(os.homedir(),'.codex','dots-local-bridge');fs.mkdirSync(dir,{recursive:true,mode:0o700});
  for(const name of ['codex-local-tools-bridge.cjs','composer-prediction-settings.cjs','composer-prediction-models.cjs','token-speed-settings.cjs','orchestrator-settings.cjs'])fs.copyFileSync(path.join(repo,'scripts',name),path.join(dir,name==='codex-local-tools-bridge.cjs'?'bridge.cjs':name));
@@ -32,7 +32,13 @@ export function ensureFeatures({nativeDir,adopt,sourcePackage=discoverPackage()}
  const status=path.join(dir,'status.json');
  if(!SUPPORTED.includes(sourcePackage.version)){atomic(status,{state:'unsupported-version',packageVersion:sourcePackage.version,supported:SUPPORTED});return {state:'unsupported-version',dir};}
  const scripts=['patch-native-agent-features.cjs','patch-token-speed.cjs','patch-orchestrator-settings.cjs','patch-desktop-startup.cjs'];
- const assets=['desktop-features/orchestrator-ui.js','desktop-features/native-subpicker.cjs','desktop-features/opencodex-tps-main.js','token-speed-renderer.js','token-speed-runtime.js','orchestrator-renderer.js','orchestrator-runtime.js','desktop-startup-patch.cjs','desktop-renderer-bindings.cjs'];
+ if(['26.1023.6621.0','26.1027.3384.0'].includes(sourcePackage.version))scripts.push('patch-permission-display.cjs');
+ // 3384 reads accounts in the desktop main process, so the gateway cannot mark the local Dot as available.
+ if(sourcePackage.version==='26.1027.3384.0')scripts.push('patch-orbit-navigation.cjs');
+ if(sourcePackage.version==='26.1027.3384.0')scripts.push('patch-computer-viewer.cjs');
+ if(sourcePackage.version==='26.1027.3384.0')scripts.push('patch-messaging-status.cjs');
+ const assets=['desktop-features/orchestrator-ui.js','desktop-features/native-subpicker.cjs','desktop-features/opencodex-tps-main.js','token-speed-renderer.js','token-speed-runtime.js','orchestrator-renderer.js','orchestrator-runtime.js','desktop-startup-patch.cjs','desktop-renderer-bindings.cjs','desktop-build-targets.cjs'];
+ if(['26.1023.6621.0','26.1027.3384.0'].includes(sourcePackage.version))assets.push('permission-display-patch.cjs','permission-display-renderer.js','permission-display-runtime.js');
  const revision=sha(Buffer.concat([...scripts,...assets].map(n=>fs.readFileSync(path.join(repo,'scripts',n)))));
  const app=path.join(dir,'app');let prior;try{prior=JSON.parse(fs.readFileSync(path.join(dir,'active.json'),'utf8'));}catch{}
  if(prior?.revision===revision&&prior.packageVersion===sourcePackage.version&&fs.existsSync(path.join(app,'ChatGPT.exe'))){const check=verifyApp(app);if(check.archiveHash!==prior.archiveHash||check.exeHash!==prior.exeHash)throw Error('Managed application integrity changed; refusing reuse');atomic(status,{state:'ready',packageVersion:prior.packageVersion,managedBy:'damndots',appRoot:app});return {state:'ready',dir,app};}

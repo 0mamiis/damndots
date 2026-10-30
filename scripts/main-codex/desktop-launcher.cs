@@ -50,6 +50,35 @@ public static class DotsDesktopLauncher {
   using(var process=Process.Start(query)){string version=process.StandardOutput.ReadToEnd().Trim();if(!process.WaitForExit(5000)||process.ExitCode!=0||version!=(string)data["packageVersion"])return false;}
   return String.Equals(Path.GetFullPath((string)data["exe"]),exe,StringComparison.OrdinalIgnoreCase)&&File.Exists(exe)&&Hash(exe)==(string)data["exeHash"];
  }
+ // Dots services create services.lock while they start. A shortcut clicked during that window waits briefly instead of opening the unmanaged Codex.
+ static bool DotsStarting(){
+  try{
+   string lockDir=Path.Combine(Path.GetDirectoryName(Root.TrimEnd(Path.DirectorySeparatorChar)),"services.lock");
+   return Directory.Exists(lockDir)&&(DateTime.UtcNow-Directory.GetLastWriteTimeUtc(lockDir)).TotalSeconds<120;
+  }catch{return false;}
+ }
+ static bool WaitForDots(){
+  if(!DotsStarting())return false;
+  Log("Dots services are starting; waiting for the managed Codex to become ready");
+  for(int i=0;i<60;i++){if(Ready())return true;Thread.Sleep(500);}
+  Log("Dots services did not become ready in time");
+  return false;
+ }
+ // Codex 26.1027+ keeps window storage in %APPDATA%\Codex\web. The package container redirects that to the package profile;
+ // the managed copy runs outside the container, so link the folder to the same profile while no managed window is open.
+ static void LinkPackageProfile(){
+  try{
+   string web=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),"Codex","web");
+   string pkg=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Packages","OpenAI.Codex_2p2nqsd0c76g0","LocalCache","Roaming","Codex","web");
+   if(!Directory.Exists(pkg)||ManagedProcess())return;
+   var info=new DirectoryInfo(web);
+   if(info.Exists&&(info.Attributes&FileAttributes.ReparsePoint)!=0)return;
+   Directory.CreateDirectory(Path.GetDirectoryName(web));
+   if(info.Exists){string aside=web+".damndots-"+DateTime.Now.ToString("yyyyMMdd-HHmmss");Directory.Move(web,aside);Log("Moved separate managed profile to "+aside);}
+   var mk=new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"cmd.exe"),"/d /c mklink /J \""+web+"\" \""+pkg+"\""){UseShellExecute=false,CreateNoWindow=true};
+   using(var p=Process.Start(mk)){p.WaitForExit(10000);Log("Linked managed profile to package profile exit="+p.ExitCode);}
+  }catch(Exception ex){Log("profile link skipped: "+ex.Message);}
+ }
  [STAThread] public static int Main(string[] args){
   try{
    SetCurrentProcessExplicitAppUserModelID(AppId);
@@ -59,9 +88,10 @@ public static class DotsDesktopLauncher {
     try{
      if(File.Exists(Path.Combine(Dir,"startup-update","active.json"))&&!LiveWindow())for(int i=0;i<20&&ManagedProcess();i++)Thread.Sleep(100);
      ApplyPending();
+     LinkPackageProfile();
      if(!Ready()){
       if(args.Length>0&&args[0]=="--managed")return 4;
-      Original();return 0;
+      if(!WaitForDots()){Original();return 0;}
      }
      for(int attempt=0;attempt<2;attempt++){
       using(var child=Process.Start(StartInfo(Path.Combine(App,"ChatGPT.exe")))){

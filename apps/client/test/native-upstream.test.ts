@@ -1,7 +1,16 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {createServer} from 'node:http';import {mkdtemp,rm,readFile} from 'node:fs/promises';import {tmpdir} from 'node:os';import {join} from 'node:path';import https from 'node:https';
 import {NativeGateway} from '../src/gateway.js';
-import {isDotsRoute,isLocalFirstRoute,isComposerPredictionConfigRoute,mergeStatsig,enableDotsAccount} from '../src/native-upstream.js';
+import {isDotsRoute,isLocalFirstRoute,isComposerPredictionConfigRoute,isWhamAccountCheckRoute,mergeStatsig,enableDotsAccount,enableDotsWhamAccounts} from '../src/native-upstream.js';
 const token=(body:unknown)=>'h.'+Buffer.from(JSON.stringify(body)).toString('base64url')+'.s';
+test('workspace account list gets the same Dots availability flags without changing the real plan',()=>{
+ assert.equal(isWhamAccountCheckRoute('GET','/backend-api/wham/accounts/check'),true);
+ assert.equal(isWhamAccountCheckRoute('POST','/backend-api/wham/accounts/check'),false);
+ assert.equal(isWhamAccountCheckRoute('GET','/backend-api/wham/accounts/check/other'),false);
+ const wham=enableDotsWhamAccounts({accounts:[{id:'real',plan_type:'k12',tbo_config:{tbo_available:false,other:true}},{id:'free',plan_type:'free'}],default_account_id:'real'}) as any;
+ assert.equal(wham.accounts[0].tbo_config.tbo_available,true);assert.equal(wham.accounts[0].tbo_config.plan_eligible,true);assert.equal(wham.accounts[0].tbo_config.other,true);
+ assert.equal(wham.accounts[0].plan_type,'k12');assert.equal(wham.accounts[1].tbo_config.tbo_available,true);assert.equal(wham.default_account_id,'real');
+ assert.equal((enableDotsWhamAccounts({accounts:{real:{account:{}}}}) as any).accounts.real.account.tbo_config,undefined);
+});
 test('Dot routes are the only local routes; account, plugin and settings routes stay real',()=>{
  for(const path of ['/backend-api/tbo','/backend-api/tbo/one/computer/sessions','/backend-api/messaging/rooms/one/messages','/backend-api/cloud-aeons/primary','/backend-api/celsius/ws/user'])assert.equal(isDotsRoute(path),true,path);
  for(const path of ['/backend-api/settings/user','/backend-api/ps/plugins/list','/backend-api/connectors/directory/list','/backend-api/accounts/check/v4','/backend-api/automations','/backend-api/wham/tasks/list','/backend-api/tbofake'])assert.equal(isDotsRoute(path),false,path);

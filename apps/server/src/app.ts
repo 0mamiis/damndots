@@ -23,7 +23,7 @@ import { registerNative, computerAppearance } from './native.js';
 import {dotBrowserSession} from './browser-session.js';
 import { importLegacy } from './migrate.js';
 import {modelProxy} from './model-proxy.js';
-import {ProviderService,isGptModel,DEFAULT_PROVIDER_ID} from './providers.js';
+import {ProviderService,isGptModel,DEFAULT_PROVIDER_ID,EFFORTS,type ModelInfo} from './providers.js';
 import {SecretVault} from './integrations/security.js';
 import {gatewayKey} from './config.js';
 import {RpcClient} from './runtime/index.js';
@@ -62,6 +62,33 @@ export async function buildServer(options:{config?:ServerConfig;store?:RecordSto
   const auth=new AuthService(config.signingKey,config.adminKey,store),external=new ExternalEvents(store),blobs=new BlobStore(join(config.dataDir,'files'),store);
   const settings=()=>({autoApproveExecution:false,...store.get<Settings&{id:string}>('settings','owner')||{id:'owner',appServerUrl:config.appServerUrl,model:config.model,reasoningEffort:config.reasoningEffort,serviceTier:config.serviceTier,maxParallelTasks:3,proactiveEnabled:false}});
   const providers=new ProviderService(store,{vault:new SecretVault(config.signingKey),fallback:{baseUrl:config.modelBaseUrl,apiKey:config.modelApiKey},activeId:()=>(settings() as any).activeProviderId??null});
+  // Codex 26.1027 exposes its native model catalog over app-server `model/list`. The provider's /models endpoint
+  // only advertises its API-enabled subset, so the settings picker looked stale next to the app's own model menu.
+  let codexModels:{at:number;rows:any[]}={at:0,rows:[]},codexModelsPending:Promise<any[]>|undefined;
+  const codexModelRows=async():Promise<any[]>=>{
+    const url=settings().appServerUrl||config.appServerUrl;
+    if(Date.now()-codexModels.at<30000&&codexModels.rows.length)return codexModels.rows;
+    if(codexModelsPending)return codexModelsPending;
+    const work=(async()=>{const rpc=new RpcClient({url});try{await rpc.connect();await rpc.request('initialize',{clientInfo:{name:'dots_models',version:'0.1.0'},capabilities:{experimentalApi:true}});rpc.notify('initialized');const result:any=await rpc.request('model/list',{});const rows=Array.isArray(result?.data)?result.data:Array.isArray(result?.models)?result.models:[];codexModels={at:Date.now(),rows};return rows;}catch{return codexModels.rows;}finally{rpc.close();}})();
+    codexModelsPending=Promise.race([work,new Promise<any[]>(resolve=>setTimeout(()=>resolve(codexModels.rows),5000))]).finally(()=>{codexModelsPending=undefined});
+    return codexModelsPending;
+  };
+  const mergeCodexModels=(providerModels:ModelInfo[],rows:any[]):ModelInfo[]=>{
+    const provider=new Map(providerModels.map(model=>[model.id,model])),seen=new Set<string>(),models:ModelInfo[]=[];
+    for(const row of rows){
+      const id=typeof row?.model==='string'?row.model:typeof row?.id==='string'?row.id:null;
+      if(!id||row?.hidden===true||seen.has(id))continue;
+      seen.add(id);
+      const base=provider.get(id);
+      const source:any[]=Array.isArray(row?.supportedReasoningEfforts)?row.supportedReasoningEfforts:[];
+      const efforts:string[]=[...new Set<string>(source.map((entry:any)=>String(entry?.reasoningEffort??entry??'').toLowerCase()).filter((effort:string)=>(EFFORTS as readonly string[]).includes(effort)))];
+      const preferred=typeof row?.defaultReasoningEffort==='string'?row.defaultReasoningEffort:null;
+      const fast=Array.isArray(row?.additionalSpeedTiers)&&row.additionalSpeedTiers.includes('fast')||Array.isArray(row?.serviceTiers)&&row.serviceTiers.some((tier:any)=>tier?.id==='priority')||base?.fast===true;
+      models.push({id,label:typeof row?.displayName==='string'&&row.displayName.trim()?row.displayName:base?.label,gpt:isGptModel(id),fast,efforts:efforts.length?efforts:base?.efforts??['low','medium','high'],defaultEffort:preferred&&efforts.includes(preferred)?preferred:base?.defaultEffort??null,contextWindow:base?.contextWindow??null});
+    }
+    for(const model of providerModels)if(!seen.has(model.id)){seen.add(model.id);models.push(model);}
+    return models;
+  };
   const tierFor=(model:string|null|undefined,tier:string|null|undefined,explicit:boolean)=>{if(!tier||!model||isGptModel(model))return tier??null;if(explicit)throw Object.assign(new Error('Fast mode is only available for GPT models'),{statusCode:400});return null;};
   const providerBody=z.object({name:z.string().trim().min(1).max(120),baseUrl:z.string().min(1).max(2000),apiKey:z.string().max(4096).nullable().optional(),apiFormat:z.enum(['responses','chat']),manualModels:z.array(z.string().trim().min(1).max(300)).max(200).optional()});
   const workers:WorkerBroker=new WorkerBroker(store,auth,{onlineMs:config.workerOnlineMs,emit:(t,d)=>external.publish(t,d),onToolCall:(name,args,input,signal):Promise<unknown>=>tools.call(name,args,input,signal)});
@@ -141,7 +168,7 @@ export async function buildServer(options:{config?:ServerConfig;store?:RecordSto
     admin.delete('/providers/:id',async req=>{const id=idOf(req),wasActive=providers.activeId()===id,deleted=providers.remove(id);if(wasActive)store.put('settings',{...settings(),activeProviderId:DEFAULT_PROVIDER_ID,model:null,serviceTier:null});return {deleted};});
     admin.post('/providers/:id/refresh-models',async req=>providers.refreshModels(idOf(req)));
     admin.post('/providers/:id/test',async req=>providers.test(idOf(req),z.object({model:z.string().max(300).optional()}).parse(req.body||{}).model));
-    admin.get('/models',async req=>providers.models(typeof (req.query as any).providerId==='string'?(req.query as any).providerId:undefined));
+    admin.get('/models',async req=>{const result=await providers.models(typeof (req.query as any).providerId==='string'?(req.query as any).providerId:undefined);return {...result,models:mergeCodexModels(result.models,await codexModelRows())};});
     admin.get('/updates',async req=>updates.status((req.query as any)?.refresh==='1'));
     admin.post('/updates/notice',async req=>{const {tag}=z.object({tag:z.string()}).parse(req.body),state=await updates.status();if(!state.available||tag!==state.latest?.tag)return {show:false};return store.transaction(()=>{if(store.get('update_notices',tag))return {show:false};store.put('update_notices',{id:tag,seenAt:new Date().toISOString()});return {show:true};});});
     admin.post('/updates/apply',async req=>updates.start(z.object({tag:z.string().regex(/^v\d+\.\d+\.\d+$/)}).parse(req.body).tag));

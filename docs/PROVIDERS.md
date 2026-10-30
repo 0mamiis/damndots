@@ -18,6 +18,7 @@ Dots routes Codex's model requests through its own **model gateway** (`/model-ga
 
 - The model is chosen from the fetched list everywhere (Settings, Dot profile, new Dot, new task). "Type a custom model name…" lets you enter a name that is not in the list.
 - Reasoning level options are the levels the provider reports per model (for example `reasoning_efforts`). If it reports none, low/medium/high are offered, and the choice is disabled for models that say they do not support it.
+- When the native Codex app is connected to this server, the model list also includes the models in Codex's own catalog. That catalog is refreshed about every 30 seconds.
 - **Fast mode** (`service_tier=priority`) is offered only for GPT model IDs. The server also refuses to assign Fast mode to a non-GPT model; if a Dot or setting moves to a non-GPT model, Fast mode turns off automatically.
 
 ## Security

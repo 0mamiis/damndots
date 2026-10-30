@@ -4,7 +4,7 @@ const {patchBootstrap}=require('./desktop-startup-patch.cjs');
 const source=fs.realpathSync(process.argv[2]),out=path.resolve(process.argv[3]||source),sha=b=>crypto.createHash('sha256').update(b).digest('hex');
 if(source.toLowerCase().includes('windowsapps')||out.toLowerCase().includes('windowsapps'))throw Error('Only private copies may be patched');
 const a=fs.readFileSync(path.join(source,'resources/app.asar')),old=a.subarray(16,16+a.readUInt32LE(12)),meta=JSON.parse(old),base=8+a.readUInt32LE(4),body=a.subarray(base);
-const files=meta.files['.vite'].files.build.files,names=Object.keys(files).filter(n=>/^bootstrap-.*\.js$/.test(n));
+const files=meta.files['.vite'].files.build.files,readFile=n=>body.subarray(+files[n].offset,+files[n].offset+files[n].size).toString();const names=Object.keys(files).filter(n=>/^bootstrap-.*\.js$/.test(n)||(/\.js$/.test(n)&&/setAppUserModelId\(/.test(readFile(n))&&/requestSingleInstanceLock\(/.test(readFile(n))));
 if(names.length!==1)throw Error('Ambiguous bootstrap module');
 const entry=files[names[0]],text=body.subarray(+entry.offset,+entry.offset+entry.size).toString(),patched=patchBootstrap(text);
 cp.execFileSync(process.execPath,['--input-type=module','--check'],{input:patched,windowsHide:true});
