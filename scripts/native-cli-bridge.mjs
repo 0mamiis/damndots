@@ -91,6 +91,9 @@ async function connectWithRetry(){
  }
 }
 const allowed=new Set(['thread/read','thread/resume','thread/turns/list','thread/items/list','thread/name/set','thread/archive','thread/unarchive','turn/interrupt']);
+// A Dot-owned thread lives on the Dot host. Every thread/turn request for it must reach that host,
+// otherwise the conversation list can read it but the composer cannot send into it.
+const dotRequest=/^(?:thread|turn)\//;
 async function connection(){
  if(remote?.readyState===WebSocket.OPEN)return remote;
  if(connecting)return connecting;
@@ -111,7 +114,7 @@ async function connection(){
 }
 async function route(line){
  let message;try{message=JSON.parse(line);}catch{cli.stdin.write(line+'\n');return;}
- if(message.id!==undefined&&allowed.has(message.method)&&typeof message.params?.threadId==='string'){
+ if(message.id!==undefined&&(allowed.has(message.method)||message.method!=null&&dotRequest.test(message.method))&&typeof message.params?.threadId==='string'){
   let owned=false;
   try{owned=await ownsWithRetry(message.params.threadId);}
   catch(error){process.stderr.write('Dot ownership lookup: '+String(error.message)+'\n');}

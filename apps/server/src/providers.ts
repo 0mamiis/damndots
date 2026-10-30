@@ -4,7 +4,7 @@ import { SecretVault, endpoint, IntegrationError } from './integrations/security
 
 export type ApiFormat = 'responses' | 'chat';
 export const EFFORTS = ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'] as const;
-export interface ModelInfo { id: string; gpt: boolean; fast: boolean; efforts: string[]; defaultEffort: string | null; contextWindow: number | null; manual?: boolean; }
+export interface ModelInfo { id: string; label?: string; gpt: boolean; fast: boolean; efforts: string[]; defaultEffort: string | null; contextWindow: number | null; manual?: boolean; }
 interface StoredProvider { id: string; name: string; baseUrl: string; apiFormat: ApiFormat; sealedKey: string | null; models: ModelInfo[]; modelsFetchedAt: string | null; lastError: string | null; createdAt: string; updatedAt: string; }
 export interface PublicProvider { id: string; name: string; baseUrl: string; apiFormat: ApiFormat; hasKey: boolean; builtin: boolean; models: ModelInfo[]; modelsFetchedAt: string | null; lastError: string | null; }
 export interface ResolvedProvider { id: string; baseUrl: string; apiKey: string; apiFormat: ApiFormat; }

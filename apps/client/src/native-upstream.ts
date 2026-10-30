@@ -10,6 +10,8 @@ export function isDotsRoute(path:string):boolean{
 export function isLocalFirstRoute(path:string):boolean{return path.startsWith('/backend-api/files/download/')||path.startsWith('/backend-api/files/content/');}
 export const isStatsigRoute=(method:string|undefined,path:string)=>method==='POST'&&path==='/backend-api/wham/statsig/bootstrap';
 export const isAccountCheckRoute=(method:string|undefined,path:string)=>method==='GET'&&path.startsWith('/backend-api/accounts/check/');
+/** Codex 26.1027+ reads the account list through the workspace route; it needs the same Dots availability flags. */
+export const isWhamAccountCheckRoute=(method:string|undefined,path:string)=>method==='GET'&&path==='/backend-api/wham/accounts/check';
 /** Composer predictions use the local Dots configuration, not the signed-in account's upstream configuration. */
 export const isComposerPredictionConfigRoute=(method:string|undefined,path:string)=>method==='GET'&&path==='/backend-api/wham/predictions/config';
 
@@ -23,6 +25,9 @@ export function mergeStatsig(real:unknown,local:unknown):unknown|undefined{
   if(!object(realPayload)||!object(localPayload?.feature_gates))return;
   if(realPayload.hash_used!=='djb2'||localPayload.hash_used!=='djb2')return;
   realPayload.feature_gates={...(object(realPayload.feature_gates)||{}),...localPayload.feature_gates};
+  // Codex 26.1027 hides the Remote location picker behind these rollout gates. The remote host can be
+  // an older Dots server that does not publish them, so the local gateway enables the UI here.
+  for(const id of ['4114442250','3296668107'])realPayload.feature_gates[id]={name:id,value:true,rule_id:'damndots-local',secondary_exposures:[],id_type:'userID'};
   return encoded?{...realBody,statsigPayload:JSON.stringify(realPayload)}:realPayload;
 }
 /** The account list stays real; only the Dots availability and eligibility flags are set, so a real plan that excludes Dots cannot lock the local Dot. */
@@ -31,4 +36,9 @@ export function enableDotsAccount(value:unknown):unknown{
   const next:Record<string,any>={};
   for(const [id,entry] of Object.entries(accounts)){const item=object(entry),account=object(item?.account);next[id]=item&&account?{...item,account:{...account,tbo_config:{...(object(account.tbo_config)||{}),tbo_available:true,plan_eligible:true}}}:entry;}
   return {...body,accounts:next};
+}
+/** Same availability rule for the list-shaped workspace account response used by newer Codex builds. */
+export function enableDotsWhamAccounts(value:unknown):unknown{
+  const body=object(value);if(!body||!Array.isArray(body.accounts))return value;
+  return {...body,accounts:body.accounts.map(item=>{const account=object(item);return account?{...account,tbo_config:{...(object(account.tbo_config)||{}),tbo_available:true,plan_eligible:true}}:item;})};
 }

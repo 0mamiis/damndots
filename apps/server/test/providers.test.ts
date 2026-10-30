@@ -45,7 +45,7 @@ async function fakeProvider() {
 }
 async function fixture() {
   const dir = await mkdtemp(join(tmpdir(), 'dots-prov-')), store = new SqliteStore(':memory:');
-  const config = { host: '127.0.0.1', port: 0, dataDir: dir, adminKey: 'private-test-key', signingKey: Buffer.alloc(32, 7), modelBaseUrl: 'http://127.0.0.1:1/v1', modelApiKey: '', appServerUrl: 'ws://localhost:9912', model: null, reasoningEffort: 'high', serviceTier: null, workerOnlineMs: 45000 };
+  const config = { host: '127.0.0.1', port: 0, dataDir: dir, adminKey: 'private-test-key', signingKey: Buffer.alloc(32, 7), modelBaseUrl: 'http://127.0.0.1:1/v1', modelApiKey: '', appServerUrl: 'ws://127.0.0.1:0', model: null, reasoningEffort: 'high', serviceTier: null, workerOnlineMs: 45000 };
   const services = await buildServer({ config, store, runner: { run: async () => { throw new Error('no task'); } } });
   await services.app.ready();
   const token = (await services.app.inject({ method: 'POST', url: '/api/v1/session', payload: { token: config.adminKey } })).json().accessToken;

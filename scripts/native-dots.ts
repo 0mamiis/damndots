@@ -41,7 +41,11 @@ if(!check)await run('certutil.exe',['-user','-addstore','Root',certificate],{win
 // Same environment as a normal launch except desktop API traffic. The app keeps its own CODEX_HOME, SQLite state,
 // real login and OpenCodex model routing; the gateway sends everything except Dot-owned routes to the real service.
 // CODEX_CLI_PATH selects the local bridge; cloud threads still need the native WebSocket transport.
+// Codex 26.1027+ picks its profile from the process; outside the package container that is an empty %APPDATA%\Codex.
+// Point the managed copy at the profile the official package uses so layout, settings and local data stay the same.
+const packageProfile=join(process.env.LOCALAPPDATA||join(homedir(),'AppData/Local'),'Packages','OpenAI.Codex_2p2nqsd0c76g0','LocalCache','Roaming','Codex');
 const environment={
+ ...existsSync(packageProfile)?{CODEX_ELECTRON_USER_DATA_PATH:packageProfile}:{},
  CODEX_API_BASE_URL:'https://localhost:'+port+'/backend-api',
  CODEX_CLI_PATH:join(data,'native-cli.exe'),
  ORBIT_DURABLE_WS_URL:'wss://localhost:'+port+'/native/app-server',

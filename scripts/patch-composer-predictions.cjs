@@ -5,7 +5,7 @@ const root=fs.realpathSync(requested);
 if(process.platform==='win32'&&root.toLowerCase().split(path.sep).includes('windowsapps'))throw Error('Patch a private staged copy, never the installed WindowsApps package');
 const file=path.join(root,'resources/app.asar'),archive=fs.readFileSync(file),oldHeader=archive.subarray(16,16+archive.readUInt32LE(12)),meta=JSON.parse(oldHeader),base=8+archive.readUInt32LE(4),body=archive.subarray(base),all=[];
 function walk(n,p=''){for(const[k,v]of Object.entries(n.files||{})){let q=p?p+'/'+k:k;v.files?walk(v,q):all.push([q,v]);}}walk(meta);
-const matches=all.filter(([name])=>/\.vite\/build\/main-.*\.js$/.test(name));if(matches.length!==1)throw Error('main module not unique');
+const buildEntries={};for(const[n,v]of all)if(n.startsWith('.vite/build/'))buildEntries[n.slice('.vite/build/'.length)]=v;const mainShort=require('./desktop-build-targets.cjs').mainBuildName(buildEntries,k=>body.subarray(+buildEntries[k].offset,+buildEntries[k].offset+buildEntries[k].size).toString());const matches=all.filter(([name])=>name==='.vite/build/'+mainShort);if(matches.length!==1)throw Error('main module not unique');
 const [name,entry]=matches[0];let source=body.subarray(+entry.offset,+entry.offset+entry.size).toString();
 function replaceOnce(a,b){if(source.split(a).length!==2)throw Error('Anchor changed: '+a);source=source.replace(a,b);}
 replaceOnce('this.unsubscribeSettings=n.onDidChange(oA.key,()=>this.clear())','this.damndotsPredictionCleanup=damndotsConnectComposerPredictions(this),this.unsubscribeSettings=n.onDidChange(oA.key,()=>this.clear())');

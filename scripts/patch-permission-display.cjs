@@ -1,0 +1,22 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),cp=require('node:child_process'),adapter=require('./permission-display-patch.cjs');
+const source=fs.realpathSync(process.argv[2]),out=path.resolve(process.argv[3]||source),sha=b=>crypto.createHash('sha256').update(b).digest('hex');
+if(source.toLowerCase().includes('windowsapps')||out.toLowerCase().includes('windowsapps'))throw Error('Only private application copies may be patched');
+const a=fs.readFileSync(path.join(source,'resources/app.asar')),old=a.subarray(16,16+a.readUInt32LE(12)),meta=JSON.parse(old),base=8+a.readUInt32LE(4),body=a.subarray(base),changes=[];
+function patch(name,edit){let e=meta;for(const p of name.split('/'))e=e.files[p];const s=body.subarray(+e.offset,+e.offset+e.size).toString();if(s.includes('damndotsPermissionInformationDialog(')||s.includes('/* damndots-custom-display */'))throw Error('Permission display already patched');const bytes=Buffer.from(edit(s));cp.execFileSync(process.execPath,['--input-type=module','--check'],{input:bytes,windowsHide:true});e.offset=String(body.length+changes.reduce((n,b)=>n+b.length,0));e.size=bytes.length;e.integrity.hash=sha(bytes);e.integrity.blocks=[];for(let i=0;i<bytes.length;i+=e.integrity.blockSize)e.integrity.blocks.push(sha(bytes.subarray(i,i+e.integrity.blockSize)));changes.push(bytes);}
+const assets=meta.files.webview.files.assets.files,names=Object.keys(assets),find=prefix=>{const n=names.filter(n=>n.startsWith(prefix)&&n.endsWith('.js'));if(n.length!==1)throw Error('Ambiguous '+prefix);return n[0];};
+const helper=fs.readFileSync(path.join(__dirname,'permission-display-renderer.js'),'utf8');
+patch('webview/assets/'+find('permissions-mode-dropdown-'),s=>adapter.fullAccess(s,helper));
+patch('webview/assets/'+find('app-primary-'),s=>adapter.ultra(s,helper));
+patch('webview/assets/'+find('app-initial-'),s=>adapter.legacyCustom(adapter.preferredCustom(s))+'\n/* damndots-custom-display */');
+const shared=names.filter(n=>/^app-shared-.*\.js$/.test(n)).filter(n=>{const e=assets[n];return body.subarray(+e.offset,+e.offset+e.size).toString().includes('function zlt(e,t,n,r)');});
+if(shared.length>1)throw Error('Custom permission eligibility module changed');
+if(shared.length===1)patch('webview/assets/'+shared[0],s=>adapter.custom(s)+'\n/* damndots-custom-display */');
+const builds=meta.files['.vite'].files.build.files,main=require('./desktop-build-targets.cjs').mainBuildName(builds,n=>body.subarray(+builds[n].offset,+builds[n].offset+builds[n].size).toString());
+patch('.vite/build/'+main,s=>s+'\n'+fs.readFileSync(path.join(__dirname,'permission-display-runtime.js'),'utf8'));
+patch('.vite/build/preload.js',s=>require('./desktop-build-targets.cjs').addPreloadBridge(s,'getPermissionDisplayPreferences','()=>{OWNER}.ipcRenderer.invoke("damndots:permission-display")'));
+const json=Buffer.from(JSON.stringify(meta)),size=(4+json.length+3)&~3,pickle=Buffer.alloc(4+size),head=Buffer.alloc(8);pickle.writeUInt32LE(size);pickle.writeUInt32LE(json.length,4);json.copy(pickle,8);head.writeUInt32LE(4);head.writeUInt32LE(pickle.length,4);
+const result=Buffer.concat([head,pickle,body,...changes]),exe=fs.readFileSync(path.join(source,'ChatGPT.exe')),needle=Buffer.from(sha(old)),at=exe.indexOf(needle);if(at<0||exe.indexOf(needle,at+1)>=0)throw Error('Executable integrity boundary changed');Buffer.from(sha(json)).copy(exe,at);
+fs.mkdirSync(path.join(out,'resources'),{recursive:true});fs.writeFileSync(path.join(out,'resources/app.asar'),result);fs.writeFileSync(path.join(out,'ChatGPT.exe'),exe);
+const rec=JSON.parse(fs.readFileSync(path.join(source,'renewal.json'),'utf8'));Object.assign(rec,{headerHash:sha(json),archiveHash:sha(result),exeHash:sha(exe),permissionDisplayPatch:1});fs.writeFileSync(path.join(out,'renewal.json'),JSON.stringify(rec,null,2));
+console.log('Permission display staged; six full ESM modules parsed; native policy and cyber-model restrictions preserved.');

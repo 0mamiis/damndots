@@ -26,10 +26,10 @@ patch('webview/assets/'+primary,s=>{
  const tick=String.fromCharCode(96),old='localStorage.getItem('+tick+'codex-orchestrator-subagent-model-v1'+tick+')||'+tick+tick;
  return rep(s,old,'localStorage.getItem('+tick+'codex-orchestrator-subagent-model-v1'+tick+')||JSON.stringify(window.__damndotsOrchestratorDefaults||null)');
 });
-const builds=meta.files['.vite'].files.build.files,main=Object.keys(builds).find(n=>n.startsWith('main-')&&n.endsWith('.js'));
+const builds=meta.files['.vite'].files.build.files,main=require('./desktop-build-targets.cjs').mainBuildName(builds,n=>body.subarray(+builds[n].offset,+builds[n].offset+builds[n].size).toString());
 patch('.vite/build/'+main,s=>s+'\n'+fs.readFileSync(path.join(__dirname,'orchestrator-runtime.js'),'utf8'));
 const tick=String.fromCharCode(96);
-patch('.vite/build/preload.js',s=>{const re=/([\w$]+)\.contextBridge\.exposeInMainWorld\(`electronBridge`,([\w$]+)\)/g;if([...s.matchAll(re)].length!==1)throw Error('Preload bridge boundary changed');return s.replace(re,(_,electron,bridge)=>bridge+'.getOrchestratorPreferences=()=>'+electron+'.ipcRenderer.invoke("damndots:orchestrator"),'+electron+'.contextBridge.exposeInMainWorld(`electronBridge`,'+bridge+')');});
+patch('.vite/build/preload.js',s=>s.includes('getOrchestratorPreferences')?s:require('./desktop-build-targets.cjs').addPreloadBridge(s,'getOrchestratorPreferences','()=>{OWNER}.ipcRenderer.invoke("damndots:orchestrator")'));
 const json=Buffer.from(JSON.stringify(meta)),payload=(4+json.length+3)&~3,pickle=Buffer.alloc(4+payload),head=Buffer.alloc(8);pickle.writeUInt32LE(payload);pickle.writeUInt32LE(json.length,4);json.copy(pickle,8);head.writeUInt32LE(4);head.writeUInt32LE(pickle.length,4);
 const result=Buffer.concat([head,pickle,body,...changed.map(x=>x.bytes)]),exe=fs.readFileSync(path.join(root,'ChatGPT.exe')),needle=Buffer.from(hash(oldHeader)),at=exe.indexOf(needle);if(at<0||exe.indexOf(needle,at+1)>=0)throw Error('EXE integrity anchor changed');Buffer.from(hash(json)).copy(exe,at);
 fs.writeFileSync(file,result);fs.writeFileSync(path.join(root,'ChatGPT.exe'),exe);
