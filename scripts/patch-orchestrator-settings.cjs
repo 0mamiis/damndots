@@ -8,8 +8,6 @@ function rep(s,a,b){if(s.split(a).length!==2)throw Error('Token speed anchor cha
 const assets=meta.files.webview.files.assets.files,initial=Object.keys(assets).find(n=>n.startsWith('app-initial-')&&n.endsWith('.js'));
 patch('webview/assets/'+initial,s=>{
  if(s.includes('var damndotsOrchestratorPreferences'))throw Error('Orchestrator settings already patched');
- s=rep(s,'return mode && Object.prototype.hasOwnProperty.call(CODEX_ORCH_TEXT, mode) ? mode : null;','return mode && Object.prototype.hasOwnProperty.call(CODEX_ORCH_TEXT, mode) ? mode : String(scopeId).startsWith("draft:")?damndotsOrchestratorPreferences.mode:null;');
- s=rep(s,'if (!Object.prototype.hasOwnProperty.call(modes, draftKey)) return;','if (!Object.prototype.hasOwnProperty.call(modes, draftKey)) modes[draftKey]=damndotsOrchestratorPreferences.mode;');
  const begin=s.indexOf('function codexOrchestratorSubmodelGet()'),end=s.indexOf('function codexOrchestratorModelList()',begin);
  if(begin<0||end<0)throw Error('Subagent preference functions missing');
  let part=s.slice(begin,end);
