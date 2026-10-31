@@ -223,6 +223,7 @@ var CODEX_ORCH_BTN="no-drag cursor-interaction items-center select-none disabled
 var CODEX_ORCH_POP="no-drag m-px flex select-none flex-col overflow-hidden bg-surface-elevated-secondary/90 text-default ring-(--color-border-overlay) ring-(length:--dropdown-overlay-ring-width) shadow-(--shadow-dropdown-overlay) backdrop-blur-sm rounded-2xl p-[var(--app-menu-gutter,var(--spacing))]";
 var codexOrchestratorPopup=null,codexOrchestratorComponent,codexOrchestratorTpsComponent;
 var CODEX_ORCH_THREAD_MODES = 'codex-orchestrator-thread-modes-v2';
+var CODEX_ORCH_PENDING_MODE = 'codex-orchestrator-pending-mode-v1';
 var codexOrchestratorScopeAtom;
 function codexOrchestratorReadModes() {
   try {
@@ -231,10 +232,41 @@ function codexOrchestratorReadModes() {
   } catch (error) { return {}; }
 }
 function codexOrchestratorMode(scopeId) {
-  if (!scopeId) return null;
   var modes = codexOrchestratorReadModes();
-  var mode = Object.prototype.hasOwnProperty.call(modes, String(scopeId)) ? modes[String(scopeId)] : null;
-  return mode && Object.prototype.hasOwnProperty.call(CODEX_ORCH_TEXT, mode) ? mode : null;
+  if (scopeId && Object.prototype.hasOwnProperty.call(modes, String(scopeId))) {
+    var explicit = modes[String(scopeId)];
+    return explicit && Object.prototype.hasOwnProperty.call(CODEX_ORCH_TEXT, explicit) ? explicit : null;
+  }
+  var defaults = window.__damndotsOrchestratorDefaults;
+  return defaults && Object.prototype.hasOwnProperty.call(CODEX_ORCH_TEXT, defaults.mode) ? defaults.mode : null;
+}
+function codexOrchestratorReadPending() {
+  try {
+    var pending = JSON.parse(localStorage.getItem(CODEX_ORCH_PENDING_MODE) || 'null');
+    if (!pending || typeof pending !== 'object' || !Number.isFinite(pending.at) || Date.now() - pending.at > 3600000) return null;
+    if (!Object.prototype.hasOwnProperty.call(CODEX_ORCH_TEXT, pending.mode) && pending.mode !== 'off') return null;
+    return pending;
+  } catch (error) { return null; }
+}
+function codexOrchestratorWritePending(mode, scopeId) {
+  try { localStorage.setItem(CODEX_ORCH_PENDING_MODE, JSON.stringify({ mode: mode, scopeId: scopeId || null, at: Date.now() })); } catch (error) {}
+}
+function codexOrchestratorClearPending() {
+  try { localStorage.removeItem(CODEX_ORCH_PENDING_MODE); } catch (error) {}
+}
+function codexOrchestratorClaimPending(scopeId) {
+  var pending = codexOrchestratorReadPending();
+  if (!pending || !scopeId) return null;
+  var pendingScope = pending.scopeId == null ? null : String(pending.scopeId);
+  if (pendingScope && pendingScope !== String(scopeId) && pendingScope.indexOf('draft:') !== 0) return null;
+  var modes = codexOrchestratorReadModes();
+  if (!Object.prototype.hasOwnProperty.call(modes, String(scopeId))) {
+    modes[String(scopeId)] = pending.mode;
+    try { localStorage.setItem(CODEX_ORCH_THREAD_MODES, JSON.stringify(modes)); } catch (error) {}
+  }
+  codexOrchestratorClearPending();
+  window.dispatchEvent(new Event('codex-orchestrator-change'));
+  return codexOrchestratorMode(scopeId);
 }
 function codexOrchestratorGet(scopeId) {
   var mode = codexOrchestratorMode(scopeId);
@@ -242,11 +274,18 @@ function codexOrchestratorGet(scopeId) {
   return index < 0 ? 0 : index;
 }
 function codexOrchestratorSet(index, scopeId) {
-  if (!scopeId) return;
   index = Math.max(0, Math.min(CODEX_ORCH_MODES.length - 1, index));
+  var mode = CODEX_ORCH_MODES[index][0];
+  if (!scopeId) {
+    codexOrchestratorWritePending(mode, null);
+    window.dispatchEvent(new Event('codex-orchestrator-change'));
+    return;
+  }
   var modes = codexOrchestratorReadModes();
-  modes[String(scopeId)] = CODEX_ORCH_MODES[index][0];
+  modes[String(scopeId)] = mode;
   localStorage.setItem(CODEX_ORCH_THREAD_MODES, JSON.stringify(modes));
+  if (String(scopeId).indexOf('draft:') === 0) codexOrchestratorWritePending(mode, String(scopeId));
+  else codexOrchestratorClearPending();
   window.dispatchEvent(new Event('codex-orchestrator-change'));
 }
 function codexOrchestratorBind(clientThreadId, threadId) {
@@ -255,10 +294,15 @@ function codexOrchestratorBind(clientThreadId, threadId) {
   var modes = codexOrchestratorReadModes();
   var draftKey = 'draft:' + String(clientThreadId);
   var threadKey = String(threadId);
-  if (!Object.prototype.hasOwnProperty.call(modes, draftKey)) return;
+  if (!Object.prototype.hasOwnProperty.call(modes, draftKey)) {
+    var pending = codexOrchestratorReadPending();
+    var defaults = window.__damndotsOrchestratorDefaults;
+    modes[draftKey] = pending && (pending.scopeId == null || String(pending.scopeId) === draftKey) ? pending.mode : defaults && defaults.mode ? defaults.mode : 'off';
+  }
   if (!Object.prototype.hasOwnProperty.call(modes, threadKey)) modes[threadKey] = modes[draftKey];
   delete modes[draftKey];
   localStorage.setItem(CODEX_ORCH_THREAD_MODES, JSON.stringify(modes));
+  codexOrchestratorClearPending();
   window.dispatchEvent(new Event('codex-orchestrator-change'));
   } catch (error) {
     // Preference persistence must never block Codex's own thread creation.
@@ -275,15 +319,18 @@ function codexOrchestratorSave(o){try{var k=Object.keys(o);for(var i=0;i<k.lengt
 function codexOrchestratorCollab(cm, options) { return cm; }
 var CODEX_ORCH_OFF_ULTRA="[ORCHESTRATOR OFF + ULTRA — THIS CHAT, CURRENT TURN]\nThe user selected Off in the orchestrator menu and Ultra reasoning for this turn. No orchestrator role workflow (Alt Ajanlar, Lead, Plan, Explore, Verify, Fix) is active and none of their phase or review requirements apply. Original Codex Ultra behaviour applies: you may proactively delegate bounded, independent subtasks to native subagents when that materially improves speed or quality of the current task; the Ultra selection is the user's authorization for this. Delegation is optional: handle greetings, status questions, small edits and tightly coupled work yourself, and do not invent busywork. Use only the native collaboration tools; do not create user-owned chats, external agent processes or background jobs. Keep the user's scope, permissions, project instructions and model choices.";
 function codexOrchestratorTurn(p, aeon, fallbackEffort) {
-  if (!p || aeon != null || !p.threadId || p.toolOutput != null || !p.input || !p.input.length) return p;
-  if (p.turnTrigger != null && p.turnTrigger !== 'composer') return p;
-  var mode = codexOrchestratorMode(p.threadId);
+  if (!p || aeon != null || p.toolOutput != null || !p.input || !p.input.length) return p;
+  if (p.turnTrigger != null && p.turnTrigger !== 'composer' && p.turnTrigger !== 'goal') return p;
+  var scopeId = p.threadId != null ? String(p.threadId) : p.clientThreadId != null ? 'draft:' + String(p.clientThreadId) : null;
+  if (!scopeId) return p;
+  var mode = codexOrchestratorMode(scopeId);
+  if (!Object.prototype.hasOwnProperty.call(codexOrchestratorReadModes(), scopeId)) { codexOrchestratorClaimPending(scopeId); mode = codexOrchestratorMode(scopeId); }
   var sent = codexOrchestratorSent();
   var context = Object.assign({}, p.additionalContext);
   var cmEffort = p.collaborationMode && p.collaborationMode.settings ? p.collaborationMode.settings.reasoning_effort : null;
   var effort = cmEffort != null ? cmEffort : p.effort != null ? p.effort : fallbackEffort;
   context.codex_orchestrator = { kind: 'application', value: mode ? CODEX_ORCH_TEXT[mode] + codexOrchestratorModelNote() : effort === 'ultra' ? CODEX_ORCH_OFF_ULTRA + codexOrchestratorModelNote() : CODEX_ORCH_OFF };
-  sent[p.threadId] = mode || 'off';
+  sent[scopeId] = mode || 'off';
   var result = Object.assign({}, p, { additionalContext: context });
   var cm = p.collaborationMode;
   if (cm && cm.settings && /^\[ORKESTRATÖR MODU:/.test(cm.settings.developer_instructions || '')) {
@@ -477,6 +524,7 @@ try { window.__codexTpsOnTurnStarted=codexTpsOnTurnStarted;window.__codexTpsOnTu
 function codexThreadTpsBadge(scopeId,R) {
   var m=codexTpsMetric(scopeId),s=R.useState(0),bump=s[1],shownState=R.useState(m.tps||0),shown=shownState[0],setShown=shownState[1];
   var badgeRef=R.useRef(null),scopeRef=R.useRef(scopeId);
+  var hovState=R.useState(false),hovered=hovState[0],setHovered=hovState[1];
   R.useEffect(function(){function update(){bump(function(x){return x+1})}window.addEventListener("codex-tps-change",update);window.addEventListener("storage",update);return function(){window.removeEventListener("codex-tps-change",update);window.removeEventListener("storage",update)}},[scopeId]);
   R.useEffect(function(){
     if(scopeRef.current!==scopeId){scopeRef.current=scopeId;setShown(m.tps||0);return;}
@@ -492,7 +540,9 @@ function codexThreadTpsBadge(scopeId,R) {
   },[m.tps,m.count,scopeId]);
   if(!m.count)return null;
   var visible=shown,number=visible>=100?Math.round(visible):visible>=10?visible.toFixed(0):visible.toFixed(1);
-  return R.createElement("span",{ref:badgeRef,className:"no-drag select-none whitespace-nowrap tabular-nums text-text",style:{fontSize:"12px",lineHeight:"18px",marginInlineEnd:"12px",fontWeight:400},title:m.title,"aria-label":m.title,"data-codex-tps":"","data-codex-tps-scope":scopeId||""},number+" tok/s");
+  var tipText=m.title;
+  var tipStyle={position:"absolute",bottom:"calc(100% + 8px)",left:"50%",transform:"translateX(-50%)",padding:"6px 10px",borderRadius:"10px",background:"var(--color-tooltip-background,var(--color-bg-tooltip,#3b3b3b))",color:"var(--color-tooltip-foreground,#f5f5f5)",fontSize:"12px",lineHeight:"16px",fontWeight:400,whiteSpace:"nowrap",boxShadow:"0 8px 24px rgba(0,0,0,.35)",border:"1px solid rgba(255,255,255,.08)",pointerEvents:"none",zIndex:60,opacity:hovered?1:0,transition:"opacity 120ms ease",visibility:hovered?"visible":"hidden"};
+  return R.createElement("span",{ref:badgeRef,className:"no-drag select-none whitespace-nowrap tabular-nums text-text",style:{position:"relative",display:"inline-flex",alignItems:"center",fontSize:"12px",lineHeight:"18px",marginInlineEnd:"12px",fontWeight:400},onMouseEnter:function(){setHovered(true)},onMouseLeave:function(){setHovered(false)},onFocus:function(){setHovered(true)},onBlur:function(){setHovered(false)},"aria-label":tipText,"data-codex-tps":"","data-codex-tps-scope":scopeId||""},number+" tok/s",R.createElement("div",{role:"tooltip",style:tipStyle,"data-codex-tps-tip":""},tipText));
 }
 
 function codexOrchestratorDropdown(R, children) {
