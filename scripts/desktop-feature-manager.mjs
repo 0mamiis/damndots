@@ -37,7 +37,12 @@ export function ensureFeatures({nativeDir,adopt,sourcePackage=discoverPackage()}
  if(sourcePackage.version==='26.1027.3384.0')scripts.push('patch-orbit-navigation.cjs');
  if(sourcePackage.version==='26.1027.3384.0')scripts.push('patch-computer-viewer.cjs');
  if(sourcePackage.version==='26.1027.3384.0')scripts.push('patch-messaging-status.cjs');
+ // Composer suggestions are opt-in: only patch the managed copy when this machine already has the setting.
+ const composerPrefs=path.join(os.homedir(),'.codex','dots-local-bridge','composer-predictions.json');
+ const composerEnabled=fs.existsSync(composerPrefs);
+ if(composerEnabled)scripts.push('patch-composer-predictions.cjs');
  const assets=['desktop-features/orchestrator-ui.js','desktop-features/native-subpicker.cjs','desktop-features/opencodex-tps-main.js','token-speed-renderer.js','token-speed-runtime.js','orchestrator-renderer.js','orchestrator-runtime.js','desktop-startup-patch.cjs','desktop-renderer-bindings.cjs','desktop-build-targets.cjs'];
+ if(composerEnabled)assets.push('native-prediction-preferences.js');
  if(['26.1023.6621.0','26.1027.3384.0'].includes(sourcePackage.version))assets.push('permission-display-patch.cjs','permission-display-renderer.js','permission-display-runtime.js');
  const revision=sha(Buffer.concat([...scripts,...assets].map(n=>fs.readFileSync(path.join(repo,'scripts',n)))));
  const app=path.join(dir,'app');let prior;try{prior=JSON.parse(fs.readFileSync(path.join(dir,'active.json'),'utf8'));}catch{}
