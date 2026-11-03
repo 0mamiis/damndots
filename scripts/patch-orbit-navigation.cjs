@@ -27,15 +27,33 @@ patch('webview/assets/'+initial,s=>{
   if(s.split(policy).length===2)s=s.replace(policy,()=>'DAt=U(Q,()=>({isLoading:!1,isError:!1,isCapable:!0}))/* damndots-orbit-navigation-v4 */');
   else if(s.includes('"orbit-navigation":DAt'))throw Error('Unsupported orbit navigation policy');
  }
+ // The Orbit capability (pb) also needs the accounts/check answer from chatgpt.com, which never carries
+ // the Dots flag and can be blocked outright. The local Dot is served by the gateway, so answer as capable.
+ if(!s.includes('/* damndots-orbit-profile-v6 */')){
+  const start=s.indexOf('pb=U(Q,({get:e})=>{let t=e(p_);if(t!=null&&e(Ndt))');
+  const end=s.indexOf('}}),DAt=',start);
+  if(start<0||end<0)throw Error('Unsupported Orbit profile capability');
+  s=s.slice(0,start)+'pb=U(Q,()=>({isLoading:!1,isError:!1,isCapable:!0}))/* damndots-orbit-profile-v6 */'+s.slice(end+3);
+ }
+ // The destination eligibility predicate deliberately drops orbit unless a cloud-workspace flag is set.
+ // The local Dot is served by the gateway, so it is eligible for the rail without that flag.
+ if(!s.includes('/* damndots-orbit-eligibility-v7 */')){
+  const eligibility=new RegExp('function ([\\w$]+)\\(e\\)\\{return e\\.id!=='+BT+'builtin:orbit'+BT+'&&e\\.id!=='+BT+'builtin:automations'+BT);
+  if(!eligibility.test(s))throw Error('Unsupported orbit destination eligibility');
+  s=s.replace(eligibility,(m,name)=>'function '+name+'(e){return /* damndots-orbit-eligibility-v7 */ e.id!=='+BT+'builtin:automations'+BT);
+ }
  return s;
 });
 
 patch('webview/assets/'+primary,s=>{
- if(s.includes('/* damndots-orbit-rail-v3 */'))return s;
- // Keep the local Dot visible as a standalone rail destination; newer builds select visibility per destination id.
- const vis='function Cbn(e,t){return t?e:e.filter(({id:e})=>e===' + BT + 'builtin:orbit' + BT;
- if(s.split(vis).length!==2)throw Error('Unsupported orbit destination visibility');
- return s+'/* damndots-orbit-rail-v3 */';
+ if(s.includes('/* damndots-orbit-rail-v4 */'))return s;
+ // The navigation rail only lists destinations that are pinned in the sidebar customization or marked
+ // visible by default, and the Dot is neither. Its capability is real, but the rail never rendered it.
+ // Mark the Dot visible by default so it is always offered as a rail destination.
+ const anchor='t=e.id===Ub.cme?';
+ if(s.split(anchor).length!==2)throw Error('Unsupported orbit destination visibility');
+ s=s.replace(anchor,()=> 't=e.id===' + BT + 'builtin:orbit' + BT + '?!0:e.id===Ub.cme?');
+ return s+'/* damndots-orbit-rail-v4 */';
 });
 
 const json=Buffer.from(JSON.stringify(meta)),payload=(4+json.length+3)&~3,pickle=Buffer.alloc(4+payload),head=Buffer.alloc(8);pickle.writeUInt32LE(payload);pickle.writeUInt32LE(json.length,4);json.copy(pickle,8);head.writeUInt32LE(4);head.writeUInt32LE(pickle.length,4);
