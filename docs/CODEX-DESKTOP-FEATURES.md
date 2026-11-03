@@ -6,7 +6,9 @@ Start-Dots → native-dots → desktop-feature-manager builds a private applicat
 
 Codex 26.1027 keeps window data under `%APPDATA%\Codex\web`, while a package-external copy starts with an empty profile. The launcher links the managed profile to the package profile with a junction before opening the app, so sign-in, layout, pins and local data stay identical; the previous standalone profile is moved aside with a timestamp instead of being deleted.
 
-Supported adapters are **26.1021.3705.0**, **26.1023.6621.0** and **26.1027.3384.0**. The startup, preload and main-process patches locate their targets by content where Codex renames chunks; each new Codex version still needs its own verified adapter before it is listed here. A different version reports `unsupported-version`; update the adapter and verify it before enabling that version. Updates never reuse incompatible assets silently.
+Supported adapters are **26.1021.3705.0**, **26.1023.6621.0**, **26.1027.3384.0** and **26.1027.6604.0**. The startup, preload and main-process patches locate their targets by content where Codex renames chunks; each new Codex version still needs its own verified adapter before it is listed here. A different version reports `unsupported-version`; update the adapter and verify it before enabling that version. Updates never reuse incompatible assets silently.
+
+Personal patches that must not be published can live in `.data/local-patches/` with a `list.json` array of script names; the manager runs them after the release patches and includes them in the build revision. Nothing in that folder is part of the repository.
 
 Managed files are under `.data/local-stack/native/desktop-features/`: `app/`, `active.json`, `status.json` and the running-service heartbeat. New builds parse every changed module as ESM and verify every ASAR entry/block plus executable/header hashes before activation. An app that is still running is not overwritten. Existing agent definitions are preserved; missing native role definitions are installed from the bundled templates.
 
