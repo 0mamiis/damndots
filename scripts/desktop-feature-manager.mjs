@@ -6,7 +6,7 @@ import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 const repo=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
-export const SUPPORTED=['26.1021.3705.0','26.1023.6621.0','26.1027.3384.0'];
+export const SUPPORTED=['26.1021.3705.0','26.1023.6621.0','26.1027.3384.0','26.1027.6604.0'];
 export function provisionFeatureBridge(nativeDir,appRoot){
  const dir=path.join(os.homedir(),'.codex','dots-local-bridge');fs.mkdirSync(dir,{recursive:true,mode:0o700});
  for(const name of ['codex-local-tools-bridge.cjs','composer-prediction-settings.cjs','composer-prediction-models.cjs','token-speed-settings.cjs','orchestrator-settings.cjs'])fs.copyFileSync(path.join(repo,'scripts',name),path.join(dir,name==='codex-local-tools-bridge.cjs'?'bridge.cjs':name));
@@ -32,19 +32,20 @@ export function ensureFeatures({nativeDir,adopt,sourcePackage=discoverPackage()}
  const status=path.join(dir,'status.json');
  if(!SUPPORTED.includes(sourcePackage.version)){atomic(status,{state:'unsupported-version',packageVersion:sourcePackage.version,supported:SUPPORTED});return {state:'unsupported-version',dir};}
  const scripts=['patch-native-agent-features.cjs','patch-token-speed.cjs','patch-orchestrator-settings.cjs','patch-desktop-startup.cjs'];
- if(['26.1023.6621.0','26.1027.3384.0'].includes(sourcePackage.version))scripts.push('patch-permission-display.cjs');
+ if(['26.1023.6621.0','26.1027.3384.0','26.1027.6604.0'].includes(sourcePackage.version))scripts.push('patch-permission-display.cjs');
  // 3384 reads accounts in the desktop main process, so the gateway cannot mark the local Dot as available.
- if(sourcePackage.version==='26.1027.3384.0')scripts.push('patch-orbit-navigation.cjs');
- if(sourcePackage.version==='26.1027.3384.0')scripts.push('patch-computer-viewer.cjs');
- if(sourcePackage.version==='26.1027.3384.0')scripts.push('patch-messaging-status.cjs');
+ if(['26.1027.3384.0','26.1027.6604.0'].includes(sourcePackage.version))scripts.push('patch-orbit-navigation.cjs');
+ if(['26.1027.3384.0','26.1027.6604.0'].includes(sourcePackage.version))scripts.push('patch-computer-viewer.cjs');
+ if(['26.1027.3384.0','26.1027.6604.0'].includes(sourcePackage.version))scripts.push('patch-messaging-status.cjs');
  // Composer suggestions are opt-in: only patch the managed copy when this machine already has the setting.
  const composerPrefs=path.join(os.homedir(),'.codex','dots-local-bridge','composer-predictions.json');
  const composerEnabled=fs.existsSync(composerPrefs);
  if(composerEnabled)scripts.push('patch-composer-predictions.cjs');
  const assets=['desktop-features/orchestrator-ui.js','desktop-features/native-subpicker.cjs','desktop-features/opencodex-tps-main.js','token-speed-renderer.js','token-speed-runtime.js','orchestrator-renderer.js','orchestrator-runtime.js','desktop-startup-patch.cjs','desktop-renderer-bindings.cjs','desktop-build-targets.cjs'];
  if(composerEnabled)assets.push('native-prediction-preferences.js');
- if(['26.1023.6621.0','26.1027.3384.0'].includes(sourcePackage.version))assets.push('permission-display-patch.cjs','permission-display-renderer.js','permission-display-runtime.js');
- const revision=sha(Buffer.concat([...scripts,...assets].map(n=>fs.readFileSync(path.join(repo,'scripts',n)))));
+ if(['26.1023.6621.0','26.1027.3384.0','26.1027.6604.0'].includes(sourcePackage.version))assets.push('permission-display-patch.cjs','permission-display-renderer.js','permission-display-runtime.js');
+ const localDir=path.join(repo,'.data','local-patches');let localScripts=[];try{localScripts=JSON.parse(fs.readFileSync(path.join(localDir,'list.json'),'utf8'));}catch{}
+ const revision=sha(Buffer.concat([...scripts,...assets].map(n=>fs.readFileSync(path.join(repo,'scripts',n))).concat(localScripts.map(n=>fs.readFileSync(path.join(localDir,n))))));
  const app=path.join(dir,'app');let prior;try{prior=JSON.parse(fs.readFileSync(path.join(dir,'active.json'),'utf8'));}catch{}
  if(prior?.revision===revision&&prior.packageVersion===sourcePackage.version&&fs.existsSync(path.join(app,'ChatGPT.exe'))){const check=verifyApp(app);if(check.archiveHash!==prior.archiveHash||check.exeHash!==prior.exeHash)throw Error('Managed application integrity changed; refusing reuse');atomic(status,{state:'ready',packageVersion:prior.packageVersion,managedBy:'damndots',appRoot:app});return {state:'ready',dir,app};}
  const staging=path.join(dir,'staging');
@@ -77,6 +78,7 @@ export function ensureFeatures({nativeDir,adopt,sourcePackage=discoverPackage()}
   }
   if(!fs.existsSync(path.join(staging,'renewal.json')))atomic(path.join(staging,'renewal.json'),{packageVersion:sourcePackage.version});
   for(const script of scripts)execFileSync(process.execPath,[path.join(repo,'scripts',script),staging],{windowsHide:true,stdio:'pipe'});
+  for(const script of localScripts)execFileSync(process.execPath,[path.join(localDir,script),staging],{windowsHide:true,stdio:'pipe'});
   const integrity=verifyApp(staging);
   atomic(path.join(staging,'damndots-desktop-features.json'),{managedBy:'damndots',schemaVersion:1,features:['token-speed','orchestrator'],packageVersion:sourcePackage.version,revision});
   // Never replace an active private app in place. Rename a released previous copy for recovery.
