@@ -18,6 +18,7 @@ function codexRspackParts(){
 // Rendered by the native model picker (inside the app's own React tree): tok/s badge, primary picker and the orchestrator/subagent picker.
 window.__codexOrchNativeWrap=function(R,main,Picker,props){
  var h=R.createElement;codexOrchestratorEnsureNative(R);
+ if(!document.getElementById('codex-orch-layout-style')){var st=document.createElement('style');st.id='codex-orch-layout-style';st.textContent='span:has(> [data-codex-orchestrator-host]),[data-codex-orchestrator-host]{display:contents}[data-codex-orchestrator-host] > [data-codex-tps]{order:-1}';document.head.appendChild(st)}
  if(!codexOrchestratorTpsComponent)codexOrchestratorTpsComponent=function(){return codexThreadTpsBadge(codexOrchestratorComposerScope(),R)};
  return h('span',{className:'flex min-w-0 items-center','data-codex-orchestrator-host':''},h(codexOrchestratorTpsComponent),main,h(Picker,Object.assign({},props,{codexSubagent:true})));
 };
