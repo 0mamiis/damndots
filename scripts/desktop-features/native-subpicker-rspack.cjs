@@ -3,7 +3,7 @@
 // The primary picker renders a second instance of itself (codexSubagent) next to it, so the instance keeps the
 // application's own providers, hooks and styling. The old (Vite) variant lives in native-subpicker.cjs.
 module.exports={picker,slider};
-function picker(s,lit,sub){
+function picker(s,lit,sub,textClass){
  const BT=String.fromCharCode(96);
  const head=[...s.matchAll(/function ([\w$]+)\(e\)\{let [\w$,]+=\(0,[\w$]+\.c\)\(\d+\),\{serviceTierDefaults:[\w$]+,conversationId:[\w$]+,hasThreadResumeFailed:[\w$]+,hideLabel:[\w$]+,home:[\w$]+,isCodexHome:[\w$]+,permissionsCwdOverride:[\w$]+,permissionsHostId:[\w$]+\}=e,/g)];
  if(head.length!==1)throw Error('Unsupported Codex composer model picker header ('+head.length+')');
@@ -22,14 +22,14 @@ function picker(s,lit,sub){
   b=sub(b,/\{serviceTierSettings:([\w$]+),setServiceTier:([\w$]+)\}=(\(0,[\w$]+\.[\w$]+\)\([\w$]+,[\w$]+\))/g,(m,a,c,call)=>'{serviceTierSettings:'+a+',setServiceTier:'+c+'}=codexSubagentTier(codexSub,'+call+','+lm[1]+','+lm[2]+')',1,'picker service tier');}
  {const dn=b.match(/displayName:([\w$]+\?[\w$]+\?\.displayName:[\w$]+\?\.displayName\?\?[\w$]+),serviceTierIconKind/);if(!dn)throw Error('Unsupported Codex picker model label');
   // The picker's own trigger (modelPickerTriggerConfig) renders selectedLabel; for the subagent instance it becomes the orchestrator label + model.
-  b=sub(b,/selectedLabel:([\w$]+)\?(\(0,([\w$]+)\.jsxs\)\("span",\{className:"flex min-w-0 items-center gap-1",children:\[[\w$]+\?null:\(0,[\w$]+\.jsx\)\("span",\{"aria-hidden":"true",children:"🌙"\}\),(\(0,[\w$]+\.jsx\)\(([\w$]+\.P),\{model:([\w$]+),displayName:[\w$]+\?\.displayName,stripGptPrefix:!0\}\)),(\(0,[\w$]+\.jsx\)\([\w$]+\.O,\{collapse:"none",children:\(0,[\w$]+\.jsx\)\([\w$]+\.A,\{\.\.\.[\w$]+\.h\[[\w$]+\]\}\)\}\))\]\}\)):void 0,/g,(m,flag,whole,jsx,modelEl,comp,model,eff)=>'selectedLabel:codexSub?codexSubagentTriggerChild('+R+',(0,'+jsx+'.jsxs)("span",{className:"flex min-w-0 items-center gap-1",children:[(0,'+jsx+'.jsx)('+comp+',{model:'+model+',displayName:'+dn[1]+',stripGptPrefix:!0}),'+eff+']})):'+flag+'?'+whole+':void 0,',1,'picker trigger label');}
+  b=sub(b,/selectedLabel:([\w$]+)\?(\(0,([\w$]+)\.jsxs\)\("span",\{className:"flex min-w-0 items-center gap-1",children:\[[\w$]+\?null:\(0,[\w$]+\.jsx\)\("span",\{"aria-hidden":"true",children:"🌙"\}\),(\(0,[\w$]+\.jsx\)\(([\w$]+\.P),\{model:([\w$]+),displayName:[\w$]+\?\.displayName,stripGptPrefix:!0\}\)),(\(0,[\w$]+\.jsx\)\([\w$]+\.O,\{collapse:"none",children:\(0,[\w$]+\.jsx\)\([\w$]+\.A,\{\.\.\.[\w$]+\.h\[[\w$]+\]\}\)\}\))\]\}\)):void 0,/g,(m,flag,whole,jsx,modelEl,comp,model,eff)=>'selectedLabel:codexSub?codexSubagentTriggerChild('+R+',(0,'+jsx+'.jsxs)("span",{className:"flex min-w-0 items-center gap-1",style:{color:"var(--color-text-primary)"},children:[(0,'+jsx+'.jsx)('+comp+',{model:'+model+',displayName:'+dn[1]+',stripGptPrefix:!0,labelClassName:"'+textClass+'"}),'+eff+']})):'+flag+'?'+whole+':void 0,',1,'picker trigger label');}
  b=sub(b,/"data-composer-navigation-target":"reasoning"/g,()=>'"data-composer-navigation-target":codexSub?void 0:"reasoning"',2,'picker navigation target');
  b=sub(b,/\(0,([\w$]+)\.jsx\)\(([\w$]+\.[\w$]+),\{align:"end",disabled:/g,(m,j,k)=>'(0,'+j+'.jsx)('+k+',{codexMenuHeader:codexSub?codexSubagentHeader('+R+'):void 0,align:"end",disabled:',1,'picker menu header');
  s=s.slice(0,start)+b+'try{window.__codexComposerModelPicker='+picker+'}catch(e){}'+s.slice(end);
  s=sub(s,/(shouldReduceMotion:[\w$]+,triggerButton:[\w$]+,triggerRef:[\w$]+)\}=e,/g,(m,x)=>x+',codexMenuHeader:codexMH}=e,',1,'dropdown header prop');
  s=sub(s,/(\(0,[\w$]+\.jsx\)\([\w$]+\.[\w$]+,\{)(active:[\w$]+,fallbackModelLabel:[\w$]+,isExplicitModelSelection:[\w$]+,menuFooter:)/g,(m,a,x)=>a+'menuHeader:codexMH,'+x,1,'dropdown menu header');
  s=sub(s,/(\(0,[\w$]+\.jsx\)\([\w$]+\.Y,\{)(contentRef:[\w$]+,disabled:[\w$]+,isExplicitModelSelection:[\w$]+,keepSimpleView:[\w$]+,menuFooter:)/g,(m,a,x)=>a+'menuHeader:codexMH,'+x,1,'dropdown unified menu header');
- return s+'\n'+helpers(BT);
+ return s+'\n'+helpers(BT)+'try{window.__codexModelTextClass="'+textClass+'"}catch(e){}\n';
 }
 function slider(s){
  if(s.includes('window.__codexNativeOrchPowerSlider'))return s;

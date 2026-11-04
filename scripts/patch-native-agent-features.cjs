@@ -41,7 +41,7 @@ function patchRspackRenderer(s){
  let helper=fs.readFileSync(path.join(__dirname,'desktop-features/orchestrator-ui.js'),'utf8');
  const scopeRe=/function codexOrchestratorComposerScope\(\)\{[^\n]+\}/;
  if(!scopeRe.test(helper))throw Error('Composer helper identity boundary changed');
- helper=helper.replace(scopeRe,()=>"function codexOrchestratorComposerScope(){try{var r=document.querySelector('[data-app-action-sidebar-thread-selected=\"true\"]'),id=r&&r.getAttribute('data-app-action-sidebar-thread-id');if(id)return String(id).replace(/^[a-z]+:/,'')}catch(e){}return 'draft:new'}");
+ helper=helper.replace(scopeRe,()=>"function codexOrchestratorComposerScope(){try{var r=document.querySelector('[data-app-action-sidebar-thread-selected=\"true\"]'),id=r&&r.getAttribute('data-app-action-sidebar-thread-id');if(id){if(/^[a-z]+:client-new-thread:/.test(id))return 'draft:new';return String(id).replace(/^[a-z]+:/,'')}}catch(e){}return 'draft:new'}");
  helper=helper.replace("eco({ hostId: 'local' })","null");
  return s+'\n'+helper+'\n'+fs.readFileSync(path.join(__dirname,'desktop-features/orchestrator-rspack.js'),'utf8');
 }
@@ -66,12 +66,23 @@ const primary=Object.keys(assets).find(n=>n.startsWith('app-primary-')&&n.endsWi
 if(primary)patch('webview/assets/'+primary,s=>s.includes('function codexSubagentSelection(')?s:require('./desktop-features/native-subpicker.cjs')(s,rep,sub));
 else{
  const rs=require('./desktop-features/native-subpicker-rspack.cjs');
- patch('webview/assets/'+locate(meta,body,{needles:['composer.cycleReasoningEffort','permissionsHostId:','persistent'],label:'model picker'}),s=>s.includes('function codexSubagentSelection(')?s:rs.picker(s,rep,sub));
- patch('webview/assets/'+locate(meta,body,{needles:['initialOptionId:','keyboardControlFocused:','onDragToMax'],label:'power slider'}),rs.slider);
+ const sliderName=locate(meta,body,{needles:['initialOptionId:','keyboardControlFocused:','onDragToMax'],label:'power slider'}),sliderEntry=assets.async.files[sliderName.replace(/^async\//,'')];
+ const textClass=(body.subarray(+sliderEntry.offset,+sliderEntry.offset+sliderEntry.size).toString().match(/ModelPickerTriggerModelText-[\w-]+/)||[])[0];if(!textClass)throw Error('Unsupported Codex model label class');
+ patch('webview/assets/'+locate(meta,body,{needles:['composer.cycleReasoningEffort','permissionsHostId:','persistent'],label:'model picker'}),s=>s.includes('function codexSubagentSelection(')?s:rs.picker(s,rep,sub,textClass));
+ patch('webview/assets/'+sliderName,rs.slider);
 }
 const builds=meta.files['.vite'].files.build.files,main=require('./desktop-build-targets.cjs').mainBuildName(builds,n=>body.subarray(+builds[n].offset,+builds[n].offset+builds[n].size).toString());
-patch('.vite/build/'+main,s=>s.includes('/* codex-tps-opencodex-bridge-v2 */')?s:s+'\n'+fs.readFileSync(path.join(__dirname,'desktop-features/opencodex-tps-main.js'),'utf8'));
-patch('.vite/build/preload.js',s=>s.includes('getOpenCodexTps:')?s:require('./desktop-build-targets.cjs').addPreloadBridge(s,'getOpenCodexTps','t=>{OWNER}.ipcRenderer.invoke("codex-tps:opencodex-v2",t)'));
+const readBuild=n=>body.subarray(+builds[n].offset,+builds[n].offset+builds[n].size).toString();
+// Codex 26.1029+ builds user turns in the Electron main process; the orchestrator context has to be added there.
+const turnFiles=Object.keys(builds).filter(n=>/\.js$/.test(n)).filter(n=>{const x=readBuild(n);return x.includes('e.requestClient.getAppServerVersion()')&&/"durable"===[\w$]+\.mode\?/.test(x)});
+if(turnFiles.length>1)throw Error('Unsupported Codex turn builder is ambiguous');
+if(turnFiles.length===1){
+ const ui=fs.readFileSync(path.join(__dirname,'desktop-features/orchestrator-ui.js'),'utf8'),pick=re=>{const m=ui.match(re);if(!m)throw Error('Orchestrator text boundary missing');return m[0]};
+ const mainTurn=[pick(/^var CODEX_ORCH_TEXT=.*$/m),pick(/^var CODEX_ORCH_SENT=.*$/m),pick(/^var CODEX_ORCH_OFF_ULTRA=.*$/m),fs.readFileSync(path.join(__dirname,'desktop-features/orchestrator-main.js'),'utf8')].join('\n');
+ patch('.vite/build/'+turnFiles[0],s=>s.includes('function codexOrchestratorTurn(')?s:wrapTurnRequest(s)+'\n'+mainTurn);
+}
+patch('.vite/build/'+main,s=>{if(!s.includes('/* codex-tps-opencodex-bridge-v2 */'))s+='\n'+fs.readFileSync(path.join(__dirname,'desktop-features/opencodex-tps-main.js'),'utf8');if(!s.includes('damndots-orchestrator-main-ipc-v1'))s+='\n'+fs.readFileSync(path.join(__dirname,'desktop-features/orchestrator-main-ipc.js'),'utf8');return s;});
+patch('.vite/build/preload.js',s=>{const b=require('./desktop-build-targets.cjs');if(!s.includes('getOpenCodexTps:'))s=b.addPreloadBridge(s,'getOpenCodexTps','t=>{OWNER}.ipcRenderer.invoke("codex-tps:opencodex-v2",t)');if(!s.includes('syncOrchestrator:'))s=b.addPreloadBridge(s,'syncOrchestrator','t=>{OWNER}.ipcRenderer.invoke("damndots:orchestrator-sync",t)');return s;});
 const json=Buffer.from(JSON.stringify(meta)),payload=(4+json.length+3)&~3,pickle=Buffer.alloc(4+payload),head=Buffer.alloc(8);pickle.writeUInt32LE(payload);pickle.writeUInt32LE(json.length,4);json.copy(pickle,8);head.writeUInt32LE(4);head.writeUInt32LE(pickle.length,4);
 const result=Buffer.concat([head,pickle,body,...changed.map(x=>x.bytes)]),exe=fs.readFileSync(path.join(root,'ChatGPT.exe')),needle=Buffer.from(hash(oldHeader)),at=exe.indexOf(needle);if(at<0||exe.indexOf(needle,at+1)>=0)throw Error('EXE integrity anchor changed');Buffer.from(hash(json)).copy(exe,at);
 fs.writeFileSync(file,result);fs.writeFileSync(path.join(root,'ChatGPT.exe'),exe);

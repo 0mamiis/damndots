@@ -23,9 +23,11 @@ window.__codexOrchNativeWrap=function(R,main,Picker,props){
 };
 function codexRspackBoot(){
  if(window.__codexRspackBooted)return;window.__codexRspackBooted=true;
- var last=null,timer=0;
+ var last=null,timer=0,syncedAt=0;
+ window.addEventListener('codex-orchestrator-change',function(){syncedAt=0;schedule()});
  function tick(){
   timer=0;
+  try{if(Date.now()-syncedAt>1000){syncedAt=Date.now();codexOrchestratorSync()}}catch(e){}
   try{
    var scope=codexOrchestratorComposerScope();if(scope!==last){last=scope;window.dispatchEvent(new Event('codex-orchestrator-change'));}
    if(typeof window.__codexComposerModelPicker==='function')return; // native picker integration renders the orchestrator itself
