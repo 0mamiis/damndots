@@ -11,10 +11,19 @@ function once(s,a,b,label){if(s.split(a).length!==2)throw Error('Unsupported Cod
 const assets=meta.files.webview.files.assets.files;
 const assetText=n=>body.subarray(+assets[n].offset,+assets[n].offset+assets[n].size).toString();
 const nameHits=Object.keys(assets).filter(n=>/.js$/.test(n)&&assetText(n).includes("!tt&&(F||nt)&&"));
-const name=nameHits.length===1?nameHits[0]:undefined;
-if(!name)throw Error('Codex messaging composer bundle missing');
+const name=nameHits.length===1?nameHits[0]:require('./asar-locate.cjs').locate(meta,body,{needles:['id:"orbit.messaging.reconnecting"'],label:'messaging composer'});
 patch('webview/assets/'+name,s=>{
  if(s.includes('/* damndots-messaging-status-v1 */'))return s;
+ if(nameHits.length!==1){
+  // Codex 26.1029: same banner, re-minified names. The reconnect flag leaves the visibility test and the label choice.
+  const show=/(![\w$]+)&&\(([\w$]+)\|\|([\w$]+)\)&&(\(0,[\w$]+\.jsx\)\("div",\{className:"flex items-center justify-center gap-2 py-3 text-secondary select-none")/;
+  const m=s.match(show);if(!m)throw Error('Unsupported Codex messaging reconnect banner');
+  s=s.replace(show,(_,x,r,ok,tail)=>x+'&&'+ok+'&&'+tail);
+  const label=new RegExp('children:'+m[2].replace('$','\\$')+'\\|\\|[\\w$]+\\.loading\\|\\|!'+m[3].replace('$','\\$')+'\\?');
+  if(!label.test(s))throw Error('Unsupported Codex messaging failure banner');
+  s=s.replace(label,()=>'children:!'+m[3]+'?');
+  return s+'/* damndots-messaging-status-v1 */';
+ }
  s=once(s,'!tt&&(F||nt)&&','!tt&&nt&&','messaging reconnect banner');
  s=once(s,'children:F||X.loading||!nt?','children:!nt?','messaging failure banner');
  return s+'/* damndots-messaging-status-v1 */';

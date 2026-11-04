@@ -318,9 +318,11 @@ function codexOrchestratorSave(o){try{var k=Object.keys(o);for(var i=0;i<k.lengt
 // Native per-turn application context. This is evaluated in the composer's scope.
 function codexOrchestratorCollab(cm, options) { return cm; }
 var CODEX_ORCH_OFF_ULTRA="[ORCHESTRATOR OFF + ULTRA — THIS CHAT, CURRENT TURN]\nThe user selected Off in the orchestrator menu and Ultra reasoning for this turn. No orchestrator role workflow (Alt Ajanlar, Lead, Plan, Explore, Verify, Fix) is active and none of their phase or review requirements apply. Original Codex Ultra behaviour applies: you may proactively delegate bounded, independent subtasks to native subagents when that materially improves speed or quality of the current task; the Ultra selection is the user's authorization for this. Delegation is optional: handle greetings, status questions, small edits and tightly coupled work yourself, and do not invent busywork. Use only the native collaboration tools; do not create user-owned chats, external agent processes or background jobs. Keep the user's scope, permissions, project instructions and model choices.";
+function codexOrchestratorTrace(reason,p,aeon){try{var k='codex-orchestrator-trace',l=JSON.parse(localStorage.getItem(k)||'[]');l.push({at:Date.now(),reason:reason,trigger:p&&p.turnTrigger,hasInput:!!(p&&p.input&&p.input.length),aeon:aeon==null?null:String(aeon),thread:p&&(p.threadId||p.clientThreadId)||null});localStorage.setItem(k,JSON.stringify(l.slice(-25)))}catch(e){}}
 function codexOrchestratorTurn(p, aeon, fallbackEffort) {
-  if (!p || aeon != null || p.toolOutput != null || !p.input || !p.input.length) return p;
-  if (p.turnTrigger != null && p.turnTrigger !== 'composer' && p.turnTrigger !== 'goal') return p;
+  codexOrchestratorTrace('enter', p, aeon);
+  if (!p || aeon != null || p.toolOutput != null || !p.input || !p.input.length) { codexOrchestratorTrace('skip-basic', p, aeon); return p; }
+  if (p.turnTrigger != null && p.turnTrigger !== 'composer' && p.turnTrigger !== 'goal') { codexOrchestratorTrace('skip-trigger', p, aeon); return p; }
   var scopeId = p.threadId != null ? String(p.threadId) : p.clientThreadId != null ? 'draft:' + String(p.clientThreadId) : null;
   if (!scopeId) return p;
   var mode = codexOrchestratorMode(scopeId);
@@ -337,6 +339,7 @@ function codexOrchestratorTurn(p, aeon, fallbackEffort) {
     result.collaborationMode = Object.assign({}, cm, { settings: Object.assign({}, cm.settings, { developer_instructions: null }) });
   }
   codexOrchestratorSave(sent);
+  codexOrchestratorTrace('injected:' + (mode || 'off'), p, aeon);
   return result;
 }
 

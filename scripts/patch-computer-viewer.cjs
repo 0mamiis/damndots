@@ -13,8 +13,18 @@ function once(s,a,b,label){if(s.split(a).length!==2)throw Error('Unsupported Cod
 const assets=meta.files.webview.files.assets.files;
 const assetText=n=>body.subarray(+assets[n].offset,+assets[n].offset+assets[n].size).toString();
 const pick=needle=>{const hits=Object.keys(assets).filter(n=>/.js$/.test(n)&&assetText(n).includes(needle));if(hits.length!==1)throw Error("Codex computer viewer bundle not unique: "+hits.length);return hits[0];};
-const view=pick("function g(e="+BT+"https://chatgpt.com/backend-api"+BT+"){"),panel=pick("function K({apiBaseUrl:e="+BT+"https://chatgpt.com/backend-api"+BT);
-if(!view||!panel)throw Error('Codex computer viewer bundles missing');
+let view=null,panel=null,unified=null;
+try{view=pick("function g(e="+BT+"https://chatgpt.com/backend-api"+BT+"){");panel=pick("function K({apiBaseUrl:e="+BT+"https://chatgpt.com/backend-api"+BT);}
+catch(error){unified=require('./asar-locate.cjs').locate(meta,body,{needles:['Unsupported computer backend','useChatGptRouting'],label:'computer viewer'});}
+if(!unified&&(!view||!panel))throw Error('Codex computer viewer bundles missing');
+if(unified)patch('webview/assets/'+unified,s=>{
+ if(s.includes('/* damndots-cua-computer-v2 */'))return s;
+ // Codex 26.1029 inlines the endpoint builder and the host allow-list in one connect function.
+ const re=/let ([\w$]+)=new URL\(([\w$]+)\);if\([^;]*?Unsupported computer backend"\);let ([\w$]+)=new URL\(\(0,[\w$]+\.[\w$]+\)\(\2,[\w$]+\)\);/;
+ const m=s.match(re);if(!m)throw Error('Unsupported computer endpoint builder');
+ return s.replace(re,()=>'let '+m[3]+'=new URL("https://localhost:'+port+'/backend-api/tbo/computer/sessions");/* damndots-cua-computer-v2 */');
+});
+else{
 patch('webview/assets/'+view,s=>{
  if(s.includes('/* damndots-cua-computer-v1 */'))return s;
  const start=s.indexOf('function g(e=`https://chatgpt.com/backend-api`){'),end=start<0?-1:s.indexOf('var _;function v()',start);
@@ -27,6 +37,7 @@ patch('webview/assets/'+panel,s=>{
  if(start<0||bad<0)throw Error('Unsupported computer backend check');
  return s.slice(0,bad)+'/* damndots-local-cua-v1 */'+s.slice(bad);
 });
+}
 const json=Buffer.from(JSON.stringify(meta)),payload=(4+json.length+3)&~3,pickle=Buffer.alloc(4+payload),head=Buffer.alloc(8);pickle.writeUInt32LE(payload);pickle.writeUInt32LE(json.length,4);json.copy(pickle,8);head.writeUInt32LE(4);head.writeUInt32LE(pickle.length,4);
 const result=Buffer.concat([head,pickle,body,...changed.map(x=>x.bytes)]),exe=fs.readFileSync(path.join(root,'ChatGPT.exe')),needle=Buffer.from(hash(oldHeader)),at=exe.indexOf(needle);if(at<0||exe.indexOf(needle,at+1)>=0)throw Error('EXE integrity anchor changed');Buffer.from(hash(json)).copy(exe,at);
 fs.writeFileSync(file,result);fs.writeFileSync(path.join(root,'ChatGPT.exe'),exe);

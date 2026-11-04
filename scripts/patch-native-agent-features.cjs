@@ -1,12 +1,12 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),cp=require('node:child_process');
-const {resolveComposerBindings,bindComposerHelper}=require('./desktop-renderer-bindings.cjs');
+const {resolveComposerBindings,bindComposerHelper}=require('./desktop-renderer-bindings.cjs'),{locate}=require('./asar-locate.cjs');
 const root=fs.realpathSync(process.argv[2]||''),hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 if(root.toLowerCase().includes('windowsapps'))throw Error('Only patch a private staged copy');
 const file=path.join(root,'resources/app.asar'),archive=fs.readFileSync(file),oldHeader=archive.subarray(16,16+archive.readUInt32LE(12)),meta=JSON.parse(oldHeader),base=8+archive.readUInt32LE(4),body=archive.subarray(base),changed=[];
 function patch(entryPath,fn){let entry=meta;for(const part of entryPath.split('/'))entry=entry.files[part];const source=body.subarray(+entry.offset,+entry.offset+entry.size).toString();const result=fn(source);cp.execFileSync(process.execPath,['--input-type=module','--check'],{input:result});const bytes=Buffer.from(result);entry.offset=String(body.length+changed.reduce((n,x)=>n+x.bytes.length,0));entry.size=bytes.length;entry.integrity.hash=hash(bytes);entry.integrity.blocks=[];for(let i=0;i<bytes.length;i+=entry.integrity.blockSize)entry.integrity.blocks.push(hash(bytes.subarray(i,i+entry.integrity.blockSize)));changed.push({entryPath,bytes});}
 function rep(s,a,b){if(s.split(a).length!==2)throw Error('Token speed anchor changed: '+a);return s.replace(a,b);}
-const assets=meta.files.webview.files.assets.files,initial=Object.keys(assets).find(n=>n.startsWith('app-initial-')&&n.endsWith('.js'));
+const assets=meta.files.webview.files.assets.files,initial=locate(meta,body,{prefix:'app-initial-',needles:['requestClient.getAppServerVersion()','orbit.navigation'],label:'renderer'});
 const BT=String.fromCharCode(96);
 function sub(s,re,fn,count,label){const g=re.flags.includes('g')?re:new RegExp(re.source,re.flags+'g');if([...s.matchAll(g)].length!==count)throw Error('Unsupported Codex '+label);return s.replace(g,fn);}
 function wrapTurnRequest(s){
@@ -18,14 +18,38 @@ function wrapTurnRequest(s){
   const durable=hosts[0][2].match(/\|\|(\w+)\.mode===/);if(!durable)throw Error('Native durable boundary missing');
   return s.replace(hosts[0][0],()=>hosts[0][1]+'=codexOrchestratorTurn('+hosts[0][2]+',('+durable[1]+'.mode==='+BT+'durable'+BT+'?true:null),'+cv[0][1]+'?.latestReasoningEffort)');
  }
+ const compact=[...s.matchAll(/((?:\(0,[\w$]+\.[\w$]+\)|[\w$]+)\(e\.getHostId\(\)\)\|\|"durable"===([\w$]+)\.mode\?[\w$]+:\(0,[\w$]+\.[\w$]+\)\([\w$]+,e\.requestClient\.getAppServerVersion\(\)\))/g)];
+ if(compact.length===1){const full=compact[0][1],conv=compact[0][2];return s.replace(full,()=>'codexOrchestratorTurn('+full+',('+conv+'.mode==="durable"?true:null),'+conv+'?.latestReasoningEffort)');}
  const modern=[...s.matchAll(/(\w+\(e\.getHostId\(\)\)\|\|(\w+)\.mode===\x60durable\x60\?\w+:\w+\(\w+,e\.requestClient\.getAppServerVersion\(\)\))/g)];
  if(modern.length!==1)throw Error('Unsupported native turn request boundary');
  const full=modern[0][1],conv=modern[0][2];
  return s.replace(full,()=>'codexOrchestratorTurn('+full+',('+conv+'.mode==='+BT+'durable'+BT+'?true:null),'+conv+'?.latestReasoningEffort)');
 }
+function patchRspackRenderer(s){
+ // Codex 26.1029 ships Rspack chunks: one module function per feature, no shared top-level scope.
+ // The helper lives at chunk level; the module that sends turns also exposes the bundle's require.
+ const at=s.indexOf('codexOrchestratorTurn(');
+ const starts=[...s.slice(0,at).matchAll(/[,{]([\w$]{3,6})\(e,t,n\)\{/g)];
+ if(!starts.length)throw Error('Native module boundary missing');
+ const last=starts[starts.length-1],ins=last.index+last[0].length;
+ s=s.slice(0,ins)+'window.__dotsRequire=n;'+s.slice(ins);
+ const notify=[...s.matchAll(/([\w$]+)\.events\.emitNotification\(([\w$]+),([\w$]+)\);return\}switch\(\2\.method\)\{/g)];
+ if(notify.length!==1)throw Error('Native event notification boundary changed');
+ const v=notify[0][2];
+ const hook="try{if(V.method==='turn/started')window.__codexTpsOnTurnStarted?.(V.params);else if(V.method==='turn/completed')window.__codexTpsOnTurnCompleted?.(V.params);else if(V.method==='item/started')window.__codexTpsOnItemStart?.(V.params);else if(V.method==='item/agentMessage/delta'||V.method==='item/plan/delta'||V.method==='item/reasoning/summaryTextDelta'||V.method==='item/reasoning/textDelta')window.__codexTpsOnDelta?.(V.params);else if(V.method==='thread/tokenUsage/updated')window.__codexTpsOnUsage?.(V.params)}catch(e){}".split('V.').join(v+'.');
+ s=s.replace(notify[0][0],()=>notify[0][1]+'.events.emitNotification('+v+','+notify[0][3]+');return}'+hook+'switch('+v+'.method){');
+ let helper=fs.readFileSync(path.join(__dirname,'desktop-features/orchestrator-ui.js'),'utf8');
+ const scopeRe=/function codexOrchestratorComposerScope\(\)\{[^\n]+\}/;
+ if(!scopeRe.test(helper))throw Error('Composer helper identity boundary changed');
+ helper=helper.replace(scopeRe,()=>"function codexOrchestratorComposerScope(){try{var r=document.querySelector('[data-app-action-sidebar-thread-selected=\"true\"]'),id=r&&r.getAttribute('data-app-action-sidebar-thread-id');if(id)return String(id).replace(/^[a-z]+:/,'')}catch(e){}return 'draft:new'}");
+ helper=helper.replace("eco({ hostId: 'local' })","null");
+ return s+'\n'+helper+'\n'+fs.readFileSync(path.join(__dirname,'desktop-features/orchestrator-rspack.js'),'utf8');
+}
+
 patch('webview/assets/'+initial,s=>{
  if(s.includes('function codexOrchestratorTurn('))return s; // Adopt an existing installation without duplicating hooks.
  s=wrapTurnRequest(s);
+ if(s.includes('export const __webpack_modules__'))return patchRspackRenderer(s);
  const cnt={};for(const x of s.matchAll(/\(0,(\w+)\.(useState|useEffect|useRef)\)/g)){(cnt[x[1]]??={})[x[2]]=(cnt[x[1]][x[2]]||0)+1;}
  const facs={};for(const n of Object.keys(cnt)){const d=s.match(new RegExp('[,;]'+n+'=(\\w+)\\(\\)[,;]'));if(d&&cnt[n].useState&&cnt[n].useEffect&&cnt[n].useRef)facs[n]=d[1];}
  const fc={};Object.values(facs).forEach(f=>fc[f]=(fc[f]||0)+1);const top=Object.entries(fc).sort((a,b)=>b[1]-a[1])[0],rn=top&&Object.keys(facs).find(n=>facs[n]===top[0]);if(!rn||top[1]<3)throw Error('React binding missing');
@@ -39,7 +63,7 @@ patch('webview/assets/'+initial,s=>{
  return s+'\n'+helper;
 });
 const primary=Object.keys(assets).find(n=>n.startsWith('app-primary-')&&n.endsWith('.js'));
-patch('webview/assets/'+primary,s=>s.includes('function codexSubagentSelection(')?s:require('./desktop-features/native-subpicker.cjs')(s,rep,sub));
+if(primary)patch('webview/assets/'+primary,s=>s.includes('function codexSubagentSelection(')?s:require('./desktop-features/native-subpicker.cjs')(s,rep,sub));
 const builds=meta.files['.vite'].files.build.files,main=require('./desktop-build-targets.cjs').mainBuildName(builds,n=>body.subarray(+builds[n].offset,+builds[n].offset+builds[n].size).toString());
 patch('.vite/build/'+main,s=>s.includes('/* codex-tps-opencodex-bridge-v2 */')?s:s+'\n'+fs.readFileSync(path.join(__dirname,'desktop-features/opencodex-tps-main.js'),'utf8'));
 patch('.vite/build/preload.js',s=>s.includes('getOpenCodexTps:')?s:require('./desktop-build-targets.cjs').addPreloadBridge(s,'getOpenCodexTps','t=>{OWNER}.ipcRenderer.invoke("codex-tps:opencodex-v2",t)'));

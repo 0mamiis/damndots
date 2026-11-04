@@ -5,7 +5,7 @@ if(root.toLowerCase().includes('windowsapps'))throw Error('Only patch a private 
 const file=path.join(root,'resources/app.asar'),archive=fs.readFileSync(file),oldHeader=archive.subarray(16,16+archive.readUInt32LE(12)),meta=JSON.parse(oldHeader),base=8+archive.readUInt32LE(4),body=archive.subarray(base),changed=[];
 function patch(entryPath,fn){let entry=meta;for(const part of entryPath.split('/'))entry=entry.files[part];const source=body.subarray(+entry.offset,+entry.offset+entry.size).toString();const result=fn(source);cp.execFileSync(process.execPath,['--input-type=module','--check'],{input:result});const bytes=Buffer.from(result);entry.offset=String(body.length+changed.reduce((n,x)=>n+x.bytes.length,0));entry.size=bytes.length;entry.integrity.hash=hash(bytes);entry.integrity.blocks=[];for(let i=0;i<bytes.length;i+=entry.integrity.blockSize)entry.integrity.blocks.push(hash(bytes.subarray(i,i+entry.integrity.blockSize)));changed.push({entryPath,bytes});}
 function rep(s,a,b){if(s.split(a).length!==2)throw Error('Token speed anchor changed: '+a);return s.replace(a,b);}
-const assets=meta.files.webview.files.assets.files,initial=Object.keys(assets).find(n=>n.startsWith('app-initial-')&&n.endsWith('.js'));
+const {locate}=require('./asar-locate.cjs');const assets=meta.files.webview.files.assets.files,initial=locate(meta,body,{prefix:'app-initial-',needles:['function codexOrchestratorSubmodelGet()'],label:'orchestrator settings'});
 patch('webview/assets/'+initial,s=>{
  if(s.includes('var damndotsOrchestratorPreferences'))throw Error('Orchestrator settings already patched');
  const begin=s.indexOf('function codexOrchestratorSubmodelGet()'),end=s.indexOf('function codexOrchestratorModelList()',begin);
@@ -20,7 +20,7 @@ patch('webview/assets/'+initial,s=>{
  return s+'\n'+fs.readFileSync(path.join(__dirname,'orchestrator-renderer.js'),'utf8');
 });
 const primary=Object.keys(assets).find(n=>n.startsWith('app-primary-')&&n.endsWith('.js'));
-patch('webview/assets/'+primary,s=>{
+if(primary)patch('webview/assets/'+primary,s=>{
  const tick=String.fromCharCode(96),old='localStorage.getItem('+tick+'codex-orchestrator-subagent-model-v1'+tick+')||'+tick+tick;
  return rep(s,old,'localStorage.getItem('+tick+'codex-orchestrator-subagent-model-v1'+tick+')||JSON.stringify(window.__damndotsOrchestratorDefaults||null)');
 });

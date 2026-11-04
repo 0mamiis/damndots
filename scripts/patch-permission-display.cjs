@@ -6,12 +6,25 @@ const a=fs.readFileSync(path.join(source,'resources/app.asar')),old=a.subarray(1
 function patch(name,edit){let e=meta;for(const p of name.split('/'))e=e.files[p];const s=body.subarray(+e.offset,+e.offset+e.size).toString();if(s.includes('damndotsPermissionInformationDialog(')||s.includes('/* damndots-custom-display */'))throw Error('Permission display already patched');const bytes=Buffer.from(edit(s));cp.execFileSync(process.execPath,['--input-type=module','--check'],{input:bytes,windowsHide:true});e.offset=String(body.length+changes.reduce((n,b)=>n+b.length,0));e.size=bytes.length;e.integrity.hash=sha(bytes);e.integrity.blocks=[];for(let i=0;i<bytes.length;i+=e.integrity.blockSize)e.integrity.blocks.push(sha(bytes.subarray(i,i+e.integrity.blockSize)));changes.push(bytes);}
 const assets=meta.files.webview.files.assets.files,names=Object.keys(assets),find=prefix=>{const n=names.filter(n=>n.startsWith(prefix)&&n.endsWith('.js'));if(n.length!==1)throw Error('Ambiguous '+prefix);return n[0];};
 const helper=fs.readFileSync(path.join(__dirname,'permission-display-renderer.js'),'utf8');
+const isRspack=!names.some(n=>n.startsWith('permissions-mode-dropdown-'));
+if(isRspack){
+ // Codex 26.1029: dialogs open from shared call sites; mirror the local preference to a window flag first.
+ const targets=names.filter(n=>/^async\//.test(n)||true).length?[]:[];
+ const asyncFiles=meta.files.webview.files.assets.files.async.files;
+ const read=n=>body.subarray(+asyncFiles[n].offset,+asyncFiles[n].offset+asyncFiles[n].size).toString();
+ const wanted=Object.keys(asyncFiles).filter(n=>/\.js$/.test(n)&&asyncFiles[n].size<2e6).filter(n=>{const t=read(n);return /onContinueWithFullAccess:[\w$]+,onContinueWithFallback:/.test(t)||/onConfirm:\(\)=>[\w$]+\([\w$]+\.value\)\}\)/.test(t)&&t.includes('"full-access"===');});
+ if(!wanted.length)throw Error('Unsupported permission dialog bundle');
+ for(const n of wanted)patch('webview/assets/async/'+n,s=>adapter.rspackDialogs(s));
+ const mainFile=require('./asar-locate.cjs').locate(meta,body,{needles:['requestClient.getAppServerVersion()','orbit.navigation'],label:'permission flag host'});
+ patch('webview/assets/'+mainFile,s=>s+'\n'+"(function(){var go=function(){try{var r=window.electronBridge&&window.electronBridge.getPermissionDisplayPreferences;if(typeof r==='function')Promise.resolve(r()).then(function(p){window.__damndotsHideDialogs=!!(p&&p.hideInformationDialogs===true)},function(){})}catch(e){}};go();setInterval(go,2000)})();"+'\n/* damndots-custom-display */');
+}else{
 patch('webview/assets/'+find('permissions-mode-dropdown-'),s=>adapter.fullAccess(s,helper));
 patch('webview/assets/'+find('app-primary-'),s=>adapter.ultra(s,helper));
 patch('webview/assets/'+find('app-initial-'),s=>adapter.legacyCustom(adapter.preferredCustom(s))+'\n/* damndots-custom-display */');
 const shared=names.filter(n=>/^app-shared-.*\.js$/.test(n)).filter(n=>{const e=assets[n];return body.subarray(+e.offset,+e.offset+e.size).toString().includes('function zlt(e,t,n,r)');});
 if(shared.length>1)throw Error('Custom permission eligibility module changed');
 if(shared.length===1)patch('webview/assets/'+shared[0],s=>adapter.custom(s)+'\n/* damndots-custom-display */');
+}
 const builds=meta.files['.vite'].files.build.files,main=require('./desktop-build-targets.cjs').mainBuildName(builds,n=>body.subarray(+builds[n].offset,+builds[n].offset+builds[n].size).toString());
 patch('.vite/build/'+main,s=>s+'\n'+fs.readFileSync(path.join(__dirname,'permission-display-runtime.js'),'utf8'));
 patch('.vite/build/preload.js',s=>require('./desktop-build-targets.cjs').addPreloadBridge(s,'getPermissionDisplayPreferences','()=>{OWNER}.ipcRenderer.invoke("damndots:permission-display")'));
