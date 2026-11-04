@@ -41,7 +41,7 @@ export function ensureFeatures({nativeDir,adopt,includeLocalPatches=true,sourceP
  const composerPrefs=path.join(os.homedir(),'.codex','dots-local-bridge','composer-predictions.json');
  const composerEnabled=fs.existsSync(composerPrefs);
  if(composerEnabled)scripts.push('patch-composer-predictions.cjs');
- const assets=['desktop-features/orchestrator-ui.js','desktop-features/native-subpicker.cjs','desktop-features/opencodex-tps-main.js','token-speed-renderer.js','token-speed-runtime.js','orchestrator-renderer.js','orchestrator-runtime.js','desktop-startup-patch.cjs','desktop-renderer-bindings.cjs','desktop-build-targets.cjs'];
+ const assets=['desktop-features/orchestrator-ui.js','desktop-features/orchestrator-rspack.js','desktop-features/native-subpicker.cjs','desktop-features/native-subpicker-rspack.cjs','asar-locate.cjs','desktop-features/opencodex-tps-main.js','token-speed-renderer.js','token-speed-runtime.js','orchestrator-renderer.js','orchestrator-runtime.js','desktop-startup-patch.cjs','desktop-renderer-bindings.cjs','desktop-build-targets.cjs'];
  if(composerEnabled)assets.push('native-prediction-preferences.js');
  if(['26.1023.6621.0','26.1027.3384.0','26.1027.6604.0','26.1029.7803.0'].includes(sourcePackage.version))assets.push('permission-display-patch.cjs','permission-display-renderer.js','permission-display-runtime.js');
  const localDir=path.join(repo,'.data','local-patches');let localScripts=[];if(includeLocalPatches)try{localScripts=JSON.parse(fs.readFileSync(path.join(localDir,'list.json'),'utf8'));}catch{}

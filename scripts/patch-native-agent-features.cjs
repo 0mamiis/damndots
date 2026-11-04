@@ -64,6 +64,11 @@ patch('webview/assets/'+initial,s=>{
 });
 const primary=Object.keys(assets).find(n=>n.startsWith('app-primary-')&&n.endsWith('.js'));
 if(primary)patch('webview/assets/'+primary,s=>s.includes('function codexSubagentSelection(')?s:require('./desktop-features/native-subpicker.cjs')(s,rep,sub));
+else{
+ const rs=require('./desktop-features/native-subpicker-rspack.cjs');
+ patch('webview/assets/'+locate(meta,body,{needles:['composer.cycleReasoningEffort','permissionsHostId:','persistent'],label:'model picker'}),s=>s.includes('function codexSubagentSelection(')?s:rs.picker(s,rep,sub));
+ patch('webview/assets/'+locate(meta,body,{needles:['initialOptionId:','keyboardControlFocused:','onDragToMax'],label:'power slider'}),rs.slider);
+}
 const builds=meta.files['.vite'].files.build.files,main=require('./desktop-build-targets.cjs').mainBuildName(builds,n=>body.subarray(+builds[n].offset,+builds[n].offset+builds[n].size).toString());
 patch('.vite/build/'+main,s=>s.includes('/* codex-tps-opencodex-bridge-v2 */')?s:s+'\n'+fs.readFileSync(path.join(__dirname,'desktop-features/opencodex-tps-main.js'),'utf8'));
 patch('.vite/build/preload.js',s=>s.includes('getOpenCodexTps:')?s:require('./desktop-build-targets.cjs').addPreloadBridge(s,'getOpenCodexTps','t=>{OWNER}.ipcRenderer.invoke("codex-tps:opencodex-v2",t)'));

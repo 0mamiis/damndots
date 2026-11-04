@@ -15,6 +15,12 @@ function codexRspackParts(){
  if(!R||!RD)return null;
  return window.__dotsParts={R:R,RD:RD};
 }
+// Rendered by the native model picker (inside the app's own React tree): tok/s badge, primary picker and the orchestrator/subagent picker.
+window.__codexOrchNativeWrap=function(R,main,Picker,props){
+ var h=R.createElement;codexOrchestratorEnsureNative(R);
+ if(!codexOrchestratorTpsComponent)codexOrchestratorTpsComponent=function(){return codexThreadTpsBadge(codexOrchestratorComposerScope(),R)};
+ return h('span',{className:'flex min-w-0 items-center','data-codex-orchestrator-host':''},h(codexOrchestratorTpsComponent),main,h(Picker,Object.assign({},props,{codexSubagent:true})));
+};
 function codexRspackBoot(){
  if(window.__codexRspackBooted)return;window.__codexRspackBooted=true;
  var last=null,timer=0;
@@ -22,6 +28,7 @@ function codexRspackBoot(){
   timer=0;
   try{
    var scope=codexOrchestratorComposerScope();if(scope!==last){last=scope;window.dispatchEvent(new Event('codex-orchestrator-change'));}
+   if(typeof window.__codexComposerModelPicker==='function')return; // native picker integration renders the orchestrator itself
    var btn=document.querySelector('[data-composer-navigation-target="reasoning"]');if(!btn)return;
    var bar=btn.parentElement&&btn.parentElement.parentElement;if(!bar)return;
    if(bar.querySelector(':scope > [data-dots-orch-root]'))return;
