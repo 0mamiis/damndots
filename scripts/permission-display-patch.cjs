@@ -46,4 +46,23 @@ function legacyCustom(source){
  const text=target.text.replace(filter,(_,selection,allowed)=>selection+'='+allowed);
  return source.slice(0,target.start)+text+source.slice(target.end);
 }
-module.exports={fullAccess,ultra,custom,preferredCustom,legacyCustom};
+
+// Codex 26.1029 (Rspack): the dialogs are opened through a shared host call, (0,X.qf)(host,Component,props).
+// Skip the information dialogs at the call site when the local preference says so; the native confirm callback still runs.
+function rspackDialogs(source){
+ let done=0;
+ // Find the call by its head, then take the whole argument list by balancing parentheses.
+ const head=/\(0,([\w$]+)\.qf\)\(([\w$]+),([\w$]+)\.O,\{canContinue:[^,]+,onClose:/g;let hm;const spans=[];
+ while((hm=head.exec(source))){
+  const open=source.indexOf('(',hm.index+hm[0].indexOf(').qf)')+5);let d=0,i=open;
+  for(;i<source.length;i++){const c=source[i];if(c==='(')d++;else if(c===')'){d--;if(!d)break;}}
+  const call=source.slice(hm.index,i+1);const go=call.match(/onContinueWithFullAccess:([\w$]+),/);
+  if(go&&call.includes('onContinueWithFallback:'))spans.push([hm.index,i+1,go[1]]);
+ }
+ for(const [st,en,go] of spans.reverse()){done++;source=source.slice(0,st)+'(window.__damndotsHideDialogs===true?'+go+'():'+source.slice(st,en)+')'+source.slice(en);}
+ const full=/\(0,([\w$]+)\.qf\)\(([\w$]+),([\w$]+),\{conversationId:([\w$]+),onConfirm:\(\)=>([\w$]+)\(([\w$]+)\.value\)\}\)/g;
+ source=source.replace(full,(m,qf,host,cmp,conv,pick,item)=>{done++;return '(window.__damndotsHideDialogs===true?'+pick+'('+item+'.value):'+m+')';});
+ if(!done)throw Error('Unsupported permission dialog bundle');
+ return source;
+}
+module.exports={fullAccess,ultra,custom,preferredCustom,legacyCustom,rspackDialogs};

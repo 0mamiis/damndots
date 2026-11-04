@@ -10,6 +10,14 @@ test('unsupported Codex version fails closed without creating or activating a pa
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'dots-desktop-version-'));
  try{const result=ensureFeatures({nativeDir:dir,sourcePackage:{version:'999.0',root:path.join(dir,'missing')}});assert.equal(result.state,'unsupported-version');assert.equal(fs.existsSync(path.join(dir,'desktop-features','active.json')),false);assert.equal(fs.existsSync(path.join(dir,'desktop-features','app')),false);}finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
+test('Rspack desktop version is supported and fails before activation when its package cannot be read',()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'dots-desktop-rspack-'));
+ try{
+  assert.throws(()=>ensureFeatures({nativeDir:dir,includeLocalPatches:false,sourcePackage:{version:'26.1029.7803.0',root:path.join(dir,'missing')}}));
+  assert.equal(fs.existsSync(path.join(dir,'desktop-features','active.json')),false);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir,'desktop-features','status.json'),'utf8')).state,'failed');
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
 test('full archive and executable verification rejects changed blocks',()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'dots-desktop-integrity-'));const data=Buffer.from('feature fixture'),meta={files:{'fixture.js':{offset:'0',size:data.length,integrity:{hash:sha(data),blockSize:data.length,blocks:[sha(data)]}}}};
  const json=Buffer.from(JSON.stringify(meta)),size=(4+json.length+3)&~3,pickle=Buffer.alloc(4+size),head=Buffer.alloc(8);pickle.writeUInt32LE(size);pickle.writeUInt32LE(json.length,4);json.copy(pickle,8);head.writeUInt32LE(4);head.writeUInt32LE(pickle.length,4);
