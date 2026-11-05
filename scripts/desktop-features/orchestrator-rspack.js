@@ -15,13 +15,23 @@ function codexRspackParts(){
  if(!R||!RD)return null;
  return window.__dotsParts={R:R,RD:RD};
 }
+// Rendered by the native model picker (inside the app's own React tree): tok/s badge, primary picker and the orchestrator/subagent picker.
+window.__codexOrchNativeWrap=function(R,main,Picker,props){
+ var h=R.createElement;codexOrchestratorEnsureNative(R);
+ if(!document.getElementById('codex-orch-layout-style')){var st=document.createElement('style');st.id='codex-orch-layout-style';st.textContent='span:has(> [data-codex-orchestrator-host]),[data-codex-orchestrator-host]{display:contents}[data-codex-orchestrator-host] > [data-codex-tps]{order:-1}[data-codex-orchestrator-host] > button:last-child{margin-inline-start:-6px}';document.head.appendChild(st)}
+ if(!codexOrchestratorTpsComponent)codexOrchestratorTpsComponent=function(){return codexThreadTpsBadge(codexOrchestratorComposerScope(),R)};
+ return h('span',{className:'flex min-w-0 items-center','data-codex-orchestrator-host':''},h(codexOrchestratorTpsComponent),main,h(Picker,Object.assign({},props,{codexSubagent:true})));
+};
 function codexRspackBoot(){
  if(window.__codexRspackBooted)return;window.__codexRspackBooted=true;
- var last=null,timer=0;
+ var last=null,timer=0,syncedAt=0;
+ window.addEventListener('codex-orchestrator-change',function(){syncedAt=0;schedule()});
  function tick(){
   timer=0;
+  try{if(Date.now()-syncedAt>1000){syncedAt=Date.now();codexOrchestratorSync()}}catch(e){}
   try{
    var scope=codexOrchestratorComposerScope();if(scope!==last){last=scope;window.dispatchEvent(new Event('codex-orchestrator-change'));}
+   if(typeof window.__codexComposerModelPicker==='function')return; // native picker integration renders the orchestrator itself
    var btn=document.querySelector('[data-composer-navigation-target="reasoning"]');if(!btn)return;
    var bar=btn.parentElement&&btn.parentElement.parentElement;if(!bar)return;
    if(bar.querySelector(':scope > [data-dots-orch-root]'))return;
