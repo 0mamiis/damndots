@@ -30,7 +30,7 @@ must("prediction provider gate",
 /([\w$]+)\.modelProvider===\x60openai\x60\?([\w$]+)\?\.includes\(\1\.model\)&&\(([\w$]+)=\x60unsupported_model\x60\):([\w$]+)=\x60unsupported_provider\x60/],
 function(m,thread,providerOut,list,modelOut){return list+"?.includes("+thread+".model)&&("+modelOut+"=\x22unsupported_model\x22)";});
 must("prediction parameters",[/configuredReasoningEffort:([\w$]+),unsupportedModels:/],function(m,name){return "configuredReasoningEffort:"+name+",predictionModel:damndotsPredictionModel=null,predictionFast:damndotsPredictionFast=false,unsupportedModels:";});
-must("prediction call site",[/configuredReasoningEffort:([\w$]+)\.prediction_reasoning_effort,unsupportedModels:([\w$]+)\.unsupported_models/],function(m,cfg,models){return "configuredReasoningEffort:"+cfg+".prediction_reasoning_effort,predictionModel:damndotsPredictionModel,predictionFast:damndotsPredictionFast,unsupportedModels:"+models+".unsupported_models";});
+must("prediction call site",[/configuredReasoningEffort:([\w$]+)\.prediction_reasoning_effort,unsupportedModels:([\w$]+)\.unsupported_models/],function(m,cfg,models){return "configuredReasoningEffort:"+cfg+".prediction_reasoning_effort,predictionModel:"+cfg+".damndotsPredictionModel,predictionFast:"+cfg+".damndotsPredictionFast,unsupportedModels:"+models+".unsupported_models";});
 must("thread sample gate",
 [/if\(([\w$]+)&&([\w$]+)\.(\w+)\(([\w$]+)\.appServerVersion,"threadSample"\)\)/,
 /if\(([\w$]+)&&(\w+)\(([\w$]+)\.appServerVersion,"threadSample"\)\)/,
