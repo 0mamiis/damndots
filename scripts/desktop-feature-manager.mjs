@@ -40,6 +40,7 @@ export function ensureFeatures({nativeDir,adopt,includeLocalPatches=true,sourceP
  // Composer suggestions are opt-in: only patch the managed copy when this machine already has the setting.
  const composerPrefs=path.join(os.homedir(),'.codex','dots-local-bridge','composer-predictions.json');
  const composerEnabled=fs.existsSync(composerPrefs);
+ if(sourcePackage.version==='26.1029.7803.0')scripts.push('patch-remote-picker.cjs');
  if(composerEnabled)scripts.push('patch-composer-predictions.cjs');
  const assets=['desktop-features/orchestrator-ui.js','desktop-features/orchestrator-rspack.js','desktop-features/native-subpicker.cjs','desktop-features/native-subpicker-rspack.cjs','desktop-features/orchestrator-main.js','desktop-features/orchestrator-main-ipc.js','asar-locate.cjs','desktop-features/opencodex-tps-main.js','token-speed-renderer.js','token-speed-runtime.js','orchestrator-renderer.js','orchestrator-runtime.js','desktop-startup-patch.cjs','desktop-renderer-bindings.cjs','desktop-build-targets.cjs'];
  if(composerEnabled)assets.push('native-prediction-preferences.js');
