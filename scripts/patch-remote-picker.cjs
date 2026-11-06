@@ -30,7 +30,19 @@ patch('webview/assets/async/'+hits[0],s=>{
  // 26.1103 has the unified location picker (opened by the gates above) instead of this menu; leave this menu unchanged there.
  return s+'\ntry{if(typeof document!=="undefined"&&!document.getElementById("damndots-picker-rows")){const st=document.createElement("style");st.id="damndots-picker-rows";st.textContent='+JSON.stringify(css)+';document.head.appendChild(st)}}catch(e){}\n/* damndots-remote-picker-v3 */';
 });
-for(const n of gateHits)if(n!==hits[0])patch('webview/assets/async/'+n,s=>s.includes('/* damndots-remote-gate */')?s:s.replace(gateRe,'!0')+'\n/* damndots-remote-gate */');
+// Codex 26.1103: the "Work in" location menu lists only This computer and Cloud; add "Remote machine" that opens the project picker.
+const menuHits=Object.keys(assets).filter(n=>/\.js$/.test(n)&&assets[n].size<2.5e7&&n!==hits[0]).filter(n=>{const s=body.subarray(+assets[n].offset,+assets[n].offset+assets[n].size).toString();return s.includes('composer.newTask.searchCloudPlaceholder')&&s.includes(',!eU&&et?.onDefaultSelected!=null&&!eR&&');});
+if(menuHits.length>1)throw Error('Ambiguous Work in location menu');
+for(const n of menuHits)patch('webview/assets/async/'+n,s=>{
+ if(s.includes('/* damndots-remote-menu */'))return s;
+ const anchor=',!eU&&et?.onDefaultSelected!=null&&!eR&&';
+ const j=s.match(/\(0,([\w$]+)\.jsx\)\(([\w$]+)\.ms\.Item,\{leftIconAsset:[\w$]+\.g,RightIcon:"local"/),r=s.match(/remote:([\w$]+)\.t,computer:/);
+ if(!j||!r||s.split(anchor).length!==2)throw Error('Work in location menu changed');
+ const label='(/^tr/i.test(navigator.language)?"Uzak makine":"Remote machine")';
+ const item=',(0,'+j[1]+'.jsx)('+j[2]+'.ms.Item,{leftIconAsset:'+r[1]+'.t,onSelect:()=>{setTimeout(()=>{const b=document.querySelector(\'[data-composer-navigation-target="workspace-project"]\');b&&b.click()},120)},children:'+label+'},"damndots-remote-machine")';
+ return s.replace(gateRe,'!0').replace(anchor,item+anchor)+'\n/* damndots-remote-menu */';
+});
+for(const n of gateHits)if(n!==hits[0]&&!menuHits.includes(n))patch('webview/assets/async/'+n,s=>s.includes('/* damndots-remote-gate */')?s:s.replace(gateRe,'!0')+'\n/* damndots-remote-gate */');
 const json=Buffer.from(JSON.stringify(meta)),payload=(4+json.length+3)&~3,pickle=Buffer.alloc(4+payload),head=Buffer.alloc(8);pickle.writeUInt32LE(payload);pickle.writeUInt32LE(json.length,4);json.copy(pickle,8);head.writeUInt32LE(4);head.writeUInt32LE(pickle.length,4);
 const result=Buffer.concat([head,pickle,body,...changed.map(x=>x.bytes)]),exe=fs.readFileSync(path.join(root,'ChatGPT.exe')),needle=Buffer.from(hash(oldHeader)),at=exe.indexOf(needle);if(at<0||exe.indexOf(needle,at+1)>=0)throw Error('EXE integrity anchor changed');Buffer.from(hash(json)).copy(exe,at);
 fs.writeFileSync(file,result);fs.writeFileSync(path.join(root,'ChatGPT.exe'),exe);
