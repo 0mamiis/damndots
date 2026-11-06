@@ -5,10 +5,10 @@
 module.exports={picker,slider};
 function picker(s,lit,sub,textClass){
  const BT=String.fromCharCode(96);
- const head=[...s.matchAll(/function ([\w$]+)\(e\)\{let [\w$,]+=\(0,[\w$]+\.c\)\(\d+\),\{serviceTierDefaults:[\w$]+,conversationId:[\w$]+,hasThreadResumeFailed:[\w$]+,hideLabel:[\w$]+,home:[\w$]+,isCodexHome:[\w$]+,permissionsCwdOverride:[\w$]+,permissionsHostId:[\w$]+\}=e,/g)];
+ const head=[...s.matchAll(/([\w$]+:)?function(?: ([\w$]+))?\(e\)\{let [\w$,]+=\(0,[\w$]+\.c\)\(\d+\),\{serviceTierDefaults:[\w$]+,conversationId:[\w$]+,hasThreadResumeFailed:[\w$]+,hideLabel:[\w$]+,home:[\w$]+,isCodexHome:[\w$]+,permissionsCwdOverride:[\w$]+,permissionsHostId:[\w$]+\}=e,/g)];
  if(head.length!==1)throw Error('Unsupported Codex composer model picker header ('+head.length+')');
- const picker=head[0][1],start=head[0].index;
- const endRe=/,([\w$]+)\}function [\w$]+\(e\)\{let\{reasoningEffort:[\w$]+\}=e;return"persistent"===[\w$]+\}/g;endRe.lastIndex=start;
+ const picker=head[0][2],start=head[0].index+(head[0][1]?head[0][1].length:0),anon=!head[0][2];
+ const endRe=anon?/,([\w$]+)\}\}\)\},[\w$]+\(e,l,n\)\{/g:/,([\w$]+)\}function [\w$]+\(e\)\{let\{reasoningEffort:[\w$]+\}=e;return"persistent"===[\w$]+\}/g;endRe.lastIndex=start;
  const em=endRe.exec(s);if(!em)throw Error('Unsupported Codex composer model picker end');
  const retVar=em[1],end=em.index+1+retVar.length+1;
  let b=s.slice(start,end);
@@ -25,7 +25,7 @@ function picker(s,lit,sub,textClass){
   b=sub(b,/selectedLabel:([\w$]+)\?(\(0,([\w$]+)\.jsxs\)\("span",\{className:"flex min-w-0 items-center gap-1",children:\[[\w$]+\?null:\(0,[\w$]+\.jsx\)\("span",\{"aria-hidden":"true",children:"🌙"\}\),(\(0,[\w$]+\.jsx\)\(([\w$]+\.P),\{model:([\w$]+),displayName:[\w$]+\?\.displayName,stripGptPrefix:!0\}\)),(\(0,[\w$]+\.jsx\)\([\w$]+\.O,\{collapse:"none",children:\(0,[\w$]+\.jsx\)\([\w$]+\.A,\{\.\.\.[\w$]+\.h\[[\w$]+\]\}\)\}\))\]\}\)):void 0,/g,(m,flag,whole,jsx,modelEl,comp,model,eff)=>'selectedLabel:codexSub?codexSubagentTriggerChild('+R+',(0,'+jsx+'.jsxs)("span",{className:"flex min-w-0 items-center gap-1",children:[(0,'+jsx+'.jsx)("span",{style:{color:"var(--color-text-primary)"},children:(0,'+jsx+'.jsx)('+comp+',{model:'+model+',displayName:'+dn[1]+',stripGptPrefix:!0,labelClassName:"'+textClass+'"})}),'+eff+']})):'+flag+'?'+whole+':void 0,',1,'picker trigger label');}
  b=sub(b,/"data-composer-navigation-target":"reasoning"/g,()=>'"data-composer-navigation-target":codexSub?void 0:"reasoning"',2,'picker navigation target');
  b=sub(b,/\(0,([\w$]+)\.jsx\)\(([\w$]+\.[\w$]+),\{align:"end",disabled:/g,(m,j,k)=>'(0,'+j+'.jsx)('+k+',{codexMenuHeader:codexSub?codexSubagentHeader('+R+'):void 0,align:"end",disabled:',1,'picker menu header');
- s=s.slice(0,start)+b+'try{window.__codexComposerModelPicker='+picker+'}catch(e){}'+s.slice(end);
+ s=anon?s.slice(0,start)+'codexPickerExport('+b+')'+s.slice(end):s.slice(0,start)+b+'try{window.__codexComposerModelPicker='+picker+'}catch(e){}'+s.slice(end);
  s=sub(s,/(shouldReduceMotion:[\w$]+,triggerButton:[\w$]+,triggerRef:[\w$]+)\}=e,/g,(m,x)=>x+',codexMenuHeader:codexMH}=e,',1,'dropdown header prop');
  s=sub(s,/(\(0,[\w$]+\.jsx\)\([\w$]+\.[\w$]+,\{)(active:[\w$]+,fallbackModelLabel:[\w$]+,isExplicitModelSelection:[\w$]+,menuFooter:)/g,(m,a,x)=>a+'menuHeader:codexMH,'+x,1,'dropdown menu header');
  s=sub(s,/(\(0,[\w$]+\.jsx\)\([\w$]+\.Y,\{)(contentRef:[\w$]+,disabled:[\w$]+,isExplicitModelSelection:[\w$]+,keepSimpleView:[\w$]+,menuFooter:)/g,(m,a,x)=>a+'menuHeader:codexMH,'+x,1,'dropdown unified menu header');
@@ -40,6 +40,7 @@ function slider(s){
 function helpers(BT){
  const K=BT+'codex-orchestrator-subagent-model-v1'+BT,CH=BT+'codex-orchestrator-change'+BT;
  return 'function codexSubagentShortcut(f,v){return f?null:v}'+
+ '\nfunction codexPickerExport(f){try{window.__codexComposerModelPicker=f}catch(e){}return f}'+
  '\nfunction codexSubagentWrap(R,flag,main,props){if(flag||props&&props.hideLabel)return main;let P=window.__codexComposerModelPicker,W=window.__codexOrchNativeWrap;return P&&W?W(R,main,P,props):main}'+
  '\nfunction codexSubagentTriggerChild(R,v){let C=window.__codexOrchTriggerLabel;return C?R.createElement(C,{model:v}):v}'+
  '\nfunction codexSubagentHeader(R){let C=window.__codexOrchMenuHeader;return C?R.createElement(C,null):void 0}'+

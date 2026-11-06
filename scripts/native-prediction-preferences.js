@@ -29,3 +29,32 @@ function damndotsConnectComposerPredictions(controller) {
  const timer=setInterval(()=>void tick(),2000);timer.unref();void tick();
  return ()=>{closed=true;clearInterval(timer);};
 }
+// Codex 26.1103: thread/sample always uses the chat model. With a custom prediction model, sample the transcript through the local OpenCodex endpoint instead.
+async function damndotsSampleThread(client,model,fast,params,signal){
+ if(!model&&!fast)return client.sampleThread(params,signal);
+ const fs=require('node:fs'),path=require('node:path'),os=require('node:os');
+ let base='http://127.0.0.1:10100/v1';
+ try{const toml=fs.readFileSync(path.join(os.homedir(),'.codex','config.toml'),'utf8'),m=toml.match(/^\s*openai_base_url\s*=\s*"([^"]+)"/m);if(m&&/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(m[1]))base=m[1].replace(/\/$/,'');}catch{}
+ const thread=await client.readThread(params.threadId,{includeTurns:true});
+ const lines=[];
+ for(const turn of (thread&&thread.turns)||[]){
+  for(const item of turn.items||[]){
+   let text='',role=null;
+   if(item.type==='userMessage'){role='User';text=(item.content||[]).map(c=>c&&c.type==='text'?c.text:'').join('');}
+   else if(item.type==='agentMessage'){role='Assistant';text=item.text||'';}
+   if(role&&text.trim())lines.push(role+': '+text.trim().slice(0,2000));
+  }
+ }
+ const transcript=lines.slice(-24).join('\n\n').slice(-24000);
+ const body={model:model||undefined,stream:false,store:false,input:[{role:'user',content:[{type:'input_text',text:'Conversation so far:\n\n'+transcript}]},{role:'user',content:[{type:'input_text',text:params.prompt}]}]};
+ if(params.effort)body.reasoning={effort:params.effort};
+ if(fast)body.service_tier='priority';
+ const res=await fetch(base+'/responses',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.any([signal,AbortSignal.timeout(25000)])});
+ if(!res.ok)throw Error('Prediction request failed ('+res.status+')');
+ const data=await res.json();
+ let text=null;
+ for(const o of data.output||[])if(o.type==='message')for(const c of o.content||[])if(c.type==='output_text'&&typeof c.text==='string')text=(text||'')+c.text;
+ text=text&&text.replace(/^\s*```(?:json)?\s*/i,'').replace(/\s*```\s*$/,'');
+ const u=data.usage||{};
+ return {text,responseId:data.id||null,inputTokens:u.input_tokens??null,cachedInputTokens:(u.input_tokens_details&&u.input_tokens_details.cached_tokens)??null};
+}

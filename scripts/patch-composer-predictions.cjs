@@ -13,14 +13,14 @@ const mainShort=predCandidates.length===1?predCandidates[0]:require('./desktop-b
 const matches=all.filter(([name])=>name==='.vite/build/'+mainShort);if(matches.length!==1)throw Error('main module not unique');
 const [name,entry]=matches[0];let source=body.subarray(+entry.offset,+entry.offset+entry.size).toString();
 const BT=String.fromCharCode(96);
-function must(label,patterns,make){
+function must(label,patterns,make,optional){
  for(const re of patterns){
   const g=new RegExp(re.source,re.flags.includes("g")?re.flags:re.flags+"g");
   const hits=[...source.matchAll(g)];
-  if(hits.length===1){source=source.replace(g,make);return;}
+  if(hits.length===1){source=source.replace(g,make);return true;}
   if(hits.length>1)throw Error("Anchor ambiguous: "+label);
  }
- throw Error("Anchor changed: "+label);
+ if(optional)return false;throw Error("Anchor changed: "+label);
 }
 // Codex 26.1027 renamed the prediction controller locals; match by shape instead of exact identifiers.
 must("prediction settings hook",[/this\.unsubscribeSettings=([\w$]+)\.onDidChange\(([\w$.]+),\(\)=>this\.clear\(\)\)/],function(){return "this.damndotsPredictionCleanup=damndotsConnectComposerPredictions(this),"+arguments[0];});
@@ -31,13 +31,19 @@ must("prediction provider gate",
 function(m,thread,providerOut,list,modelOut){return list+"?.includes("+thread+".model)&&("+modelOut+"=\x22unsupported_model\x22)";});
 must("prediction parameters",[/configuredReasoningEffort:([\w$]+),unsupportedModels:/],function(m,name){return "configuredReasoningEffort:"+name+",predictionModel:damndotsPredictionModel=null,predictionFast:damndotsPredictionFast=false,unsupportedModels:";});
 must("prediction call site",[/configuredReasoningEffort:([\w$]+)\.prediction_reasoning_effort,unsupportedModels:([\w$]+)\.unsupported_models/],function(m,cfg,models){return "configuredReasoningEffort:"+cfg+".prediction_reasoning_effort,predictionModel:"+cfg+".damndotsPredictionModel,predictionFast:"+cfg+".damndotsPredictionFast,unsupportedModels:"+models+".unsupported_models";});
-must("thread sample gate",
-[/if\(([\w$]+)&&([\w$]+)\.(\w+)\(([\w$]+)\.appServerVersion,"threadSample"\)\)/,
-/if\(([\w$]+)&&(\w+)\(([\w$]+)\.appServerVersion,"threadSample"\)\)/,
-/if\(([\w$]+)&&([\w$]+)\.(\w+)\(([\w$]+)\.appServerVersion,\x60threadSample\x60\)\)/],
-function(m){return "if(!damndotsPredictionModel&&!damndotsPredictionFast&&"+m.slice(3);});
-must("native prediction switch",[/experimentalPredictionMode:!0,experimentalDisablePredictionMcp:/],function(){return "experimentalPredictionMode:!damndotsPredictionModel&&!damndotsPredictionFast,experimentalDisablePredictionMcp:";});
-must("prediction request model",[/responseSchema:([\w$]+)\.([\w$]+),schema:null,model:null,effort:([\w$]+)/],function(m,ns,schema,effort){return "responseSchema:"+ns+"."+schema+",schema:null,model:damndotsPredictionModel??null,serviceTier:damndotsPredictionFast?\"priority\":null,effort:"+effort;});
+// Codex 26.1103 only has thread/sample (always the chat model). Older builds had a separate request path with a model field.
+const sampleOnly=/if\(!([\w$]+)\(([\w$]+)\.appServerVersion,"threadSample"\)\)return null;let ([\w$]+)=await ([\w$]+)\.sampleThread\(/.test(source);
+if(sampleOnly){
+ must("thread sample gate",[/if\(!([\w$]+)\(([\w$]+)\.appServerVersion,"threadSample"\)\)return null;let ([\w$]+)=await ([\w$]+)\.sampleThread\(/],function(m,fn,client,res,c2){return "if(!damndotsPredictionModel&&!damndotsPredictionFast&&!"+fn+"("+client+".appServerVersion,\"threadSample\"))return null;let "+res+"=await damndotsSampleThread("+client+",damndotsPredictionModel,damndotsPredictionFast,";});
+}else{
+ must("thread sample gate",
+ [/if\(([\w$]+)&&([\w$]+)\.(\w+)\(([\w$]+)\.appServerVersion,"threadSample"\)\)/,
+ /if\(([\w$]+)&&(\w+)\(([\w$]+)\.appServerVersion,"threadSample"\)\)/,
+ /if\(([\w$]+)&&([\w$]+)\.(\w+)\(([\w$]+)\.appServerVersion,\x60threadSample\x60\)\)/],
+ function(m){return "if(!damndotsPredictionModel&&!damndotsPredictionFast&&"+m.slice(3);});
+ must("native prediction switch",[/experimentalPredictionMode:!0,experimentalDisablePredictionMcp:/],function(){return "experimentalPredictionMode:!damndotsPredictionModel&&!damndotsPredictionFast,experimentalDisablePredictionMcp:";});
+ must("prediction request model",[/responseSchema:([\w$]+)\.([\w$]+),schema:null,model:null,effort:([\w$]+)/],function(m,ns,schema,effort){return "responseSchema:"+ns+"."+schema+",schema:null,model:damndotsPredictionModel??null,serviceTier:damndotsPredictionFast?\"priority\":null,effort:"+effort;});
+}
 source+='\n'+fs.readFileSync(path.join(__dirname,'native-prediction-preferences.js'),'utf8');
 cp.execFileSync(process.execPath,['--input-type=module','--check'],{input:source});
 const bytes=Buffer.from(source);entry.offset=String(body.length);entry.size=bytes.length;entry.integrity.hash=hash(bytes);entry.integrity.blocks=[];for(let i=0;i<bytes.length;i+=entry.integrity.blockSize)entry.integrity.blocks.push(hash(bytes.subarray(i,i+entry.integrity.blockSize)));
