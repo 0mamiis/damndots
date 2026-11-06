@@ -12,7 +12,7 @@ const listOld=/children:\[([\w$]+),([\w$]+),([\w$]+),([\w$]+),([\w$]+),([\w$]+),
 const list={test:s=>listOld.test(s)||listNew.test(s)};
 const cloud=/\(0,([\w$]+)\.jsx\)\(([\w$]+)\.ms\.Item,\{LeftIcon:([\w$]+)\.LL7[,}]/;
 const close=/closeDropdown:([\w$]+),openHandoffDialog:/;
-const css='[class*="scrollSection-"]>*{flex-shrink:0}';
+const css='[class*="scrollSection-"]>*{flex-shrink:0}.flex.w-max.min-w-full.items-center.gap-2:has([data-composer-navigation-target="workspace-project"]){flex-direction:row-reverse;justify-content:flex-end}';
 const assets=meta.files.webview.files.assets.files.async.files;
 // Codex 26.1103: the unified project/remote-host picker sits behind rollout gate 1678134557, which is off for this account.
 const gateRe=/\(0,[\w$]+\._U\)\([\w$]+\.JW,"(?:1678134557|4114442250)"\)|(?<![\w$.])e\([\w$]+\.JW,"(?:1678134557|4114442250)"\)/g;
@@ -39,7 +39,7 @@ for(const n of menuHits)patch('webview/assets/async/'+n,s=>{
  const j=s.match(/\(0,([\w$]+)\.jsx\)\(([\w$]+)\.ms\.Item,\{leftIconAsset:[\w$]+\.g,RightIcon:"local"/),r=s.match(/remote:([\w$]+)\.t,computer:/);
  if(!j||!r||s.split(anchor).length!==2)throw Error('Work in location menu changed');
  const label='(/^tr/i.test(navigator.language)?"Uzak makine":"Remote machine")';
- const item=',(0,'+j[1]+'.jsx)('+j[2]+'.ms.Item,{leftIconAsset:'+r[1]+'.t,onSelect:()=>{setTimeout(()=>{const b=document.querySelector(\'[data-composer-navigation-target="workspace-project"]\');b&&b.click()},120)},children:'+label+'},"damndots-remote-machine")';
+ const item=',(0,'+j[1]+'.jsx)('+j[2]+'.ms.Item,{leftIconAsset:'+r[1]+'.t,onSelect:()=>{const q=()=>document.querySelector(\'[data-composer-navigation-target="workspace-project"]\'),go=()=>{const b=q();b&&b.getAttribute(\'aria-expanded\')!==\'true\'&&b.click()};setTimeout(go,250);setTimeout(go,700)},children:'+label+'},"damndots-remote-machine")';
  return s.replace(gateRe,'!0').replace(anchor,item+anchor)+'\n/* damndots-remote-menu */';
 });
 for(const n of gateHits)if(n!==hits[0]&&!menuHits.includes(n))patch('webview/assets/async/'+n,s=>s.includes('/* damndots-remote-gate */')?s:s.replace(gateRe,'!0')+'\n/* damndots-remote-gate */');
