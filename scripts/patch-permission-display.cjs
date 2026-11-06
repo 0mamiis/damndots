@@ -12,9 +12,10 @@ if(isRspack){
  const targets=names.filter(n=>/^async\//.test(n)||true).length?[]:[];
  const asyncFiles=meta.files.webview.files.assets.files.async.files;
  const read=n=>body.subarray(+asyncFiles[n].offset,+asyncFiles[n].offset+asyncFiles[n].size).toString();
- const wanted=Object.keys(asyncFiles).filter(n=>/\.js$/.test(n)&&asyncFiles[n].size<2e6).filter(n=>{const t=read(n);return /onContinueWithFullAccess:[\w$]+,onContinueWithFallback:/.test(t)||/onConfirm:\(\)=>[\w$]+\([\w$]+\.value\)\}\)/.test(t)&&t.includes('"full-access"===');});
+ const wanted=Object.keys(asyncFiles).filter(n=>/\.js$/.test(n)&&asyncFiles[n].size<2e6).filter(n=>{const t=read(n);return /onContinueWithFullAccess:[\w$]+,onContinueWithFallback:/.test(t)||/\{conversationId:[\w$]+,onConfirm:/.test(t)&&t.includes('"full-access"===');});
  if(!wanted.length)throw Error('Unsupported permission dialog bundle');
- for(const n of wanted)patch('webview/assets/async/'+n,s=>adapter.rspackDialogs(s));
+ const customFiles=Object.keys(asyncFiles).filter(n=>/\.js$/.test(n)&&asyncFiles[n].size<2e6).filter(n=>{const t=read(n);return t.includes('"custom"!==e')&&t.includes('canShowCustom:')&&adapter.rspackCustom(t)!==null;});
+ for(const n of new Set([...wanted,...customFiles]))patch('webview/assets/async/'+n,s=>{if(wanted.includes(n))s=adapter.rspackDialogs(s);if(customFiles.includes(n))s=adapter.rspackCustom(s)+'\n/* damndots-custom-display */';return s;});
  const mainFile=require('./asar-locate.cjs').locate(meta,body,{needles:['requestClient.getAppServerVersion()','orbit.navigation'],label:'permission flag host'});
  patch('webview/assets/'+mainFile,s=>s+'\n'+"(function(){var go=function(){try{var r=window.electronBridge&&window.electronBridge.getPermissionDisplayPreferences;if(typeof r==='function')Promise.resolve(r()).then(function(p){window.__damndotsHideDialogs=!!(p&&p.hideInformationDialogs===true)},function(){})}catch(e){}};go();setInterval(go,2000)})();"+'\n/* damndots-custom-display */');
 }else{

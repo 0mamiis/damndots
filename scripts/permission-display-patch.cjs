@@ -60,9 +60,25 @@ function rspackDialogs(source){
   if(go&&call.includes('onContinueWithFallback:'))spans.push([hm.index,i+1,go[1]]);
  }
  for(const [st,en,go] of spans.reverse()){done++;source=source.slice(0,st)+'(window.__damndotsHideDialogs===true?'+go+'():'+source.slice(st,en)+')'+source.slice(en);}
- const full=/\(0,([\w$]+)\.qf\)\(([\w$]+),([\w$]+),\{conversationId:([\w$]+),onConfirm:\(\)=>([\w$]+)\(([\w$]+)\.value\)\}\)/g;
- source=source.replace(full,(m,qf,host,cmp,conv,pick,item)=>{done++;return '(window.__damndotsHideDialogs===true?'+pick+'('+item+'.value):'+m+')';});
+ // Full-access confirm: (0,X.qf)(host,Cmp,{conversationId:C,onConfirm:HANDLER}); take the whole call by balancing parentheses.
+ {const h2=/\(0,([\w$]+)\.qf\)\(([\w$]+),([\w$]+),\{conversationId:([\w$]+),onConfirm:/g;let m2;const sp=[];
+  while((m2=h2.exec(source))){
+   if(source.slice(Math.max(0,m2.index-40),m2.index).includes('__damndotsHideDialogs===true?'))continue;
+   const op=source.indexOf('(',m2.index+m2[0].indexOf(').qf)')+5);let dd=0,j=op;
+   for(;j<source.length;j++){const c=source[j];if(c==='(')dd++;else if(c===')'){dd--;if(!dd)break;}}
+   const call=source.slice(m2.index,j+1),hs=m2[0].length;
+   let body=call.slice(hs,call.length-2);// handler text before closing }) 
+   if(!/^(\(\)=>|[\w$]+$)/.test(body))continue;
+   sp.push([m2.index,j+1,body]);
+  }
+  for(const [st,en,body] of sp.reverse()){done++;source=source.slice(0,st)+'(window.__damndotsHideDialogs===true?('+body+')():'+source.slice(st,en)+')'+source.slice(en);}
+ }
  if(!done)throw Error('Unsupported permission dialog bundle');
  return source;
 }
-module.exports={fullAccess,ultra,custom,preferredCustom,legacyCustom,rspackDialogs};
+function rspackCustom(source){
+ const filter=/([\w$]+)=![\w$]+&&null!=[\w$]+&&[\w$]+\.includes\([\w$]+\)&&![\w$]+\?([\w$]+)\.filter\(e=>"custom"!==e\):\2/g;
+ let n=0;source=source.replace(filter,(m,lhs,all)=>{n++;return lhs+'='+all;});
+ return n?source:null;
+}
+module.exports={fullAccess,ultra,custom,preferredCustom,legacyCustom,rspackDialogs,rspackCustom};
