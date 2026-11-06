@@ -15,6 +15,8 @@ export const isWhamAccountCheckRoute=(method:string|undefined,path:string)=>meth
 /** Composer predictions use the local Dots configuration, not the signed-in account's upstream configuration. */
 export const isComposerPredictionConfigRoute=(method:string|undefined,path:string)=>method==='GET'&&path==='/backend-api/wham/predictions/config';
 
+/** Flags whose real-account value must win over the Dots server's self-hosted flag set. */
+const REAL_ONLY_GATES=['3085093835'];
 const object=(value:unknown):Record<string,any>|undefined=>value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,any>:undefined;
 /** Keeps the real account's feature flags and adds only the flags Dots needs. Returns undefined when hashes are incompatible. */
 export function mergeStatsig(real:unknown,local:unknown):unknown|undefined{
@@ -24,7 +26,10 @@ export function mergeStatsig(real:unknown,local:unknown):unknown|undefined{
   try{realPayload=encoded?JSON.parse(realBody.statsigPayload):realBody;localPayload=typeof localBody.statsigPayload==='string'?JSON.parse(localBody.statsigPayload):localBody;}catch{return;}
   if(!object(realPayload)||!object(localPayload?.feature_gates))return;
   if(realPayload.hash_used!=='djb2'||localPayload.hash_used!=='djb2')return;
-  realPayload.feature_gates={...(object(realPayload.feature_gates)||{}),...localPayload.feature_gates};
+  // The Dots server publishes a full self-hosted flag set for its isolated app. In the original app the real account decides
+  // layout flags such as the Spaces navigation (it replaces the rail's usage meter), so those are never taken from Dots.
+  const keep={...localPayload.feature_gates};for(const id of REAL_ONLY_GATES)delete keep[id];
+  realPayload.feature_gates={...(object(realPayload.feature_gates)||{}),...keep};
   // Codex 26.1027 hides the Remote location picker behind these rollout gates. The remote host can be
   // an older Dots server that does not publish them, so the local gateway enables the UI here.
   for(const id of ['4114442250','3296668107'])realPayload.feature_gates[id]={name:id,value:true,rule_id:'damndots-local',secondary_exposures:[],id_type:'userID'};

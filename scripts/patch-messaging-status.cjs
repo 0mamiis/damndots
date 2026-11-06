@@ -16,7 +16,10 @@ patch('webview/assets/'+name,s=>{
  if(s.includes('/* damndots-messaging-status-v1 */'))return s;
  if(nameHits.length!==1){
   // Codex 26.1029: same banner, re-minified names. The reconnect flag leaves the visibility test and the label choice.
-  const show=/(![\w$]+)&&\(([\w$]+)\|\|([\w$]+)\)&&(\(0,[\w$]+\.jsx\)\("div",\{className:"flex items-center justify-center gap-2 py-3 text-secondary select-none")/;
+  // Codex 26.1103: the banner flag is a single derived value (connection flag, or a loading error).
+ const flag=/([\w$]+)=([\w$]+)&&\(void 0!==([\w$]+)&&\3\|\|!![\w$]+&&[\w$]+\.loading\)(;[\w$]+\[\d+\]!==)/g,fh=[...s.matchAll(flag)];
+ if(fh.length===1&&s.includes('Nonblocking status while reconnecting a messaging conversation')){s=s.replace(flag,(_m,v,p,x,tail)=>v+'=!1'+tail);return s+'/* damndots-messaging-status-v1 */';}
+ const show=/(![\w$]+)&&\(([\w$]+)\|\|([\w$]+)\)&&(\(0,[\w$]+\.jsx\)\("div",\{className:"flex items-center justify-center gap-2 py-3 text-secondary select-none")/;
   const m=s.match(show);if(!m)throw Error('Unsupported Codex messaging reconnect banner');
   s=s.replace(show,(_,x,r,ok,tail)=>x+'&&'+ok+'&&'+tail);
   const label=new RegExp('children:'+m[2].replace('$','\\$')+'\\|\\|[\\w$]+\\.loading\\|\\|!'+m[3].replace('$','\\$')+'\\?');

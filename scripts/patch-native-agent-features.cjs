@@ -33,15 +33,24 @@ function patchRspackRenderer(s){
  if(!starts.length)throw Error('Native module boundary missing');
  const last=starts[starts.length-1],ins=last.index+last[0].length;
  s=s.slice(0,ins)+'window.__dotsRequire=n;'+s.slice(ins);
- const notify=[...s.matchAll(/([\w$]+)\.events\.emitNotification\(([\w$]+),([\w$]+)\);return\}switch\(\2\.method\)\{/g)];
+ // Codex 26.1103 runs the app-server manager in a worker and the page subscribes over RPC: add a page-side subscription for the token speed events.
+ const rpcSub=/(let ([\w$]+)=\(\)=>([\w$]+)\.connection===([\w$]+);)("all"===([\w$]+)&&([\w$]+)\.push\(([\w$]+)\.subscribe\(\{type:"notification",key:\{hostId:([\w$]+)\})/g,rpcHits=[...s.matchAll(rpcSub)];
+ if(rpcHits.length===1){
+  const m=rpcHits[0],guard=m[2],pushList=m[7],client=m[8],host=m[9];
+  const body="try{var P=e.params;if(e.method==='turn/started'){try{var sr=document.querySelector('[data-app-action-sidebar-thread-selected]:not([data-app-action-sidebar-thread-selected=false])'),sid=sr&&sr.getAttribute('data-app-action-sidebar-thread-id');if(sid&&/client-new-thread:/.test(sid)&&P&&P.threadId){(window.__dotsThreadMap=window.__dotsThreadMap||{})[String(sid).replace(/^[a-z]+:/,'')]=String(P.threadId);window.dispatchEvent(new Event('codex-orchestrator-change'))}}catch(z){}}if(e.method==='turn/started')window.__codexTpsOnTurnStarted?.(P);else if(e.method==='turn/completed')window.__codexTpsOnTurnCompleted?.(P);else if(e.method==='item/started')window.__codexTpsOnItemStart?.(P);else if(e.method==='item/agentMessage/delta'||e.method==='item/plan/delta'||e.method==='item/reasoning/summaryTextDelta'||e.method==='item/reasoning/textDelta')window.__codexTpsOnDelta?.(P);else if(e.method==='thread/tokenUsage/updated')window.__codexTpsOnUsage?.(P)}catch(x){}";
+  s=s.replace(rpcSub,()=>m[1]+pushList+'.push('+client+'.subscribe({type:"notification",key:{hostId:'+host+'},methods:["turn/started","turn/completed","item/started","item/agentMessage/delta","item/plan/delta","item/reasoning/summaryTextDelta","item/reasoning/textDelta","thread/tokenUsage/updated"],listener:e=>{if('+guard+'())'+'{'+body+'}}}));'+m[5]);
+  let h2=null;
+ }
+ const notifyOld=rpcHits.length!==1;
+ if(notifyOld){ const notify=[...s.matchAll(/([\w$]+)\.events\.emitNotification\(([\w$]+),([\w$]+)\);return\}switch\(\2\.method\)\{/g)];
  if(notify.length!==1)throw Error('Native event notification boundary changed');
  const v=notify[0][2];
  const hook="try{if(V.method==='turn/started')window.__codexTpsOnTurnStarted?.(V.params);else if(V.method==='turn/completed')window.__codexTpsOnTurnCompleted?.(V.params);else if(V.method==='item/started')window.__codexTpsOnItemStart?.(V.params);else if(V.method==='item/agentMessage/delta'||V.method==='item/plan/delta'||V.method==='item/reasoning/summaryTextDelta'||V.method==='item/reasoning/textDelta')window.__codexTpsOnDelta?.(V.params);else if(V.method==='thread/tokenUsage/updated')window.__codexTpsOnUsage?.(V.params)}catch(e){}".split('V.').join(v+'.');
- s=s.replace(notify[0][0],()=>notify[0][1]+'.events.emitNotification('+v+','+notify[0][3]+');return}'+hook+'switch('+v+'.method){');
+ s=s.replace(notify[0][0],()=>notify[0][1]+'.events.emitNotification('+v+','+notify[0][3]+');return}'+hook+'switch('+v+'.method){');}
  let helper=fs.readFileSync(path.join(__dirname,'desktop-features/orchestrator-ui.js'),'utf8');
  const scopeRe=/function codexOrchestratorComposerScope\(\)\{[^\n]+\}/;
  if(!scopeRe.test(helper))throw Error('Composer helper identity boundary changed');
- helper=helper.replace(scopeRe,()=>"function codexOrchestratorComposerScope(){try{var r=document.querySelector('[data-app-action-sidebar-thread-selected=\"true\"]'),id=r&&r.getAttribute('data-app-action-sidebar-thread-id');if(id){if(/^[a-z]+:client-new-thread:/.test(id))return 'draft:new';return String(id).replace(/^[a-z]+:/,'')}}catch(e){}return 'draft:new'}");
+ helper=helper.replace(scopeRe,()=>"function codexOrchestratorComposerScope(){try{var r=document.querySelector('[data-app-action-sidebar-thread-selected=\"true\"]'),id=r&&r.getAttribute('data-app-action-sidebar-thread-id');if(id){var raw=String(id).replace(/^[a-z]+:/,'');if(/^client-new-thread:/.test(raw)){var mp=window.__dotsThreadMap&&window.__dotsThreadMap[raw];return mp||'draft:new'}return raw}}catch(e){}return 'draft:new'}");
  helper=helper.replace("eco({ hostId: 'local' })","null");
  return s+'\n'+helper+'\n'+fs.readFileSync(path.join(__dirname,'desktop-features/orchestrator-rspack.js'),'utf8');
 }
