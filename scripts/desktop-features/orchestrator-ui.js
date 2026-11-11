@@ -319,7 +319,7 @@ function codexOrchestratorSync() {
     var bridge = window.electronBridge;
     if (!bridge || typeof bridge.syncOrchestrator !== 'function') return;
     var defaults = window.__damndotsOrchestratorDefaults;
-    bridge.syncOrchestrator({ modes: codexOrchestratorReadModes(), pending: codexOrchestratorReadPending(), note: codexOrchestratorModelNote(), defaultMode: defaults && typeof defaults.mode === 'string' ? defaults.mode : null }).then(function (r) {
+    bridge.syncOrchestrator({ modes: codexOrchestratorReadModes(), pending: codexOrchestratorReadPending(), active: (function () { try { var sc = codexOrchestratorComposerScope(); return { scope: String(sc), mode: codexOrchestratorMode(sc) || 'off', at: Date.now() }; } catch (e) { return null; } })(), note: codexOrchestratorModelNote(), defaultMode: defaults && typeof defaults.mode === 'string' ? defaults.mode : null }).then(function (r) {
       if (!r || typeof r !== 'object') return;
       var changed = false, modes = codexOrchestratorReadModes();
       if (r.claims) Object.keys(r.claims).forEach(function (k) { if (!Object.prototype.hasOwnProperty.call(modes, k)) { modes[k] = r.claims[k]; changed = true; } });
