@@ -449,7 +449,7 @@ function codexOrchestratorEnsureNative(R){
   function keyboard(e){var idx=codexOrchestratorGet(scopeId),to=e.key==="ArrowRight"?idx+1:e.key==="ArrowLeft"?idx-1:e.key==="Home"?0:e.key==="End"?M.length-1:null;if(to===null)return;e.preventDefault();e.stopPropagation();var k=Math.max(0,Math.min(M.length-1,to));if(ref.current){var nativeRoot=ref.current.querySelector('[data-model-picker-power-slider]');if(nativeRoot)nativeRoot.dispatchEvent(new WheelEvent("wheel",{deltaY:k>idx?-120:120,bubbles:true,cancelable:true}));} }
   return h('div',{ref:ref,'data-codex-orchestrator-header':'','data-codex-native-orch-slider':'',style:{'--color-chart-blue':m[3],'--color-chart-purple':m[3],'--color-accent':m[3]},onKeyDown:keyboard},
    h('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:40,padding:'2px 4px',textAlign:'center'}},
-    h('div',{style:{fontSize:14,lineHeight:'20px',fontWeight:500,color:m[3]}},m[1]),
+    h('div',{style:{fontSize:14,lineHeight:'20px',fontWeight:500,color:codexOrchLight(m[3])}},m[1]),
     h('div',{style:{fontSize:12,lineHeight:'16px',opacity:.5,whiteSpace:'nowrap'}},m[2])),
    Slider?h('div',{'data-codex-orchestrator-slider':'',tabIndex:0,role:'group','aria-label':'Orkestratör modu','aria-valuenow':i,'aria-valuetext':m[1]},h(Slider,{active:true,disabled:!scopeId,fastModeEnabled:false,initialOptionId:m[0],keyboardControlFocused:false,onSelectOption:pick,onCommitOption:pick,onCancelOption:function(){},onConfirmCurrentOption:function(){},onDragToMax:function(){},options:options,selectedOptionId:m[0],shouldReduceMotion:reduced,transitionsReady:true})):null,
    h('div',{style:{height:.5,margin:'6px 8px 0',background:'color-mix(in srgb, currentColor 12%, transparent)'}}));
@@ -463,8 +463,8 @@ function codexOrchestratorEnsureNative(R){
    btn.removeAttribute('data-composer-navigation-target');btn.setAttribute('data-codex-subagent-trigger','');
   });
   if(i===0)return h('span',{ref:ref,className:'truncate whitespace-nowrap','data-codex-orchestrator-label':'off'},'Orkestratör');
-  if(props.model==null)return h('span',{ref:ref,className:'shrink-0 whitespace-nowrap '+(window.__codexModelTextClass||''),'data-codex-orchestrator-label':m[0],style:{color:m[3]}},m[1]);
-  return h('span',{ref:ref,className:'flex min-w-0 items-center gap-1.5','data-codex-orchestrator-label':m[0]},h('span',{className:'shrink-0 whitespace-nowrap '+(window.__codexModelTextClass||''),style:{color:m[3]}},m[1]),props.model);
+  if(props.model==null)return h('span',{ref:ref,className:'shrink-0 whitespace-nowrap '+(window.__codexModelTextClass||''),'data-codex-orchestrator-label':m[0],style:{color:codexOrchLight(m[3])}},m[1]);
+  return h('span',{ref:ref,className:'flex min-w-0 items-center gap-1.5','data-codex-orchestrator-label':m[0]},h('span',{className:'shrink-0 whitespace-nowrap '+(window.__codexModelTextClass||''),style:{color:codexOrchLight(m[3])}},m[1]),props.model);
  };
 }
 var CODEX_ORCH_TPS_KEY = "codex-thread-tps-v3";
@@ -609,7 +609,7 @@ function codexOrchestratorDropdown(R, children) {
         title: 'Orkestratör: ' + m[1], 'aria-label': 'Orkestratör: ' + m[1], 'aria-haspopup': 'dialog',
         'aria-expanded': open, 'data-state': open ? 'open' : 'closed', 'data-codex-orchestrator-trigger': m[0],
         'data-codex-orchestrator-scope': scopeId || '', onClick: click },
-        h('span', { className: 'truncate whitespace-nowrap', style: i > 0 ? { color: m[3], fontWeight: 500 } : undefined }, i > 0 ? m[1] : 'Orkestratör'),
+        h('span', { className: 'truncate whitespace-nowrap', style: i > 0 ? { color: codexOrchLight(m[3]), fontWeight: 500 } : undefined }, i > 0 ? m[1] : 'Orkestratör'),
         h('svg', { width: 12, height: 12, viewBox: '0 0 20 20', fill: 'none', 'aria-hidden': 'true', style: { flexShrink: 0, opacity: 0.7 } },
           h('path', { d: 'M5.5 7.5 10 12l4.5-4.5', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round' }))));
     };
@@ -618,3 +618,5 @@ function codexOrchestratorDropdown(R, children) {
 }
 
 
+
+function codexOrchLight(c){return 'color-mix(in srgb, '+c+' 55%, white)'}
