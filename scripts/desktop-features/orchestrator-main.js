@@ -15,7 +15,7 @@ function codexOrchestratorTurn(p, aeon, fallbackEffort) {
     if (pendingOk && (!known || (times[scopeId] && pe.at > times[scopeId]))) {
       mode = pe.mode; S.modes[scopeId] = mode; S.claims[scopeId] = mode; times[scopeId] = pe.at; S.consumedAt = pe.at; S.pending = null;
     } else if (known) mode = S.modes[scopeId];
-    else mode = S.defaultMode || null;
+    else mode = (typeof S.modes['draft:new'] === 'string' ? S.modes['draft:new'] : null) || S.defaultMode || null; // a new chat shows the draft selection, so the first turn has to use it too
     if (!mode || !Object.prototype.hasOwnProperty.call(CODEX_ORCH_TEXT, mode)) mode = null;
     var note = S.note || '';
     var context = Object.assign({}, p.additionalContext);
