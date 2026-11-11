@@ -23,6 +23,7 @@ const allowed = new Set([
   "telegram",
   "chat-suggestions",
   "token-speed",
+  "scroll-controls",
   "orchestrator",
   "providers",
   "models",
@@ -48,7 +49,7 @@ async function proxy(
     const auth = await session();
     if (!auth)
       return Response.json({ error: "Connect to a server first." }, { status: 401 });
-    if((path[0]==="token-speed"&&path.length===1||path[0]==="orchestrator"&&(path.length===1||path.length===2&&path[1]==="models"))&&process.platform==="win32"){
+    if(((path[0]==="token-speed"||path[0]==="scroll-controls")&&path.length===1||path[0]==="orchestrator"&&(path.length===1||path.length===2&&path[1]==="models"))&&process.platform==="win32"){
       if(!["GET","PATCH"].includes(request.method))return Response.json({error:"Method not allowed"},{status:405});
       const token=await readFile(join(homedir(),".codex","dots-local-bridge","token.txt"),"utf8");
       const r=await fetch("http://127.0.0.1:9915/"+path.join("/"),{method:request.method,headers:{authorization:"Bearer "+token.trim(),"content-type":"application/json"},...(request.method==="PATCH"?{body:await request.text()}:{}),cache:"no-store",redirect:"error",signal:AbortSignal.timeout(8000)});

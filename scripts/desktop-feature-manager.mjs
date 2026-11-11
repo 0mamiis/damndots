@@ -9,7 +9,7 @@ const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
 export const SUPPORTED=['26.1021.3705.0','26.1023.6621.0','26.1027.3384.0','26.1027.6604.0','26.1029.7803.0','26.1103.3517.0','26.1103.4239.0','26.1106.6628.0'];
 export function provisionFeatureBridge(nativeDir,appRoot){
  const dir=path.join(os.homedir(),'.codex','dots-local-bridge');fs.mkdirSync(dir,{recursive:true,mode:0o700});
- for(const name of ['codex-local-tools-bridge.cjs','composer-prediction-settings.cjs','composer-prediction-models.cjs','token-speed-settings.cjs','orchestrator-settings.cjs'])fs.copyFileSync(path.join(repo,'scripts',name),path.join(dir,name==='codex-local-tools-bridge.cjs'?'bridge.cjs':name));
+ for(const name of ['codex-local-tools-bridge.cjs','composer-prediction-settings.cjs','composer-prediction-models.cjs','token-speed-settings.cjs','orchestrator-settings.cjs','scroll-controls-settings.cjs'])fs.copyFileSync(path.join(repo,'scripts',name),path.join(dir,name==='codex-local-tools-bridge.cjs'?'bridge.cjs':name));
  const token=path.join(dir,'token.txt');if(!fs.existsSync(token))fs.writeFileSync(token,crypto.randomBytes(32).toString('hex'),{mode:0o600,flag:'wx'});
  const file=path.join(dir,'config.json');let config;try{config=JSON.parse(fs.readFileSync(file,'utf8').replace(/^\uFEFF/,''));}catch{}
  if(!config){const manifest=JSON.parse(fs.readFileSync(path.join(nativeDir,'cli-bridge.json'),'utf8'));config={localOnly:true,localPort:9915,remotePort:9914,nativeGateway:manifest.gateway,certificate:manifest.certificate,directory:dir};}

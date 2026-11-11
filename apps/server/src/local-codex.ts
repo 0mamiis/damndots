@@ -41,6 +41,14 @@ export class LocalCodex {
   if(!r.ok)throw Object.assign(new Error('Token speed settings bridge failed (HTTP '+r.status+').'),{statusCode:502});
   return r.json();
  }
+ async scrollControlsPreferences(patch?:{enabled:boolean;thinking:boolean;model:boolean;mode:boolean}):Promise<unknown>{
+  const file=process.env.DOTS_LOCAL_CODEX_TOKEN_FILE||(process.platform==='win32'?join(homedir(),'.codex','dots-local-bridge','token.txt'):this.tokenFile);
+  const url=process.env.DOTS_LOCAL_CODEX_URL||(process.platform==='win32'?'http://127.0.0.1:9915':this.url);
+  if(!existsSync(file))throw Object.assign(new Error('The PC settings bridge is not configured.'),{statusCode:503});
+  let r:Response;try{r=await fetch(url+'/scroll-controls',{method:patch?'PATCH':'GET',headers:{'content-type':'application/json',authorization:'Bearer '+readFileSync(file,'utf8').trim()},...(patch?{body:JSON.stringify(patch)}:{}),redirect:'error',signal:AbortSignal.timeout(8000)});}catch{throw Object.assign(new Error('The PC settings bridge is offline.'),{statusCode:503});}
+  if(!r.ok)throw Object.assign(new Error('Scroll controls bridge failed (HTTP '+r.status+').'),{statusCode:502});
+  return r.json();
+ }
  async composerPreferences(patch?:{enabled:boolean;model?:string|null;effort?:string|null;fast?:boolean},models=false,timeoutMs=8000):Promise<unknown>{
   const file=process.env.DOTS_LOCAL_CODEX_TOKEN_FILE||(process.platform==='win32'?join(homedir(),'.codex','dots-local-bridge','token.txt'):this.tokenFile);
   const url=process.env.DOTS_LOCAL_CODEX_URL||(process.platform==='win32'?'http://127.0.0.1:9915':this.url);

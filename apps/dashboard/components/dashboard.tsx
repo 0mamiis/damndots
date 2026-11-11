@@ -37,6 +37,7 @@ import { ThemeToggle } from "./theme";
 import { TelegramPanel } from "./telegram-panel";
 import { ChatSuggestionsPanel } from "./chat-suggestions-panel";
 import { TokenSpeedPanel } from "./token-speed-panel";
+import { ScrollControlsPanel } from "./scroll-controls-panel";
 import { OrchestratorPanel } from "./orchestrator-panel";
 import {ConnectionPanel} from './connection-panel';
 import {UpdateFooter,useReleaseUpdates} from './update-footer';
@@ -71,6 +72,7 @@ type PageKey =
   | "telegram"
   | "chat-suggestions"
   | "token-speed"
+  | "scroll-controls"
   | "orchestrator"
   | "servers"
   | "settings";
@@ -89,6 +91,7 @@ const pages: [PageKey, string, ReactElement][] = [
   ["voice", "Voice", <MicIcon key="i" />],
   ["chat-suggestions", "Composer settings", <GearIcon key="suggestions" />],
   ["token-speed", "Token speed", <GearIcon key="token-speed" />],
+  ["scroll-controls", "Scroll controls", <GearIcon key="scroll-controls" />],
   ["orchestrator", "Orchestrator", <GearIcon key="orchestrator" />],
   ["telegram", "Telegram", <svg key="telegram" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m21 3-7 18-4-7-7-4 18-7Z"/><path d="m10 14 5-5"/></svg>],
   ["settings", "Settings", <GearIcon key="i" />],
@@ -502,6 +505,8 @@ export function Dashboard({
               <><PageHeading eyebrow="Codex preferences" title="Orchestrator" description="Configure defaults for native Codex agent coordination." /><OrchestratorPanel /></>
             ) : page === "token-speed" ? (
               <><PageHeading eyebrow="Codex preferences" title="Token speed" description="Configure the tok/s indicator in Codex conversations." /><TokenSpeedPanel /></>
+            ) : page === "scroll-controls" ? (
+              <><PageHeading eyebrow="Codex preferences" title="Scroll controls" description="Scroll over the Codex pickers to change thinking level, model and orchestrator mode." /><ScrollControlsPanel /></>
             ) : page === "chat-suggestions" ? (
               <><PageHeading eyebrow="Codex preferences" title="Composer settings" description="Configure suggestions shown inside the Codex chat input." /><ChatSuggestionsPanel /></>
             ) : page === "telegram" ? (
