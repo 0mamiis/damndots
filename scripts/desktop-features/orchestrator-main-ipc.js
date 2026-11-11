@@ -16,8 +16,9 @@ try {
         S.pending = pe && typeof pe === "object" && typeof pe.mode === "string" && Number.isFinite(pe.at) && pe.at > S.consumedAt ? { mode: pe.mode, at: pe.at } : null;
         S.note = typeof st.note === "string" ? st.note.slice(0, 4000) : "";
         S.defaultMode = typeof st.defaultMode === "string" ? st.defaultMode : null;
-        const ac = st.active;
-        S.active = ac && typeof ac === "object" && typeof ac.scope === "string" && typeof ac.mode === "string" ? { scope: ac.scope.slice(0, 120), mode: ac.mode.slice(0, 40), at: Date.now() } : null;
+        const nt = st.notes, notes = {};
+        if (nt && typeof nt === "object") for (const k of Object.keys(nt).slice(0, 400)) if (typeof nt[k] === "string") notes[k.slice(0, 120)] = nt[k].slice(0, 4000);
+        S.notes = notes;
       }
       return { claims: S.claims, pendingConsumed: S.consumedAt };
     });
