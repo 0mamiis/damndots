@@ -620,3 +620,23 @@ function codexOrchestratorDropdown(R, children) {
 
 
 function codexOrchLight(c){return 'color-mix(in srgb, '+c+' 55%, white)'}
+
+/* damndots wheel control: scroll over the model pickers changes the thinking level, Ctrl+scroll over the orchestrator picker changes the mode */
+(function(){
+ if(window.__codexWheelInstalled)return;window.__codexWheelInstalled=1;
+ var last=0;
+ window.addEventListener('wheel',function(e){
+  var t=e.target&&e.target.closest?e.target.closest('button'):null;if(!t)return;
+  var sub=t.hasAttribute('data-codex-subagent-trigger'),main=!sub&&t.getAttribute('data-composer-navigation-target')==='reasoning';
+  if(!sub&&!main)return;
+  if(t.getAttribute('aria-expanded')==='true')return;
+  var dir=e.deltaY<0?1:e.deltaY>0?-1:0;if(!dir)return;
+  var ctrlMode=sub&&(e.ctrlKey||e.metaKey);
+  var H=window.__codexPickerHandlers&&window.__codexPickerHandlers[sub?'sub':'main'],fn=H&&H[dir>0?'composer.increaseReasoningEffort':'composer.decreaseReasoningEffort'];
+  if(!ctrlMode&&typeof fn!=='function')return;
+  e.preventDefault();e.stopPropagation();
+  var now=Date.now();if(now-last<140)return;last=now;
+  if(ctrlMode){var scope=codexOrchestratorComposerScope(),idx=codexOrchestratorGet(scope),to=Math.max(0,Math.min(CODEX_ORCH_MODES.length-1,idx+dir));if(to!==idx)codexOrchestratorSet(to,scope);return}
+  try{fn()}catch(x){}
+ },{capture:true,passive:false});
+})();

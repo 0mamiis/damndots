@@ -16,7 +16,7 @@ function picker(s,lit,sub,textClass){
  b=b.slice(0,b.length-(retVar.length+2))+',codexSubagentWrap('+R+',codexSub,'+retVar+',e)}';
  b=sub(b,/permissionsHostId:([\w$]+)\}=e,/g,(m,x)=>'permissionsHostId:'+x+',codexSubagent:codexSub}=e,',1,'picker props');
  b=sub(b,/let ([\w$]+)=(\(0,[\w$]+\.[\w$]+\)\([\w$]+\)),\{modelSettings:([\w$]+),selectComposerModelAndReasoningEffort:/g,(m,v,call,ms)=>'let '+v+'=codexSubagentSelection('+R+',codexSub,'+call+'),{modelSettings:'+ms+',selectComposerModelAndReasoningEffort:',1,'picker model selection');
- b=sub(b,/(\(0,[\w$]+\.[\w$]+\))\("(composer\.(?:openModelPicker|toggleFastMode|increaseReasoningEffort|decreaseReasoningEffort|cycleReasoningEffort))",([\w$]+),([\w$]+)\)/g,(m,f,k,h,o)=>f+'("'+k+'",'+h+',codexSub?{enabled:!1}:'+o+')',5,'picker hotkeys');
+ b=sub(b,/(\(0,[\w$]+\.[\w$]+\))\("(composer\.(?:openModelPicker|toggleFastMode|increaseReasoningEffort|decreaseReasoningEffort|cycleReasoningEffort))",([\w$]+),([\w$]+)\)/g,(m,f,k,h,o)=>f+'("'+k+'",codexSubagentHotkey(codexSub,"'+k+'",'+h+'),codexSub?{enabled:!1}:'+o+')',5,'picker hotkeys');
  b=sub(b,/([\w$]+)=(\(0,[\w$]+\.[\w$]+\)\([\w$]+\.[\w$]+,"composer\.openModelPicker"\))/g,(m,v,call)=>v+'=codexSubagentShortcut(codexSub,'+call+')',1,'picker shortcut');
  {const lm=b.match(/serviceTierAccess:[\w$]+\}=\(0,[\w$]+\.[\w$]+\)\([\w$]+\),[\w$]+=\(0,[\w$]+\.[\w$]+\)\([\w$]+\.[\w$]+,[\w$]+\),[\w$]+=\(0,[\w$]+\.[\w$]+\)\(([\w$]+),([\w$]+)\)/);if(!lm)throw Error('Unsupported Codex picker model list');
   b=sub(b,/\{serviceTierSettings:([\w$]+),setServiceTier:([\w$]+)\}=(\(0,[\w$]+\.[\w$]+\)\([\w$]+,[\w$]+(?:\?\?[\w$]+)?\))/g,(m,a,c,call)=>'{serviceTierSettings:'+a+',setServiceTier:'+c+'}=codexSubagentTier(codexSub,'+call+','+lm[1]+','+lm[2]+')',1,'picker service tier');}
@@ -39,7 +39,8 @@ function slider(s){
 }
 function helpers(BT){
  const K=BT+'codex-orchestrator-subagent-model-v1'+BT,CH=BT+'codex-orchestrator-change'+BT;
- return 'function codexSubagentShortcut(f,v){return f?null:v}'+
+ return 'function codexSubagentHotkey(f,k,h){try{var r=window.__codexPickerHandlers=window.__codexPickerHandlers||{main:{},sub:{}};r[f?"sub":"main"][k]=h}catch(e){}return h}\n'+
+ 'function codexSubagentShortcut(f,v){return f?null:v}'+
  '\nfunction codexPickerExport(f){try{window.__codexComposerModelPicker=f}catch(e){}return f}'+
  '\nfunction codexSubagentWrap(R,flag,main,props){if(flag||props&&props.hideLabel)return main;let P=window.__codexComposerModelPicker,W=window.__codexOrchNativeWrap;return P&&W?W(R,main,P,props):main}'+
  '\nfunction codexSubagentTriggerChild(R,v){let C=window.__codexOrchTriggerLabel;return C?R.createElement(C,{model:v}):v}'+
