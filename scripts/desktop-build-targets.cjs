@@ -12,8 +12,8 @@ function mainBuildName(entries,readText){
 function addPreloadBridge(s,name,template){
  const inline=[...s.matchAll(/([\w$]+)\.contextBridge\.exposeInMainWorld\((["`])electronBridge\2,\{/g)];
  if(inline.length===1){const m=inline[0],owner=m[1],value=template.split('{OWNER}').join(owner);return s.replace(m[0],()=>owner+'.contextBridge.exposeInMainWorld('+m[2]+'electronBridge'+m[2]+',{'+name+':'+value+',');}
- const legacy=[...s.matchAll(/([\w$]+)\.contextBridge\.exposeInMainWorld\(`electronBridge`,([\w$]+)\)/g)];
- if(legacy.length===1){const m=legacy[0],owner=m[1],bridge=m[2],value=template.split('{OWNER}').join(owner);return s.replace(m[0],()=>bridge+'.'+name+'='+value+','+m[0]);}
+ const legacy=[...s.matchAll(/([\w$]+)\.contextBridge\.exposeInMainWorld\((["`])electronBridge\2,([\w$]+)\)/g)];
+ if(legacy.length===1){const m=legacy[0],owner=m[1],bridge=m[3],value=template.split('{OWNER}').join(owner);return s.replace(m[0],()=>bridge+'.'+name+'='+value+','+m[0]);}
  throw Error('Preload electron bridge boundary changed');
 }
 module.exports={mainBuildName,addPreloadBridge};

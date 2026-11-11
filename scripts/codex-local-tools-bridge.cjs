@@ -74,6 +74,13 @@ const server=http.createServer(async(req,res)=>{
   try{let value='';for await(const chunk of req){value+=chunk.toString();if(value.length>1024)return respond(413,{error:'Settings body is too large'});}preferences.write(dir,JSON.parse(value));return respond(200,preferences.read(dir,appRoot));}
   catch{return respond(400,{error:'Invalid token speed preferences'});}
  }
+ if(req.url==='/scroll-controls'){
+  const preferences=require('./scroll-controls-settings.cjs'),appRoot=managedAppRoot();
+  if(req.method==='GET')return respond(200,preferences.read(dir,appRoot));
+  if(req.method!=='PATCH')return respond(405,{error:'Method not allowed'});
+  try{let value='';for await(const chunk of req){value+=chunk.toString();if(value.length>1024)return respond(413,{error:'Settings body is too large'});}preferences.write(dir,JSON.parse(value));return respond(200,preferences.read(dir,appRoot));}
+  catch{return respond(400,{error:'Invalid scroll control preferences'});}
+ }
  if(req.url==='/composer-predictions'){
   const preferences=require('./composer-prediction-settings.cjs'),appRoot=managedAppRoot();
   if(!path.isAbsolute(appRoot))return respond(500,{error:'The Codex application path must be absolute'});
