@@ -16,11 +16,10 @@ function codexOrchestratorTurn(p, aeon, fallbackEffort) {
       mode = pe.mode; S.modes[scopeId] = mode; S.claims[scopeId] = mode; times[scopeId] = pe.at; S.consumedAt = pe.at; S.pending = null;
     } else if (known) mode = S.modes[scopeId];
     else mode = (typeof S.modes['draft:new'] === 'string' ? S.modes['draft:new'] : null) || S.defaultMode || null; // a new chat shows the draft selection, so the first turn has to use it too
-    // The composer showed a draft selection while the turn belongs to an already known chat (the view could not tell which chat it was): the mode the user sees is the one that applies.
-    var ac = S.active;
-    if (known && ac && Date.now() - ac.at < 5000 && String(ac.scope).indexOf('draft:') === 0 && (ac.mode === 'off' || Object.prototype.hasOwnProperty.call(CODEX_ORCH_TEXT, ac.mode))) { mode = ac.mode === 'off' ? null : ac.mode; S.modes[scopeId] = ac.mode; }
     if (!mode || !Object.prototype.hasOwnProperty.call(CODEX_ORCH_TEXT, mode)) mode = null;
-    var note = S.note || '';
+    // The subagent model note is stored per chat; a chat that has no entry of its own yet (a fresh chat) uses the draft selection, like the mode.
+    var notes = S.notes || null;
+    var note = notes ? (Object.prototype.hasOwnProperty.call(notes, scopeId) ? notes[scopeId] : (known ? '' : (notes['draft:new'] || ''))) : (S.note || '');
     var context = Object.assign({}, p.additionalContext);
     var cmEffort = p.collaborationMode && p.collaborationMode.settings ? p.collaborationMode.settings.reasoning_effort : null;
     var effort = cmEffort != null ? cmEffort : p.effort != null ? p.effort : fallbackEffort;
