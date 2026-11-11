@@ -237,6 +237,9 @@ function codexOrchestratorMode(scopeId) {
     var explicit = modes[String(scopeId)];
     return explicit && Object.prototype.hasOwnProperty.call(CODEX_ORCH_TEXT, explicit) ? explicit : null;
   }
+  // A just-created chat has no saved mode for a moment (the draft is bound to its thread id after the turn starts); the selection made in the new-chat composer is still pending then.
+  if (scopeId && String(scopeId).indexOf('draft:') !== 0) { var young = codexOrchestratorReadPending(); if (young && young.mode && Date.now() - young.at < 120000 && Object.prototype.hasOwnProperty.call(CODEX_ORCH_TEXT, young.mode)) return young.mode; }
+  if (scopeId && String(scopeId).indexOf('draft:') === 0) { var pend = codexOrchestratorReadPending(); if (pend && pend.mode && Object.prototype.hasOwnProperty.call(CODEX_ORCH_TEXT, pend.mode)) return pend.mode; }
   var defaults = window.__damndotsOrchestratorDefaults;
   return defaults && Object.prototype.hasOwnProperty.call(CODEX_ORCH_TEXT, defaults.mode) ? defaults.mode : null;
 }
@@ -297,7 +300,8 @@ function codexOrchestratorBind(clientThreadId, threadId) {
   if (!Object.prototype.hasOwnProperty.call(modes, draftKey)) {
     var pending = codexOrchestratorReadPending();
     var defaults = window.__damndotsOrchestratorDefaults;
-    modes[draftKey] = pending && (pending.scopeId == null || String(pending.scopeId) === draftKey) ? pending.mode : defaults && defaults.mode ? defaults.mode : 'off';
+    var draftNew = Object.prototype.hasOwnProperty.call(modes, 'draft:new') ? modes['draft:new'] : null;
+    modes[draftKey] = pending && (pending.scopeId == null || String(pending.scopeId).indexOf('draft:') === 0) ? pending.mode : draftNew ? draftNew : defaults && defaults.mode ? defaults.mode : 'off';
   }
   if (!Object.prototype.hasOwnProperty.call(modes, threadKey)) modes[threadKey] = modes[draftKey];
   delete modes[draftKey];
