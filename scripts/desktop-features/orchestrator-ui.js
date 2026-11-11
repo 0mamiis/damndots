@@ -438,6 +438,9 @@ function codexOrchestratorEnsureNative(R){
  window.__codexOrchMenuHeader=function(){
   var scopeId=codexOrchestratorComposerScope(),ref=R.useRef(null);
   useOrchTick();
+  /* Same as the native menu: transitions are off for the first frame so the max-effort particles are visible immediately. */
+  var trs=R.useState(false),transitionsReady=trs[0],setTransitionsReady=trs[1];
+  R.useLayoutEffect(function(){var f=window.requestAnimationFrame(function(){setTransitionsReady(true)});return function(){window.cancelAnimationFrame(f)}},[]);
   var rm=R.useState(function(){return window.matchMedia("(prefers-reduced-motion: reduce)").matches}),reduced=rm[0],setReduced=rm[1];
   R.useEffect(function(){var q=window.matchMedia("(prefers-reduced-motion: reduce)");function sync(){setReduced(q.matches)}q.addEventListener("change",sync);sync();return function(){q.removeEventListener("change",sync)}},[]);
   var i=codexOrchestratorGet(scopeId),M=CODEX_ORCH_MODES,m=M[i],Slider=window.__codexNativeOrchPowerSlider;
@@ -451,7 +454,7 @@ function codexOrchestratorEnsureNative(R){
    h('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:40,padding:'2px 4px',textAlign:'center'}},
     h('div',{style:{fontSize:14,lineHeight:'20px',fontWeight:500,color:codexOrchLight(m[3])}},m[1]),
     h('div',{style:{fontSize:12,lineHeight:'16px',opacity:.5,whiteSpace:'nowrap'}},m[2])),
-   Slider?h('div',{'data-codex-orchestrator-slider':'',tabIndex:0,role:'group','aria-label':'Orkestratör modu','aria-valuenow':i,'aria-valuetext':m[1]},h(Slider,{active:true,disabled:!scopeId,fastModeEnabled:false,initialOptionId:m[0],keyboardControlFocused:false,onSelectOption:pick,onCommitOption:pick,onCancelOption:function(){},onConfirmCurrentOption:function(){},onDragToMax:function(){},options:options,selectedOptionId:m[0],shouldReduceMotion:reduced,transitionsReady:true})):null,
+   Slider?h('div',{'data-codex-orchestrator-slider':'',tabIndex:0,role:'group','aria-label':'Orkestratör modu','aria-valuenow':i,'aria-valuetext':m[1]},h(Slider,{active:true,disabled:!scopeId,fastModeEnabled:false,initialOptionId:m[0],keyboardControlFocused:false,onSelectOption:pick,onCommitOption:pick,onCancelOption:function(){},onConfirmCurrentOption:function(){},onDragToMax:function(){},options:options,selectedOptionId:m[0],shouldReduceMotion:reduced,transitionsReady:transitionsReady})):null,
    h('div',{style:{height:.5,margin:'6px 8px 0',background:'color-mix(in srgb, currentColor 12%, transparent)'}}));
  };
 
