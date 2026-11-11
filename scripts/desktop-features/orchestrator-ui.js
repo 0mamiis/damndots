@@ -454,6 +454,35 @@ function codexOrchestratorEnsureNative(R){
    Slider?h('div',{'data-codex-orchestrator-slider':'',tabIndex:0,role:'group','aria-label':'Orkestratör modu','aria-valuenow':i,'aria-valuetext':m[1]},h(Slider,{active:true,disabled:!scopeId,fastModeEnabled:false,initialOptionId:m[0],keyboardControlFocused:false,onSelectOption:pick,onCommitOption:pick,onCancelOption:function(){},onConfirmCurrentOption:function(){},onDragToMax:function(){},options:options,selectedOptionId:m[0],shouldReduceMotion:reduced,transitionsReady:true})):null,
    h('div',{style:{height:.5,margin:'6px 8px 0',background:'color-mix(in srgb, currentColor 12%, transparent)'}}));
  };
+
+ /* Mode text with the same blur / width animation as the native reasoning-effort label (same DOM structure, classes, timing). */
+ window.__codexOrchModeText=function(props){
+  var idx=props.index,root=R.useRef(null),layersRef=R.useRef(null),st=R.useRef({key:null,anims:[]});
+  function nat(part){var e=document.querySelector('[class*="ModelPickerTriggerEffort'+part+'"]');return e&&typeof e.className==='string'?e.className.split(/s+/).filter(function(c){return c.indexOf('ModelPickerTriggerEffort'+part)===0}).join(' '):''}
+  function fin(a){try{a.onfinish=null;var t=a.effect&&a.effect.target;if(a.playState!=='idle'&&t&&t.isConnected&&t.getClientRects().length>0)a.commitStyles();a.cancel()}catch(e){}}
+  R.useLayoutEffect(function(){
+   var el=root.current,box=layersRef.current;if(!el||!box)return;
+   var layers=Array.prototype.slice.call(box.querySelectorAll('[data-orch-layer]')),sel=layers.filter(function(x){return x.getAttribute('data-orch-layer')===String(idx)})[0];if(!sel)return;
+   var w=parseFloat(getComputedStyle(sel).width),reduced=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches,key=idx+':'+w;
+   if(st.current.key===key)return;
+   var animate=st.current.key!=null&&!reduced;st.current.key=key;
+   st.current.anims.forEach(fin);
+   var blur=getComputedStyle(box).getPropertyValue('--blur-xs')||'4px';
+   var targets=[[el,{width:w+'px'}]].concat(layers.map(function(x){return [x,{opacity:x===sel?'1':'0',filter:x===sel?'blur(0px)':'blur('+blur+')'}]}));
+   var opts=window.__codexNativeEffortAnim||{duration:300,easing:'ease-out',fill:'both'};
+   st.current.anims=targets.map(function(p){var t=p[0],to=p[1];if(!animate){Object.assign(t.style,to);return null}
+    var cs=getComputedStyle(t),from={};Object.keys(to).forEach(function(k){from[k]=cs.getPropertyValue(k)});var a=t.animate([from,to],opts);a.onfinish=function(){fin(a)};return a}).filter(Boolean);
+  });
+  R.useLayoutEffect(function(){return function(){st.current.anims.forEach(fin);st.current.key=null}},[]);
+  var M=CODEX_ORCH_MODES,layerEls=M.map(function(row,k){
+   var base={opacity:0,width:'max-content',filter:'blur(var(--blur-xs, 4px))',willChange:'opacity, filter',gridArea:'1 / 1',justifySelf:'center'};
+   if(k>0)base.color=codexOrchLight(row[3]);
+   return h('span',{key:row[0],'data-orch-layer':String(k),'aria-hidden':true,className:(k>0?(window.__codexModelTextClass||''):'')+' '+nat('Text'),style:base},k===0?'Orkestratör':row[1]);
+  });
+  return h('span',{ref:root,className:nat('Label'),style:{display:'inline-flex',boxSizing:'content-box',whiteSpace:'nowrap',flexShrink:0}},
+   h('span',{className:'sr-only'},M[idx][1]),
+   h('span',{className:nat('Viewport'),style:{display:'flex',justifyContent:'center'}},h('span',{ref:layersRef,className:nat('Layers'),style:{display:'grid',gridTemplateColumns:'max-content',width:'max-content',flexShrink:0}},layerEls)));
+ };
  window.__codexOrchTriggerLabel=function(props){
   var scopeId=codexOrchestratorComposerScope();useOrchTick();
   var i=codexOrchestratorGet(scopeId),m=CODEX_ORCH_MODES[i];
@@ -462,9 +491,10 @@ function codexOrchestratorEnsureNative(R){
    var el=ref.current,btn=el&&el.closest('button');if(!btn)return;
    btn.removeAttribute('data-composer-navigation-target');btn.setAttribute('data-codex-subagent-trigger','');
   });
-  if(i===0)return h('span',{ref:ref,className:'truncate whitespace-nowrap','data-codex-orchestrator-label':'off'},'Orkestratör');
-  if(props.model==null)return h('span',{ref:ref,className:'shrink-0 whitespace-nowrap '+(window.__codexModelTextClass||''),'data-codex-orchestrator-label':m[0],style:{color:codexOrchLight(m[3])}},m[1]);
-  return h('span',{ref:ref,className:'flex min-w-0 items-center gap-1.5','data-codex-orchestrator-label':m[0]},h('span',{className:'shrink-0 whitespace-nowrap '+(window.__codexModelTextClass||''),style:{color:codexOrchLight(m[3])}},m[1]),props.model);
+  var modeText=h(window.__codexOrchModeText,{index:i});
+  if(i===0)return h('span',{ref:ref,className:'truncate whitespace-nowrap','data-codex-orchestrator-label':'off'},modeText);
+  if(props.model==null)return h('span',{ref:ref,className:'shrink-0 whitespace-nowrap','data-codex-orchestrator-label':m[0]},modeText);
+  return h('span',{ref:ref,className:'flex min-w-0 items-center gap-1.5','data-codex-orchestrator-label':m[0]},modeText,props.model);
  };
 }
 var CODEX_ORCH_TPS_KEY = "codex-thread-tps-v3";

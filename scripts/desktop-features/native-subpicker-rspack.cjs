@@ -39,6 +39,9 @@ function slider(s){
  // The trigger's animated (blur) effort label lives in the same chunk; the orchestrator picker reuses it.
  const el=[...s.matchAll(/function ([\w$]+)\(e\)\{let [\w$,]+=\(0,[\w$]+\.c\)\(\d+\),\{reasoningEffort:[\w$]+,shouldReduceMotion:[\w$]+\}=e,/g)];
  if(el.length===1)s=s.slice(0,el[0].index)+'try{window.__codexNativeEffortLabel='+el[0][1]+'}catch(e){}'+s.slice(el[0].index);
+ // The label animates with this spring timing; the orchestrator mode text reuses the exact same options.
+ const an=[...s.matchAll(/,([\w$]+)=\{duration:[\w$]+,easing:\(0,[\w$]+\.[\w$]+\)\(e=>[\w$]+\.next\(e\*[\w$]+\)\.value,[\w$]+\),fill:"both"\};/g)];
+ if(an.length===1){const at=an[0].index+an[0][0].length;s=s.slice(0,at)+'try{window.__codexNativeEffortAnim='+an[0][1]+'}catch(e){}'+s.slice(at);}
  return s;
 }
 function helpers(BT){
