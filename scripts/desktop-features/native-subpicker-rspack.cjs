@@ -35,12 +35,16 @@ function slider(s){
  if(s.includes('window.__codexNativeOrchPowerSlider'))return s;
  const m=[...s.matchAll(/function ([\w$]+)\(e\)\{let [\w$,]+=\(0,[\w$]+\.c\)\(\d+\),\{active:[\w$]+,disabled:[\w$]+,fastModeEnabled:[\w$]+,initialOptionId:[\w$]+,keyboardControlFocused:/g)];
  if(m.length!==1)throw Error('Unsupported Codex power slider ('+m.length+')');
- return s.slice(0,m[0].index)+'try{window.__codexNativeOrchPowerSlider='+m[0][1]+'}catch(e){}'+s.slice(m[0].index);
+ s=s.slice(0,m[0].index)+'try{window.__codexNativeOrchPowerSlider='+m[0][1]+'}catch(e){}'+s.slice(m[0].index);
+ // The trigger's animated (blur) effort label lives in the same chunk; the orchestrator picker reuses it.
+ const el=[...s.matchAll(/function ([\w$]+)\(e\)\{let [\w$,]+=\(0,[\w$]+\.c\)\(\d+\),\{reasoningEffort:[\w$]+,shouldReduceMotion:[\w$]+\}=e,/g)];
+ if(el.length===1)s=s.slice(0,el[0].index)+'try{window.__codexNativeEffortLabel='+el[0][1]+'}catch(e){}'+s.slice(el[0].index);
+ return s;
 }
 function helpers(BT){
  const K=BT+'codex-orchestrator-subagent-model-v1'+BT,CH=BT+'codex-orchestrator-change'+BT;
  return 'function codexSubagentHotkey(f,k,h){try{var r=window.__codexPickerHandlers=window.__codexPickerHandlers||{main:{},sub:{}};r[f?"sub":"main"][k]=h}catch(e){}return h}\n'+
- 'function codexSubagentEffort(R,el){try{var S=window.__codexPickerSel&&window.__codexPickerSel.sub,e=S&&S.modelSettings&&S.modelSettings.reasoningEffort;if(e!=="ultra")return el;if(!document.getElementById("damndots-max-effort")){var st=document.createElement("style");st.id="damndots-max-effort";st.textContent="[data-codex-max-effort],[data-codex-max-effort] *{color:var(--color-chart-purple)!important}";document.head.appendChild(st)}return R.createElement("span",{"data-codex-max-effort":"",className:"inline-flex"},el)}catch(x){return el}}'+
+ 'function codexSubagentEffort(R,el){try{var S=window.__codexPickerSel&&window.__codexPickerSel.sub,e=S&&S.modelSettings&&S.modelSettings.reasoningEffort;var L=window.__codexNativeEffortLabel;if(e&&L){return R.createElement(L,{reasoningEffort:e,shouldReduceMotion:!!(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches)})}if(e!=="ultra")return el;if(!document.getElementById("damndots-max-effort")){var st=document.createElement("style");st.id="damndots-max-effort";st.textContent="[data-codex-max-effort],[data-codex-max-effort] *{color:var(--color-chart-purple)!important}";document.head.appendChild(st)}return R.createElement("span",{"data-codex-max-effort":"",className:"inline-flex"},el)}catch(x){return el}}'+
  'function codexSubagentShortcut(f,v){if(!f)return v;try{var c=window.__codexScrollControls;if(c&&c.enabled===false)return null}catch(e){}return /^tr/i.test(navigator.language)?"Kaydır · Ctrl+Kaydır":"Scroll · Ctrl+Scroll"}'+
  '\nfunction codexPickerExport(f){try{window.__codexComposerModelPicker=f}catch(e){}return f}'+
  '\nfunction codexSubagentWrap(R,flag,main,props){if(flag||props&&props.hideLabel)return main;let P=window.__codexComposerModelPicker,W=window.__codexOrchNativeWrap;return P&&W?W(R,main,P,props):main}'+
