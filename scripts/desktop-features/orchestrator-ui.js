@@ -650,7 +650,7 @@ function codexOrchLight(c){return 'color-mix(in srgb, '+c+' 55%, white)'}
   var H=window.__codexPickerHandlers&&window.__codexPickerHandlers[which],fn=H&&H[dir>0?'composer.increaseReasoningEffort':'composer.decreaseReasoningEffort'];
   if(action==='thinking'&&typeof fn!=='function')return;
   e.preventDefault();e.stopPropagation();
-  var now=Date.now();if(now-last<140)return;last=now;
+  var now=Date.now();if(now-last<45)return;last=now;
   if(action==='mode'){var scope=codexOrchestratorComposerScope(),idx=codexOrchestratorGet(scope),to=Math.max(0,Math.min(CODEX_ORCH_MODES.length-1,idx+dir));if(to!==idx)codexOrchestratorSet(to,scope);return}
   if(action==='model'){var okc=false;try{okc=cycleModel(which,dir)}catch(x){window.__codexWheelErr=String(x&&x.message||x)}window.__codexWheelDbg={which:which,dir:dir,ok:okc};return}
   try{fn()}catch(x){}
