@@ -45,6 +45,8 @@ Open [the dashboard](http://127.0.0.1:4320). Its login key is generated in `apps
 
 Model lists refresh automatically every 30 seconds while the panel is visible, and when you return to it. Providers share one in-flight discovery request; failed discovery retains the last successful list and retries after 30 seconds. Manually entered models are preserved. **Fetch models** still refreshes immediately.
 
+The first successful start adds a **Damndots** shortcut to the desktop, so later you start the services from there instead of looking for `Start-Dots.cmd` in the repository folder. It is skipped when a desktop shortcut already starts `Start-Dots.cmd`, is created only once (a deleted shortcut does not come back) and can be turned off with `DOTS_NO_DESKTOP_SHORTCUT=1`.
+
 Once the services are ready, open Codex from your original shortcut. If Codex was already running during initial setup, close and reopen it once. `Start-Dots.cmd` does not open another Codex window or replace your shortcuts.
 
 The dashboard is in English. Use its host-management section to configure backend connections and computer mode, and its settings section to select the model and execution policy. A host change is refused while tasks are running, and it does not move conversations between backends. Each backend keeps its own data.

@@ -475,6 +475,7 @@ function codexOrchestratorEnsureNative(R){
   R.useLayoutEffect(function(){var f=window.requestAnimationFrame(function(){setTransitionsReady(true)});return function(){window.cancelAnimationFrame(f)}},[]);
   var rm=R.useState(function(){return window.matchMedia("(prefers-reduced-motion: reduce)").matches}),reduced=rm[0],setReduced=rm[1];
   R.useEffect(function(){var q=window.matchMedia("(prefers-reduced-motion: reduce)");function sync(){setReduced(q.matches)}q.addEventListener("change",sync);sync();return function(){q.removeEventListener("change",sync)}},[]);
+  // Like Ultra in the reasoning slider, the base range keeps the previous level colour on the last (max) mode; the native MaxFill reveal animates the max colour over it.
   var i=codexOrchestratorGet(scopeId),M=CODEX_ORCH_MODES,m=M[i],Slider=window.__codexNativeOrchPowerSlider;
   // The last mode in the picker gets the native Ultra (max) effect, like Ultra in the reasoning slider. The list can change through the Damndots order and toggles.
   var optKey=M.map(function(r){return r[0]}).join(",");
@@ -484,7 +485,7 @@ function codexOrchestratorEnsureNative(R){
   },[]);
   function pick(o){var k=M.findIndex(function(x){return x[0]===o.id});if(k>=0)codexOrchestratorSet(k,scopeId)}
   function keyboard(e){var idx=codexOrchestratorGet(scopeId),to=e.key==="ArrowRight"?idx+1:e.key==="ArrowLeft"?idx-1:e.key==="Home"?0:e.key==="End"?M.length-1:null;if(to===null)return;e.preventDefault();e.stopPropagation();var k=Math.max(0,Math.min(M.length-1,to));if(ref.current){var nativeRoot=ref.current.querySelector('[data-model-picker-power-slider]');if(nativeRoot)nativeRoot.dispatchEvent(new WheelEvent("wheel",{deltaY:k>idx?-120:120,bubbles:true,cancelable:true}));} }
-  return h('div',{ref:ref,'data-codex-orchestrator-header':'','data-codex-native-orch-slider':'',style:{'--color-chart-blue':m[3],'--color-chart-purple':m[3],'--color-accent':m[3]},onKeyDown:keyboard},
+  return h('div',{ref:ref,'data-codex-orchestrator-header':'','data-codex-native-orch-slider':'',style:{'--color-chart-blue':m[3],'--color-chart-purple':m[3],'--color-accent':(i>1&&i===M.length-1?M[i-1][3]:m[3])},onKeyDown:keyboard},
    h('div',{style:{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:40,padding:'2px 4px',textAlign:'center'}},
     h('div',{style:{fontSize:14,lineHeight:'20px',fontWeight:500,color:codexOrchLight(m[3])}},m[1]),
     h('div',{style:{fontSize:12,lineHeight:'16px',opacity:.5,whiteSpace:'nowrap'}},m[2])),

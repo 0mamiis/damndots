@@ -61,4 +61,6 @@ let missing=await unavailable();
 for(let i=0;i<80&&missing.length;i++){await new Promise(r=>setTimeout(r,250));missing=await unavailable();}
 if(missing.length)console.error('Dots startup could not be completed. Services that are not ready: '+missing.join(', '));
 else console.log(`The Dots services are ready. Panel: http://127.0.0.1:${dashboardPort}. The Codex window was not opened.`);
+// First successful start on Windows: add a Damndots desktop shortcut for Start-Dots.cmd (once; DOTS_NO_DESKTOP_SHORTCUT=1 skips it).
+if(!missing.length&&process.platform==='win32'&&process.env.DOTS_NO_DESKTOP_SHORTCUT!=='1')execFile('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',join(root,'scripts/main-codex/install-start-shortcut.ps1'),'-Root',root,'-Marker',join(data,'start-shortcut.json')],{windowsHide:true},(error,stdout)=>{const out=String(stdout||'').trim();if(error)console.error('Desktop shortcut was not created: '+(error.message.split('\n')[0]));else if(out.startsWith('created'))console.log('Added a Damndots shortcut to the desktop for starting the services.');});
 if(!missing.length)await writeFile(join(data,'ready.json'),JSON.stringify({pid:process.pid,readyAt:new Date().toISOString()}),{mode:0o600});
