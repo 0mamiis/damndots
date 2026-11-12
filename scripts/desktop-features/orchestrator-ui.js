@@ -261,11 +261,13 @@ function codexOrchestratorModeRaw(scopeId) {
     return explicit && Object.prototype.hasOwnProperty.call(CODEX_ORCH_TEXT, explicit) ? explicit : null;
   }
   // A just-created chat has no saved mode for a moment (the draft is bound to its thread id after the turn starts); the selection made in the new-chat composer is still pending then.
-  if (scopeId && String(scopeId).indexOf('draft:') !== 0) { var young = codexOrchestratorReadPending(); if (young && young.mode && Date.now() - young.at < 120000 && Object.prototype.hasOwnProperty.call(CODEX_ORCH_TEXT, young.mode)) return young.mode; }
+  if (scopeId && String(scopeId).indexOf('draft:') !== 0 && codexOrchestratorIsNewThread(scopeId)) { var young = codexOrchestratorReadPending(); if (young && young.mode && Date.now() - young.at < 120000 && Object.prototype.hasOwnProperty.call(CODEX_ORCH_TEXT, young.mode)) return young.mode; }
   if (scopeId && String(scopeId).indexOf('draft:') === 0) { var pend = codexOrchestratorReadPending(); if (pend && pend.mode && Object.prototype.hasOwnProperty.call(CODEX_ORCH_TEXT, pend.mode)) return pend.mode; }
   var defaults = window.__damndotsOrchestratorDefaults;
   return defaults && Object.prototype.hasOwnProperty.call(CODEX_ORCH_TEXT, defaults.mode) ? defaults.mode : null;
 }
+// A chat created in this session from the new-chat composer (its first turn has started).
+function codexOrchestratorIsNewThread(id) { try { var m = window.__dotsThreadMap || {}; for (var k in m) if (Object.prototype.hasOwnProperty.call(m, k) && String(m[k]) === String(id)) return true; } catch (e) {} return false; }
 function codexOrchestratorReadPending() {
   try {
     var pending = JSON.parse(localStorage.getItem(CODEX_ORCH_PENDING_MODE) || 'null');
@@ -285,6 +287,8 @@ function codexOrchestratorClaimPending(scopeId) {
   if (!pending || !scopeId) return null;
   var pendingScope = pending.scopeId == null ? null : String(pending.scopeId);
   if (pendingScope && pendingScope !== String(scopeId) && pendingScope.indexOf('draft:') !== 0) return null;
+  // Only a just-made selection may move to a chat that has no saved mode; an old draft choice must not switch an existing chat on.
+  if (String(scopeId).indexOf('draft:') !== 0 && Date.now() - pending.at > 120000) return null;
   var modes = codexOrchestratorReadModes();
   if (!Object.prototype.hasOwnProperty.call(modes, String(scopeId))) {
     modes[String(scopeId)] = pending.mode;
@@ -351,7 +355,7 @@ function codexOrchestratorSync() {
     var bridge = window.electronBridge;
     if (!bridge || typeof bridge.syncOrchestrator !== 'function') return;
     var defaults = window.__damndotsOrchestratorDefaults;
-    bridge.syncOrchestrator({ disabled: codexOrchestratorDisabledList(), modes: codexOrchestratorReadModes(), pending: codexOrchestratorReadPending(), notes: (function () { var out = {}; try { var ks = Object.keys(codexOrchestratorReadModes()); if (ks.indexOf('draft:new') < 0) ks.push('draft:new'); ks.forEach(function (k) { try { var n = codexOrchestratorModelNote(k); if (n) out[k] = n; else out[k] = ''; } catch (e) {} }); } catch (e) {} return out; })(), note: codexOrchestratorModelNote(), defaultMode: defaults && typeof defaults.mode === 'string' ? defaults.mode : null }).then(function (r) {
+    bridge.syncOrchestrator({ disabled: codexOrchestratorDisabledList(), modes: codexOrchestratorReadModes(), pending: codexOrchestratorReadPending(), notes: (function () { var out = {}; try { var ks = Object.keys(codexOrchestratorReadModes()); if (ks.indexOf('draft:new') < 0) ks.push('draft:new'); ks.forEach(function (k) { try { var n = codexOrchestratorModelNote(k); if (n) out[k] = n; else out[k] = ''; } catch (e) {} }); } catch (e) {} return out; })(), note: codexOrchestratorModelNote(), defaultMode: defaults && typeof defaults.mode === 'string' ? defaults.mode : null, scope: (function () { try { return codexOrchestratorComposerScope(); } catch (e) { return null; } })(), scopeMode: (function () { try { return codexOrchestratorMode(codexOrchestratorComposerScope()) || 'off'; } catch (e) { return null; } })() }).then(function (r) {
       if (!r || typeof r !== 'object') return;
       var changed = false, modes = codexOrchestratorReadModes();
       if (r.claims) Object.keys(r.claims).forEach(function (k) { if (!Object.prototype.hasOwnProperty.call(modes, k)) { modes[k] = r.claims[k]; changed = true; } });
