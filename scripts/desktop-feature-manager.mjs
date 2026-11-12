@@ -25,6 +25,8 @@ export function discoverPackage(){
  if(process.platform!=='win32')throw Error('Codex desktop features currently require Windows');
  return JSON.parse(execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command','Get-AppxPackage OpenAI.Codex | Select-Object -First 1 @{n="version";e={$_.Version.ToString()}},@{n="root";e={Join-Path $_.InstallLocation "app"}} | ConvertTo-Json -Compress'],{encoding:'utf8',windowsHide:true}).replace(/^\uFEFF/,''));
 }
+// Keep only the newest previous copy for recovery; every older one is a full 2.5 GB duplicate.
+function prunePrevious(dir){try{const olds=fs.readdirSync(dir,{withFileTypes:true}).filter(e=>e.isDirectory()&&/^previous-\d+$/.test(e.name)).map(e=>e.name).sort();for(const n of olds.slice(0,-1))fs.rmSync(path.join(dir,n),{recursive:true,force:true});}catch{}}
 function atomic(file,v){const temp=file+'.tmp';fs.writeFileSync(temp,JSON.stringify(v,null,2),{mode:0o600});fs.renameSync(temp,file);}
 export function ensureFeatures({nativeDir,adopt,includeLocalPatches=true,sourcePackage=discoverPackage()}={}){
  nativeDir=path.resolve(nativeDir||path.join(repo,'.data/local-stack/native'));
@@ -56,7 +58,7 @@ export function ensureFeatures({nativeDir,adopt,includeLocalPatches=true,sourceP
   if(pending?.revision!==revision||pending.packageVersion!==sourcePackage.version)throw Error('An unfinished or incompatible feature build requires inspection.');
   const integrity=verifyApp(staging);
   if(fs.existsSync(app)){try{const fd=fs.openSync(path.join(app,'ChatGPT.exe'),'r+');fs.closeSync(fd);}catch{atomic(status,{state:'waiting-for-codex-close',staging});return {state:'waiting-for-codex-close',dir};}fs.renameSync(app,path.join(dir,'previous-'+Date.now()));}
-  fs.renameSync(staging,app);
+  fs.renameSync(staging,app);prunePrevious(dir);
   atomic(path.join(dir,'active.json'),{managedBy:'damndots',revision,packageVersion:sourcePackage.version,exe:path.join(app,'ChatGPT.exe'),...integrity});
   atomic(status,{state:'ready',managedBy:'damndots',packageVersion:sourcePackage.version,appRoot:app,checkedEntries:integrity.checked});
   return {state:'ready',dir,app};
@@ -84,7 +86,7 @@ export function ensureFeatures({nativeDir,adopt,includeLocalPatches=true,sourceP
   atomic(path.join(staging,'damndots-desktop-features.json'),{managedBy:'damndots',schemaVersion:1,features:['token-speed','orchestrator'],packageVersion:sourcePackage.version,revision});
   // Never replace an active private app in place. Rename a released previous copy for recovery.
   if(fs.existsSync(app)){let fd;try{fd=fs.openSync(path.join(app,'ChatGPT.exe'),'r+');fs.closeSync(fd);}catch{atomic(status,{state:'waiting-for-codex-close',staging});return {state:'waiting-for-codex-close',dir};}fs.renameSync(app,path.join(dir,'previous-'+Date.now()));}
-  fs.renameSync(staging,app);
+  fs.renameSync(staging,app);prunePrevious(dir);
   atomic(path.join(dir,'active.json'),{managedBy:'damndots',revision,packageVersion:sourcePackage.version,exe:path.join(app,'ChatGPT.exe'),...integrity});
   const bridgeDir=path.join(os.homedir(),'.codex','dots-local-bridge');
   if(fs.existsSync(path.join(bridgeDir,'config.json'))){const config=JSON.parse(fs.readFileSync(path.join(bridgeDir,'config.json'),'utf8').replace(/^\uFEFF/,''));config.composerAppRoot=app;atomic(path.join(bridgeDir,'config.json'),config);}
