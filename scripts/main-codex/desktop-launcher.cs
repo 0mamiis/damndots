@@ -36,6 +36,24 @@ public static class DotsDesktopLauncher {
   try{foreach(var name in names)File.Copy(Path.Combine(pending,name),Path.Combine(App,name),true);File.Copy(manifest,Path.Combine(Dir,"active.json"),true);File.Copy(manifest,Path.Combine(pending,"applied.json"),true);File.Delete(manifest);Log("Applied verified startup update");}
   catch{foreach(var name in names){string backup=Path.Combine(pending,Path.GetFileName(name)+".previous");if(File.Exists(backup))File.Copy(backup,Path.Combine(App,name),true);}File.WriteAllBytes(Path.Combine(Dir,"active.json"),oldActive);throw;}
  }
+ // A queued Dots build waits in desktop-features/staging until Codex is closed. Restarting Codex from the shortcut leaves
+ // no gap for the background watcher, so the launcher applies the queued build itself before it opens the window.
+ static void ApplyStaged(){
+  string staging=Path.Combine(Dir,"staging");
+  if(!Directory.Exists(staging)||LiveWindow())return;
+  for(int i=0;i<150&&ManagedProcess();i++)Thread.Sleep(100);
+  if(ManagedProcess()){Log("Staged build deferred: managed process still running");return;}
+  string repo=Path.GetFullPath(Path.Combine(Root,"..","..",".."));
+  string script=Path.Combine(repo,"scripts","apply-pending-features.mjs");
+  if(!File.Exists(script))return;
+  try{
+   var info=new ProcessStartInfo("node","\""+script+"\" --now"){UseShellExecute=false,CreateNoWindow=true,WorkingDirectory=repo};
+   using(var p=Process.Start(info)){
+    if(!p.WaitForExit(300000)){Log("Staged build apply timed out");return;}
+    Log("Staged build apply exit="+p.ExitCode);
+   }
+  }catch(Exception ex){Log("Staged build apply skipped: "+ex.Message);}
+ }
  static ProcessStartInfo StartInfo(string exe){
   var info=new ProcessStartInfo(exe){UseShellExecute=false,WorkingDirectory=App};
   var file=Path.Combine(Root,"environment.json");
@@ -88,6 +106,7 @@ public static class DotsDesktopLauncher {
     try{
      if(File.Exists(Path.Combine(Dir,"startup-update","active.json"))&&!LiveWindow())for(int i=0;i<20&&ManagedProcess();i++)Thread.Sleep(100);
      ApplyPending();
+     ApplyStaged();
      LinkPackageProfile();
      if(!Ready()){
       if(args.Length>0&&args[0]=="--managed")return 4;

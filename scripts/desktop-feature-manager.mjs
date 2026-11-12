@@ -95,7 +95,7 @@ export function ensureFeatures({nativeDir,adopt,includeLocalPatches=true,sourceP
   const bridgeDir=path.join(os.homedir(),'.codex','dots-local-bridge');
   if(fs.existsSync(path.join(bridgeDir,'config.json'))){const config=JSON.parse(fs.readFileSync(path.join(bridgeDir,'config.json'),'utf8').replace(/^\uFEFF/,''));config.composerAppRoot=app;atomic(path.join(bridgeDir,'config.json'),config);}
   const agents=path.join(os.homedir(),'.codex','agents');fs.mkdirSync(agents,{recursive:true});
-  for(const name of ['lead','plan','explore','verify','fix','subagents']){const file=path.join(agents,name+'.toml');if(!fs.existsSync(file))fs.copyFileSync(path.join(repo,'scripts/desktop-features/agents',name+'.toml'),file,fs.constants.COPYFILE_EXCL);}
+  for(const name of ['lead','plan','explore','verify','fix','subagents','swarm']){const file=path.join(agents,name+'.toml');if(!fs.existsSync(file))fs.copyFileSync(path.join(repo,'scripts/desktop-features/agents',name+'.toml'),file,fs.constants.COPYFILE_EXCL);}
   atomic(status,{state:'ready',managedBy:'damndots',packageVersion:sourcePackage.version,appRoot:app,checkedEntries:integrity.checked});
   return {state:'ready',dir,app};
  }catch(error){atomic(status,{state:'failed',error:error.message,staging});throw error;}
