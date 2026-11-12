@@ -17,6 +17,8 @@ try {
         S.note = typeof st.note === "string" ? st.note.slice(0, 4000) : "";
         S.disabled = Array.isArray(st.disabled) ? st.disabled.filter((m) => typeof m === "string").slice(0, 20) : null;
         S.defaultMode = typeof st.defaultMode === "string" ? st.defaultMode : null;
+        S.scope = typeof st.scope === "string" ? st.scope.slice(0, 200) : null;
+        S.scopeMode = typeof st.scopeMode === "string" ? st.scopeMode.slice(0, 40) : null;
         const nt = st.notes, notes = {};
         if (nt && typeof nt === "object") for (const k of Object.keys(nt).slice(0, 400)) if (typeof nt[k] === "string") notes[k.slice(0, 120)] = nt[k].slice(0, 4000);
         S.notes = notes;
