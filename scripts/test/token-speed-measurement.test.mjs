@@ -17,7 +17,7 @@ test('composer bindings follow renamed native scope, hook and conversation resol
 });
 function fixture(bridge){
  const data=new Map(),window={electronBridge:bridge?{getOpenCodexTps:bridge}:undefined,dispatchEvent:()=>{}};
- const context=vm.createContext({localStorage:{getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v)},window,performance:{now:()=>10000},Event:class{},Date,JSON,Math,Number,String,Promise,Object});
+ const context=vm.createContext({localStorage:{getItem:k=>data.get(k)??null,setItem:(k,v)=>data.set(k,v)},window,performance:{now:()=>10000},Event:class{},Date,JSON,Math,Number,String,Promise,Object,codexOrchL:t=>t});
  const start=helper.indexOf('var CODEX_ORCH_TPS_KEY'),end=helper.indexOf('function codexOrchestratorDropdown');vm.runInContext(helper.slice(start,end),context);return context;
 }
 test('native token notifications produce a visible badge for the current chat and use seconds correctly',()=>{

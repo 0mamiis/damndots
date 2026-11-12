@@ -15,6 +15,7 @@ function fixture(defaultMode = 'off') {
   const window = {__damndotsOrchestratorDefaults: {mode: defaultMode}, dispatchEvent: event => events.push(event.type)};
   const context = vm.createContext({window, localStorage: {getItem: key => store.get(key) ?? null, setItem: (key, value) => store.set(key, value), removeItem: key => store.delete(key)}, Event: class { constructor(type) { this.type = type; } }, Date, JSON, Number, Object, String});
   context.codexOrchestratorModelNote = () => '';
+  context.codexOrchL = text => text;
   vm.runInContext(routing, context);
   return {context, store, events, index: id => context.CODEX_ORCH_MODES.findIndex(mode => mode[0] === id)};
 }

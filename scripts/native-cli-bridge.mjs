@@ -61,10 +61,34 @@ function routeThroughGateway(value){
  for(const child of Object.values(value))if(child&&typeof child==='object'&&routeThroughGateway(child))changed=true;
  return changed;
 }
-createInterface({input:cli.stdout,terminal:false}).on('line',line=>{
- if(line.includes('workspaceRouting')){try{const message=JSON.parse(line);if(routeThroughGateway(message)){process.stdout.write(JSON.stringify(message)+'\n');return;}}catch{}}
- process.stdout.write(line+'\n');
+// CLI output is forwarded as bytes. A thread with many images can produce a single JSONL line of several hundred MB;
+// turning that into one JS string (readline) exceeded V8's string limit, crashed the bridge and made the desktop
+// reconnect and show its error screen. Only small lines are decoded, which is all the routing rewrite needs.
+const INSPECT_LIMIT=4*1024*1024,NEWLINE=0x0a,ROUTING=Buffer.from('workspaceRouting');
+let held=[],heldBytes=0,streaming=false;
+function out(chunk){if(!process.stdout.write(chunk))cli.stdout.pause();}
+process.stdout.on('drain',()=>cli.stdout.resume());
+function finishLine(){
+ if(streaming){out('\n');streaming=false;return;}
+ const line=held.length===1?held[0]:Buffer.concat(held,heldBytes);held=[];heldBytes=0;
+ if(line.includes(ROUTING)){try{const message=JSON.parse(line.toString('utf8'));if(routeThroughGateway(message)){out(JSON.stringify(message)+'\n');return;}}catch{}}
+ out(Buffer.concat([line,Buffer.from('\n')]));
+}
+cli.stdout.on('data',chunk=>{
+ let start=0;
+ for(let at=chunk.indexOf(NEWLINE);at!==-1;at=chunk.indexOf(NEWLINE,start)){
+  const piece=chunk.subarray(start,at);
+  if(streaming){if(piece.length)out(piece);}else if(piece.length){held.push(piece);heldBytes+=piece.length;}
+  finishLine();start=at+1;
+ }
+ if(start<chunk.length){
+  const rest=chunk.subarray(start);
+  if(streaming)out(rest);
+  else{held.push(rest);heldBytes+=rest.length;
+   if(heldBytes>INSPECT_LIMIT){for(const part of held)out(part);held=[];heldBytes=0;streaming=true;}}
+ }
 });
+cli.stdout.on('end',()=>{if(streaming||heldBytes){if(streaming)streaming=false;else{const tail=Buffer.concat(held,heldBytes);held=[];heldBytes=0;out(tail);}}});
 const ca=await readFile(manifest.certificate),pending=new Map();
 let remote,connecting,counter=0;
 const emit=value=>process.stdout.write(JSON.stringify(value)+'\n');

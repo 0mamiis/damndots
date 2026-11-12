@@ -17,6 +17,7 @@ function codexOrchestratorTurn(p, aeon, fallbackEffort) {
     } else if (known) mode = S.modes[scopeId];
     else mode = (typeof S.modes['draft:new'] === 'string' ? S.modes['draft:new'] : null) || S.defaultMode || null; // a new chat shows the draft selection, so the first turn has to use it too
     if (!mode || !Object.prototype.hasOwnProperty.call(CODEX_ORCH_TEXT, mode)) mode = null;
+    if (mode && Array.isArray(S.disabled) && S.disabled.indexOf(mode) >= 0) mode = null; // switched off in the Damndots dashboard
     // The subagent model note is stored per chat; a chat that has no entry of its own yet (a fresh chat) uses the draft selection, like the mode.
     var notes = S.notes || null;
     var note = notes ? (Object.prototype.hasOwnProperty.call(notes, scopeId) ? notes[scopeId] : (known ? '' : (notes['draft:new'] || ''))) : (S.note || '');

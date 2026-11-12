@@ -15,6 +15,7 @@ try {
         const pe = st.pending;
         S.pending = pe && typeof pe === "object" && typeof pe.mode === "string" && Number.isFinite(pe.at) && pe.at > S.consumedAt ? { mode: pe.mode, at: pe.at } : null;
         S.note = typeof st.note === "string" ? st.note.slice(0, 4000) : "";
+        S.disabled = Array.isArray(st.disabled) ? st.disabled.filter((m) => typeof m === "string").slice(0, 20) : null;
         S.defaultMode = typeof st.defaultMode === "string" ? st.defaultMode : null;
         const nt = st.notes, notes = {};
         if (nt && typeof nt === "object") for (const k of Object.keys(nt).slice(0, 400)) if (typeof nt[k] === "string") notes[k.slice(0, 120)] = nt[k].slice(0, 4000);
