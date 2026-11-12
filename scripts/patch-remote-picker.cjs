@@ -12,7 +12,7 @@ const listOld=/children:\[([\w$]+),([\w$]+),([\w$]+),([\w$]+),([\w$]+),([\w$]+),
 const list={test:s=>listOld.test(s)||listNew.test(s)};
 const cloud=/\(0,([\w$]+)\.jsx\)\(([\w$]+)\.ms\.Item,\{LeftIcon:([\w$]+)\.LL7[,}]/;
 const close=/closeDropdown:([\w$]+),openHandoffDialog:/;
-const css='[class*="scrollSection-"]>*{flex-shrink:0}';
+const css='[class*="scrollSection-"]>*{flex-shrink:0}.flex.w-max.min-w-full.items-center.gap-2:has([data-composer-navigation-target="workspace-project"])>:has([data-composer-navigation-target="workspace-project"]),.flex.w-max.min-w-full.items-center.gap-2>[data-composer-navigation-target="workspace-project"]{order:-1}';
 const assets=meta.files.webview.files.assets.files.async.files;
 // Codex 26.1103: the unified project/remote-host picker sits behind rollout gate 1678134557, which is off for this account.
 const gateRe=/\(0,[\w$]+\._U\)\([\w$]+\.JW,"(?:1678134557|4114442250)"\)|(?<![\w$.])e\([\w$]+\.JW,"(?:1678134557|4114442250)"\)/g;
