@@ -13,7 +13,7 @@ export function ScrollControlsPanel(){
    <Form submit="Save settings" onSubmit={async()=>{await mutate('scroll-controls','PATCH',draft);setDirty(false);setSaved(true);}}>
     <Check label="Enable scroll controls" isSelected={draft.enabled} onChange={enabled=>change({enabled})} description="Master switch. When off, the pickers behave like the original Codex."/>
     <Check label="Scroll changes thinking level" isSelected={draft.thinking} onChange={thinking=>change({thinking})} description="Scroll over the model picker or the orchestrator picker while its menu is closed."/>
-    <Check label="Ctrl + Shift + scroll changes model" isSelected={draft.model} onChange={model=>change({model})} description="Switches to the previous or next model in the list for the picker under the pointer."/>
+    <Check label="Shift + scroll changes model" isSelected={draft.model} onChange={model=>change({model})} description="Switches to the previous or next model in the list for the picker under the pointer."/>
     <Check label="Ctrl + scroll changes orchestrator mode" isSelected={draft.mode} onChange={mode=>change({mode})} description="Works over the orchestrator picker."/>
    </Form>
    {data.managedBy==='damndots'&&<p className="text-sm text-muted">Installed and managed by Damndots.</p>}<p role="status" className="text-sm text-muted">{!data.installed?'The scroll controls need the Damndots-managed Codex app.':!data.connected?'Settings saved. Open or reload the patched Codex app to apply them.':data.applied?'Settings applied in Codex.':'Applying settings…'}</p>

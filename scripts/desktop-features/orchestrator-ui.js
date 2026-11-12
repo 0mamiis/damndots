@@ -670,7 +670,7 @@ function codexOrchestratorDropdown(R, children) {
 
 function codexOrchLight(c){return 'color-mix(in srgb, '+c+' 55%, white)'}
 
-/* damndots wheel control: scroll over the model pickers changes the thinking level, Ctrl+Shift+scroll the model, Ctrl+scroll over the orchestrator picker its mode */
+/* damndots wheel control: scroll over the model pickers changes the thinking level, Shift+scroll the model, Ctrl+scroll over the orchestrator picker its mode */
 (function(){
  if(window.__codexWheelInstalled)return;window.__codexWheelInstalled=1;
  window.__codexScrollControls={enabled:true,thinking:true,model:true,mode:true};
@@ -714,7 +714,7 @@ function codexOrchLight(c){return 'color-mix(in srgb, '+c+' 55%, white)'}
   if(!sub&&!main)return;
   if(t.getAttribute('aria-expanded')==='true')return;
   var dir=e.deltaY<0?1:e.deltaY>0?-1:0;if(!dir||e.altKey)return;
-  var ctrl=e.ctrlKey||e.metaKey,which=sub?'sub':'main',action=ctrl&&e.shiftKey?'model':ctrl&&sub?'mode':!ctrl&&!e.shiftKey?'thinking':null;
+  var ctrl=e.ctrlKey||e.metaKey,which=sub?'sub':'main',action=e.shiftKey&&!ctrl?'model':ctrl&&!e.shiftKey&&sub?'mode':!ctrl&&!e.shiftKey?'thinking':null;
   if(!action||c[action]===false)return;
   var inst=pickInst(t,which),H=inst&&inst.handlers||(window.__codexPickerHandlers&&window.__codexPickerHandlers[which]),fn=H&&H[dir>0?'composer.increaseReasoningEffort':'composer.decreaseReasoningEffort'];
   if(action==='thinking'&&typeof fn!=='function'&&!(inst&&inst.sel)&&!(window.__codexPickerSel&&window.__codexPickerSel[which]))return;
