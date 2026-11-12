@@ -81,7 +81,7 @@ function helpers(BT){
  'function codexSubagentModel(R,Comp,props){return R.createElement(codexSubagentModelView,{...props,Comp:Comp,R:R})}\n'+
  'function codexSubagentEffortView(p){var L=window.__codexNativeEffortLabel;if(p.eff&&L)return p.R.createElement(L,{reasoningEffort:p.eff,shouldReduceMotion:!!(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches)});return p.el}\n'+
  'function codexSubagentEffort(R,el,eff){try{var S=window.__codexPickerSel&&window.__codexPickerSel.sub,e=eff||(S&&S.modelSettings&&S.modelSettings.reasoningEffort);return R.createElement(codexSubagentEffortView,{R:R,el:el,eff:e})}catch(x){return el}}'+
- 'function codexSubagentShortcut(f,v){if(!f)return v;try{var c=window.__codexScrollControls;if(c&&c.enabled===false)return null}catch(e){}return /^tr/i.test(navigator.language)?"Kaydır · Ctrl+Kaydır":"Scroll · Ctrl+Scroll"}'+
+ 'function codexSubagentShortcut(f,v){if(!f)return v;try{var c=window.__codexScrollControls;if(c&&c.enabled===false)return null}catch(e){}return /^tr/i.test(navigator.language)?"Kaydır · Shift+Kaydır · Ctrl+Kaydır":"Scroll · Shift+Scroll · Ctrl+Scroll"}'+
  '\nfunction codexPickerExport(f){try{window.__codexComposerModelPicker=f}catch(e){}return f}'+
  '\nfunction codexSubagentWrap(R,flag,main,props){window.__codexCurrentInst=null;if(flag||props&&props.hideLabel)return main;let P=window.__codexComposerModelPicker,W=window.__codexOrchNativeWrap;return P&&W?W(R,main,P,props):main}'+
  '\nfunction codexSubagentTriggerChild(R,v){let C=window.__codexOrchTriggerLabel;return C?R.createElement(C,{model:v}):v}'+
