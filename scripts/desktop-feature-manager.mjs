@@ -55,13 +55,17 @@ export function ensureFeatures({nativeDir,adopt,includeLocalPatches=true,sourceP
  if(fs.existsSync(staging)){
   const marker=path.join(staging,'damndots-desktop-features.json');
   let pending;try{pending=JSON.parse(fs.readFileSync(marker,'utf8'));}catch{}
-  if(pending?.revision!==revision||pending.packageVersion!==sourcePackage.version)throw Error('An unfinished or incompatible feature build requires inspection.');
+  // A staged copy from another patch revision is scratch data. Discarding it and rebuilding is what keeps the
+  // queued build from being refused forever, which left the running app on the previous version.
+  if(pending?.revision!==revision||pending.packageVersion!==sourcePackage.version){fs.rmSync(staging,{recursive:true,force:true});atomic(status,{state:'building',packageVersion:sourcePackage.version,recycled:true});}
+  else{
   const integrity=verifyApp(staging);
   if(fs.existsSync(app)){try{const fd=fs.openSync(path.join(app,'ChatGPT.exe'),'r+');fs.closeSync(fd);}catch{atomic(status,{state:'waiting-for-codex-close',staging});return {state:'waiting-for-codex-close',dir};}fs.renameSync(app,path.join(dir,'previous-'+Date.now()));}
   fs.renameSync(staging,app);prunePrevious(dir);
   atomic(path.join(dir,'active.json'),{managedBy:'damndots',revision,packageVersion:sourcePackage.version,exe:path.join(app,'ChatGPT.exe'),...integrity});
   atomic(status,{state:'ready',managedBy:'damndots',packageVersion:sourcePackage.version,appRoot:app,checkedEntries:integrity.checked});
   return {state:'ready',dir,app};
+  }
  }
  fs.mkdirSync(staging,{recursive:true});atomic(status,{state:'building',packageVersion:sourcePackage.version});
  try{
