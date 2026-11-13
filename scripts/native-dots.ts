@@ -53,10 +53,19 @@ const environment={
 };
 await writeFile(join(data,'environment.json'),JSON.stringify({environment},null,2),{mode:0o600});
 let featureBridge:ReturnType<typeof spawn>|undefined;
-if(managedFeatures?.state==='ready'){
- try{const bridge=provisionFeatureBridge(data,managedFeatures.app);const listening=await new Promise<boolean>(resolve=>{const socket=net.connect(bridge.port,'127.0.0.1');socket.once('connect',()=>{socket.destroy();resolve(true);});socket.once('error',()=>resolve(false));socket.setTimeout(1000,()=>{socket.destroy();resolve(false);});});
+async function startFeatureBridge(app:string){
+ try{const bridge=provisionFeatureBridge(data,app);const listening=await new Promise<boolean>(resolve=>{const socket=net.connect(bridge.port,'127.0.0.1');socket.once('connect',()=>{socket.destroy();resolve(true);});socket.once('error',()=>resolve(false));socket.setTimeout(1000,()=>{socket.destroy();resolve(false);});});
  if(!listening)featureBridge=spawn(process.execPath,[bridge.script],{cwd:root,env:process.env,stdio:'inherit',windowsHide:true});
  }catch(error){console.error('Codex preference bridge unavailable: '+(error as Error).message);}
+
+}
+if(managedFeatures?.state==='ready')await startFeatureBridge(managedFeatures.app);
+else{
+ // The features were staged while Codex was open. They become ready later (the launcher or apply-pending swaps them in);
+ // provision the preference bridge then, so the dashboard settings work without restarting the services.
+ const featureStatus=join(data,'desktop-features','status.json');
+ const featureWatch=setInterval(()=>{void readFile(featureStatus,'utf8').then(JSON.parse).then(async st=>{if(st?.state!=='ready'||!st.appRoot||featureBridge)return;clearInterval(featureWatch);await startFeatureBridge(st.appRoot);}).catch(()=>{});},5000);
+ featureWatch.unref();
 }
 const helper=spawn('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',join(root,'scripts/main-codex/native-package.ps1'),'-EnvironmentFile',join(data,'environment.json'),'-ParentPid',String(process.pid),...check?['-CheckOnly']:[]],{windowsHide:true,stdio:'inherit',env:{...process.env,PSModulePath:undefined}});
 let closing=false;
