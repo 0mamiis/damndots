@@ -236,6 +236,12 @@ function codexOrchestratorDisabledList(){var d=window.__damndotsOrchestratorDefa
 function codexOrchestratorAllowed(m){return codexOrchestratorDisabledList().indexOf(m)<0}
 // Optional dashboard setting: while the orchestrator is Off the picker reads "Off <model> <thinking>" instead of "Orchestrator".
 function codexOrchOffDetails(){var d=window.__damndotsOrchestratorDefaults;return !!(d&&d.showOffDetails===true)}
+// The short text the orchestrator trigger shows; Codex replaces its content with a placeholder while the menu is
+// open, so the same text is mirrored into an attribute for the open state.
+function codexOrchShortLabel(){try{var i=codexOrchestratorGet(codexOrchestratorComposerScope());return i===0?(codexOrchOffDetails()?codexOrchL('Kapalı'):codexOrchL('Orkestratör')):CODEX_ORCH_MODES[i][1]}catch(e){return ''}}
+window.__codexOrchShortLabel=codexOrchShortLabel;
+function codexOrchIsOff(){try{return !codexOrchestratorMode(codexOrchestratorComposerScope())}catch(e){return false}}
+window.__codexOrchIsOff=codexOrchIsOff;
 function codexOrchestratorOrdered(){var d=window.__damndotsOrchestratorDefaults,o=d&&Array.isArray(d.modeOrder)?d.modeOrder:null;if(!o)return CODEX_ORCH_ALL_MODES;var rows=[CODEX_ORCH_ALL_MODES[0]];o.forEach(function(k){var r=CODEX_ORCH_ALL_MODES.find(function(x){return x[0]===k});if(r&&rows.indexOf(r)<0)rows.push(r)});CODEX_ORCH_ALL_MODES.forEach(function(r){if(rows.indexOf(r)<0)rows.push(r)});return rows}
 // Colours chosen in the Damndots dashboard replace the built-in colour of a mode; the row objects are cached so the picker keeps stable identities.
 var codexOrchestratorColorCache={};
