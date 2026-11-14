@@ -15,7 +15,7 @@ test('older settings with a boolean per action keep their original keys', () => 
 });
 
 test('a model-name scroll binding without a key is stored as written', () => {
-  const next={enabled:true,thinking:{on:true,key:'none',zone:'thinking'},model:{on:true,key:'none',zone:'model'},mode:{on:true,key:'none',zone:'mode'},fast:{on:true,key:'ctrl+shift',zone:'any'}};
+  const next={enabled:true,thinking:{on:true,key:'none',zone:'thinking'},model:{on:true,key:'none',zone:'model'},mode:{on:true,key:'none',zone:'mode'},fast:{on:true,key:'none',zone:'fast'}};
   assert.deepEqual(settings.validate(next),next);
 });
 

@@ -2,7 +2,7 @@
 import {useContext,useEffect,useState} from 'react';
 import {ApiContext,Check,Form,FormGrid,Loading,Notice,Section,SelectField,useData} from './ui';
 type Key='none'|'shift'|'ctrl'|'alt'|'ctrl+shift';
-type Zone='any'|'model'|'thinking'|'mode';
+type Zone='any'|'model'|'thinking'|'mode'|'fast';
 type Binding={on:boolean;key:Key;zone:Zone};
 type Settings={enabled:boolean;thinking:Binding;model:Binding;mode:Binding;fast:Binding};
 type Preferences=Settings&{installed:boolean;managedBy:string|null;connected:boolean;applied:boolean};
@@ -13,7 +13,7 @@ const actions:{id:'thinking'|'model'|'mode'|'fast';label:string;description:stri
  {id:'fast',label:'Change Fast mode',description:'Steps through the speed options of the model (Standard, Fast and Ultra fast when the model offers them).'}
 ];
 const keys=[{value:'none',label:'No key (scroll only)'},{value:'shift',label:'Shift'},{value:'ctrl',label:'Ctrl'},{value:'alt',label:'Alt'},{value:'ctrl+shift',label:'Ctrl + Shift'}];
-const zones=[{value:'any',label:'Anywhere on the picker'},{value:'model',label:'Model name'},{value:'thinking',label:'Thinking level'},{value:'mode',label:'Orchestrator mode label'}];
+const zones=[{value:'any',label:'Anywhere on the picker'},{value:'model',label:'Model name'},{value:'thinking',label:'Thinking level'},{value:'mode',label:'Orchestrator mode label'},{value:'fast',label:'Fast icon (left of the model name)'}];
 const defaults:Settings={enabled:true,thinking:{on:true,key:'none',zone:'any'},model:{on:true,key:'shift',zone:'any'},mode:{on:true,key:'ctrl',zone:'any'},fast:{on:true,key:'alt',zone:'any'}};
 const pick=(d:Preferences):Settings=>({enabled:d.enabled,thinking:d.thinking,model:d.model,mode:d.mode,fast:d.fast});
 // Two enabled actions that use the same key and overlapping zones would compete for the same scroll.

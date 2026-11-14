@@ -37,7 +37,7 @@ try {
       if (!url.startsWith("app://-/")) return null;
       const dir = __dotsPath.join(__dotsOs.homedir(), ".codex", "dots-local-bridge");
       // Same rules as scripts/scroll-controls-settings.cjs (older files stored a boolean per action).
-      const KEYS = ["none", "shift", "ctrl", "alt", "ctrl+shift"], ZONES = ["any", "model", "thinking", "mode"];
+      const KEYS = ["none", "shift", "ctrl", "alt", "ctrl+shift"], ZONES = ["any", "model", "thinking", "mode", "fast"];
       const DEFAULTS = { thinking: { on: true, key: "none", zone: "any" }, model: { on: true, key: "shift", zone: "any" }, mode: { on: true, key: "ctrl", zone: "any" }, fast: { on: true, key: "alt", zone: "any" } };
       const bind = (name, v) => {
         if (typeof v === "boolean") return Object.assign({}, DEFAULTS[name], { on: v });

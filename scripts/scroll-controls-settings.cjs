@@ -1,8 +1,8 @@
 'use strict';
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 // Each scroll action has a switch, a modifier key and the part of the picker the pointer has to be over.
-// keys: none | shift | ctrl | alt | ctrl+shift. zones: any | model | thinking | mode (the orchestrator mode label).
-const actions=['thinking','model','mode','fast'],keys=['none','shift','ctrl','alt','ctrl+shift'],zones=['any','model','thinking','mode'];
+// keys: none | shift | ctrl | alt | ctrl+shift. zones: any | model | thinking | mode (the orchestrator mode label) | fast (the Fast icon, left of the model name).
+const actions=['thinking','model','mode','fast'],keys=['none','shift','ctrl','alt','ctrl+shift'],zones=['any','model','thinking','mode','fast'];
 const defaults={enabled:true,thinking:{on:true,key:'none',zone:'any'},model:{on:true,key:'shift',zone:'any'},mode:{on:true,key:'ctrl',zone:'any'},fast:{on:true,key:'alt',zone:'any'}};
 function binding(name,v){
  // Older files stored a plain boolean per action; they keep the original key and zone of that action.

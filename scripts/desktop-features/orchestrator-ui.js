@@ -729,7 +729,7 @@ function codexOrchLight(c){return 'color-mix(in srgb, '+c+' 55%, white)'}
   for(var q=0;q<bs.length;q++){if(bs[q].checkVisibility&&!bs[q].checkVisibility())continue;var rc=bs[q].getBoundingClientRect();if(rc.width&&e.clientX>=rc.left&&e.clientX<=rc.right&&e.clientY>=rc.top&&e.clientY<=rc.bottom)return bs[q]}
   return null;
  }
- var KEYS=['none','shift','ctrl','alt','ctrl+shift'],ZONES=['any','model','thinking','mode'],ACTIONS=['thinking','model','mode','fast'];
+ var KEYS=['none','shift','ctrl','alt','ctrl+shift'],ZONES=['any','model','thinking','mode','fast'],ACTIONS=['thinking','model','mode','fast'];
  var DEFAULT_BINDINGS={thinking:{on:true,key:'none',zone:'any'},model:{on:true,key:'shift',zone:'any'},mode:{on:true,key:'ctrl',zone:'any'},fast:{on:true,key:'alt',zone:'any'}};
  // Older settings stored a boolean per action; a missing action keeps its default key and zone.
  function bindingOf(c,name){var v=c&&c[name],d=DEFAULT_BINDINGS[name];if(typeof v==='boolean')return {on:v,key:d.key,zone:d.zone};if(v&&typeof v==='object'&&typeof v.on==='boolean'&&KEYS.indexOf(v.key)>=0&&ZONES.indexOf(v.zone)>=0)return v;return d}
@@ -740,6 +740,8 @@ function codexOrchLight(c){return 'color-mix(in srgb, '+c+' 55%, white)'}
   if(mode)regs.push(['mode',mode]);if(model)regs.push(['model',model]);
   var labels=t.querySelectorAll('[class*="ModelPickerTriggerEffortLabel"]');
   for(var i=0;i<labels.length;i++){var l=labels[i];if(l.hasAttribute('data-codex-model-blur-label')||l.parentElement&&l.parentElement.hasAttribute('data-codex-orchestrator-label'))continue;regs.push(['thinking',l]);break}
+  // The Fast icon sits left of the model name and is only drawn while Fast is on; the strip at the left edge of the model name counts as Fast either way.
+  if(model){var mb=model.getBoundingClientRect(),ic=t.querySelector('[class*="ModelPickerTriggerInlineModeIcon"]'),ib=ic&&ic.getBoundingClientRect();if(mb.width&&x<=(ib&&ib.width?ib.right+3:mb.left+6))return 'fast'}
   var best=null,bd=1e9;
   regs.forEach(function(r){var b=r[1].getBoundingClientRect();if(!b.width)return;var d=x<b.left?b.left-x:x>b.right?x-b.right:0;if(d<bd){bd=d;best=r[0]}});
   return best;

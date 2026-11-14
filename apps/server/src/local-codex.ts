@@ -22,7 +22,7 @@ export class LocalCodexError extends Error {
   this.statusCode=archived?409:502;
  }
 }
-export type ScrollBinding={on:boolean;key:'none'|'shift'|'ctrl'|'alt'|'ctrl+shift';zone:'any'|'model'|'thinking'|'mode'};
+export type ScrollBinding={on:boolean;key:'none'|'shift'|'ctrl'|'alt'|'ctrl+shift';zone:'any'|'model'|'thinking'|'mode'|'fast'};
 export type ScrollControlsPatch={enabled:boolean;thinking:ScrollBinding;model:ScrollBinding;mode:ScrollBinding;fast:ScrollBinding};
 export class LocalCodex {
  private tokenFile=process.env.DOTS_LOCAL_CODEX_TOKEN_FILE||'C:\\ProgramData\\DotsCodexBridge\\local-token.txt';
