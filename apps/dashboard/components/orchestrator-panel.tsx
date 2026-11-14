@@ -7,12 +7,12 @@ const DEFAULT_COLORS:Record<string,string>={fix:'#E1465A',verify:'#16A34A',explo
 const HEX=/^#[0-9a-fA-F]{6}$/;
 const DEFAULT_ORDER=['fix','verify','explore','plan','subagents','lead','swarm'];
 const modeInfo=(id:string)=>MODES.find(m=>m[0]===id)!;
-type Preferences={mode:string;model:string|null;effort:string|null;fast:boolean;disabledModes?:string[];modeOrder?:string[];modeColors?:Record<string,string>;installed:boolean;managedBy:string|null;connected:boolean;applied:boolean};
+type Preferences={mode:string;model:string|null;effort:string|null;fast:boolean;disabledModes?:string[];modeOrder?:string[];modeColors?:Record<string,string>;showOffDetails?:boolean;installed:boolean;managedBy:string|null;connected:boolean;applied:boolean};
 export function OrchestratorPanel(){
  const {data,error}=useData<Preferences>('orchestrator',3000),{mutate}=useContext(ApiContext);
  const models=useData<{models:{id:string;label?:string;efforts?:string[];fast?:boolean}[]}>('orchestrator/models',10000);
- const [draft,setDraft]=useState<{mode:string;model:string;effort:string;fast:boolean;disabledModes:string[];modeOrder:string[];modeColors:Record<string,string>}>({mode:'off',model:'',effort:'',fast:false,disabledModes:['fix','verify','explore'],modeOrder:DEFAULT_ORDER,modeColors:{}}),[dirty,setDirty]=useState(false),[saved,setSaved]=useState(false);
- useEffect(()=>{if(data&&!dirty)setDraft({mode:data.mode,model:data.model??'',effort:data.effort??'',fast:data.fast,disabledModes:data.disabledModes??['fix','verify','explore'],modeOrder:data.modeOrder??DEFAULT_ORDER,modeColors:data.modeColors??{}});},[data,dirty]);
+ const [draft,setDraft]=useState<{mode:string;model:string;effort:string;fast:boolean;disabledModes:string[];modeOrder:string[];modeColors:Record<string,string>;showOffDetails:boolean}>({mode:'off',model:'',effort:'',fast:false,disabledModes:['fix','verify','explore'],modeOrder:DEFAULT_ORDER,modeColors:{},showOffDetails:false}),[dirty,setDirty]=useState(false),[saved,setSaved]=useState(false);
+ useEffect(()=>{if(data&&!dirty)setDraft({mode:data.mode,model:data.model??'',effort:data.effort??'',fast:data.fast,disabledModes:data.disabledModes??['fix','verify','explore'],modeOrder:data.modeOrder??DEFAULT_ORDER,modeColors:data.modeColors??{},showOffDetails:data.showOffDetails===true});},[data,dirty]);
  const selected=models.data?.models.find(m=>m.id===draft.model);
  const [dragging,setDragging]=useState<string|null>(null);
  function change(v:Partial<typeof draft>){setDraft(d=>({...d,...v}));setDirty(true);setSaved(false);}
@@ -25,6 +25,7 @@ export function OrchestratorPanel(){
   {!data?!error&&<Loading/>:<>
    <Form submit="Save settings" onSubmit={async()=>{setHexDraft({});await mutate('orchestrator','PATCH',{...draft,model:draft.model||null,effort:draft.effort||null,fast:selected?.fast===true&&draft.fast});setDirty(false);setSaved(true);}}>
     <SelectField label="Default for new conversations" value={draft.mode} onChange={mode=>change({mode})} options={[{value:'off',label:'Off'},...draft.modeOrder.filter(value=>!draft.disabledModes.includes(value)).map(value=>({value,label:modeInfo(value)[1]}))]}/>
+    <Check label="Show the subagent model while the orchestrator is off" isSelected={draft.showOffDetails} onChange={showOffDetails=>change({showOffDetails})} description="The picker shows Off with the subagent model and thinking level instead of the word Orchestrator."/>
     <fieldset className="flex flex-col gap-3"><legend className="mb-1 text-sm font-medium">Modes in the picker</legend>
      <p className="text-sm text-muted">Left to right is the picker order after Off. Drag a card or use the arrows to move it. Switched off modes are hidden from the picker, and chats that use one of them run with the orchestrator off.</p>
      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">

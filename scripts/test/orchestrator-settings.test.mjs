@@ -16,3 +16,10 @@ test('renderer refresh applies defaults without altering per-chat or explicit mo
  const context=vm.createContext({window:{electronBridge:{getOrchestratorPreferences:async()=>({mode:'lead',model:null,effort:null,fast:false})},dispatchEvent:()=>events++},document:{visibilityState:'visible'},localStorage:{getItem:k=>storage.get(k),setItem:()=>assert.fail('poll must not alter local selections')},Event:class{},setInterval:fn=>{callback=fn;return 1;},clearInterval(){},JSON});
  vm.runInContext(fs.readFileSync(new URL('../orchestrator-renderer.js',import.meta.url),'utf8'),context);const stop=context.damndotsWatchOrchestratorPreferences();await new Promise(r=>setImmediate(r));assert.equal(context.damndotsOrchestratorPreferences.mode,'lead');assert.equal(context.window.__damndotsOrchestratorDefaults.mode,'lead');assert.equal(events,1);await callback();assert.equal(events,1);assert.equal(storage.get('codex-orchestrator-thread-modes-v2'),'{"existing":"off"}');stop();
 });
+
+test('the off-state label option defaults to off, accepts only a boolean and old files stay valid',()=>{
+ assert.equal(settings.defaults.showOffDetails,false);
+ assert.equal(settings.validate({mode:'off',model:null,effort:null,fast:false}).showOffDetails,false);
+ assert.equal(settings.validate({...settings.defaults,showOffDetails:true}).showOffDetails,true);
+ assert.throws(()=>settings.validate({...settings.defaults,showOffDetails:'yes'}));
+});
