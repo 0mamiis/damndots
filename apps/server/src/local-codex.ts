@@ -22,6 +22,8 @@ export class LocalCodexError extends Error {
   this.statusCode=archived?409:502;
  }
 }
+export type ScrollBinding={on:boolean;key:'none'|'shift'|'ctrl'|'alt'|'ctrl+shift';zone:'any'|'model'|'thinking'|'mode'};
+export type ScrollControlsPatch={enabled:boolean;thinking:ScrollBinding;model:ScrollBinding;mode:ScrollBinding;fast:ScrollBinding};
 export class LocalCodex {
  private tokenFile=process.env.DOTS_LOCAL_CODEX_TOKEN_FILE||'C:\\ProgramData\\DotsCodexBridge\\local-token.txt';
  private url=process.env.DOTS_LOCAL_CODEX_URL||'http://127.0.0.1:9914';
@@ -41,7 +43,7 @@ export class LocalCodex {
   if(!r.ok)throw Object.assign(new Error('Token speed settings bridge failed (HTTP '+r.status+').'),{statusCode:502});
   return r.json();
  }
- async scrollControlsPreferences(patch?:{enabled:boolean;thinking:boolean;model:boolean;mode:boolean}):Promise<unknown>{
+ async scrollControlsPreferences(patch?:ScrollControlsPatch):Promise<unknown>{
   const file=process.env.DOTS_LOCAL_CODEX_TOKEN_FILE||(process.platform==='win32'?join(homedir(),'.codex','dots-local-bridge','token.txt'):this.tokenFile);
   const url=process.env.DOTS_LOCAL_CODEX_URL||(process.platform==='win32'?'http://127.0.0.1:9915':this.url);
   if(!existsSync(file))throw Object.assign(new Error('The PC settings bridge is not configured.'),{statusCode:503});
