@@ -12,7 +12,7 @@ export async function localCodexPreferences(
   request: Request,
   path: string[],
   dir = join(homedir(), ".codex", "dots-local-bridge"),
-  stack = resolve(process.env.DOTS_STACK_DIR || join(process.cwd(), ".data", "local-stack")),
+  stack = resolve(/*turbopackIgnore: true*/ process.env.DOTS_STACK_DIR || join(process.cwd(), ".data", "local-stack")),
 ) {
   const headers = { "cache-control": "no-store" };
   if (path[1] === "models") {
