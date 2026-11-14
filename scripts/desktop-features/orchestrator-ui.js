@@ -549,7 +549,7 @@ function codexOrchestratorEnsureNative(R){
   var previousMode=R.useRef(i);
   R.useLayoutEffect(function(){
    var el=ref.current,was=previousMode.current;previousMode.current=i;
-   if(!el||was===i||i===0)return;
+   if(!el||was===i||was!==0||i===0)return; // only when the model and thinking text join the label (off to a mode); switching between modes animates the mode text alone
    if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
    var opts=window.__codexNativeEffortAnim||{duration:300,easing:'ease-out',fill:'both'};
    var blur=getComputedStyle(el).getPropertyValue('--blur-xs')||'4px';
