@@ -6,6 +6,14 @@ Self-hosted Dots for the Codex desktop app. Run the backend on your PC or a serv
 
 **Read before installing.** The Windows integration adds a local certificate authority to your user trust store and starts the Codex process it manages with Chromium's `--ignore-certificate-errors`. Dot tasks ask for command approval by default; full access is an opt-in setting. See [Security notes](SECURITY.md).
 
+## Screenshots
+
+| Orchestrator picker with the Swarm mode | Composer with tok/s and the orchestrator |
+| --- | --- |
+| ![Orchestrator picker](docs/images/orchestrator-picker.png) | ![Composer](docs/images/composer.png) |
+
+![Damndots dashboard settings](docs/images/dashboard-settings.png)
+
 ## What works
 
 - The original Windows Codex app, with its existing account and history. The launcher starts services; you open Codex yourself.
