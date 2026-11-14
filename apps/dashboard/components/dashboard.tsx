@@ -370,6 +370,7 @@ export function Dashboard({
           <a
             href="#overview"
             aria-label="Go to overview"
+            title={serverLabel}
             className="rounded-xl px-2 py-1"
             onClick={(e) => {
               e.preventDefault();
@@ -378,18 +379,7 @@ export function Dashboard({
           >
             <Brand />
           </a>
-          <div className="flex flex-col gap-0.5 rounded-2xl bg-surface-secondary px-3 py-2">
-            <span className="text-[11px] font-semibold tracking-widest text-muted uppercase">
-              Workspace
-            </span>
-            <span
-              className="truncate text-sm font-medium"
-              title={serverLabel}
-            >
-              {serverLabel.replace(/^https?:\/\//, "")}
-            </span>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="dots-scroll min-h-0 flex-1 overflow-y-auto">
             <Nav page={page} onSelect={setPage} />
           </div>
           <UpdateFooter updates={updates} />

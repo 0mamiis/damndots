@@ -97,6 +97,12 @@ export const MoonIcon = (p: Props) => (
     <path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10Z" />
   </Icon>
 );
+export const AutoIcon = (p: Props) => (
+  <Icon {...p}>
+    <rect x="3" y="5" width="18" height="12" rx="2" />
+    <path d="M9 20h6M12 17v3" />
+  </Icon>
+);
 export const MenuIcon = (p: Props) => (
   <Icon {...p}>
     <path d="M4 7h16M4 12h16M4 17h16" />
