@@ -1,6 +1,6 @@
 {
   "name": "@dots/contracts",
-  "version": "0.3.50",
+  "version": "0.3.52",
   "private": true,
   "type": "module",
   "exports": {
