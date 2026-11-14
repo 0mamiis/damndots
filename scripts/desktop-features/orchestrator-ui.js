@@ -234,6 +234,8 @@ var CODEX_ORCH_DEFAULT_DISABLED=["fix","verify","explore"];
 var CODEX_ORCH_MODES=CODEX_ORCH_ALL_MODES.slice();
 function codexOrchestratorDisabledList(){var d=window.__damndotsOrchestratorDefaults;var l=d&&Array.isArray(d.disabledModes)?d.disabledModes:CODEX_ORCH_DEFAULT_DISABLED;return l.filter(function(m){return m!=="off"})}
 function codexOrchestratorAllowed(m){return codexOrchestratorDisabledList().indexOf(m)<0}
+// Optional dashboard setting: while the orchestrator is Off the picker reads "Off <model> <thinking>" instead of "Orchestrator".
+function codexOrchOffDetails(){var d=window.__damndotsOrchestratorDefaults;return !!(d&&d.showOffDetails===true)}
 function codexOrchestratorOrdered(){var d=window.__damndotsOrchestratorDefaults,o=d&&Array.isArray(d.modeOrder)?d.modeOrder:null;if(!o)return CODEX_ORCH_ALL_MODES;var rows=[CODEX_ORCH_ALL_MODES[0]];o.forEach(function(k){var r=CODEX_ORCH_ALL_MODES.find(function(x){return x[0]===k});if(r&&rows.indexOf(r)<0)rows.push(r)});CODEX_ORCH_ALL_MODES.forEach(function(r){if(rows.indexOf(r)<0)rows.push(r)});return rows}
 // Colours chosen in the Damndots dashboard replace the built-in colour of a mode; the row objects are cached so the picker keeps stable identities.
 var codexOrchestratorColorCache={};
@@ -519,7 +521,7 @@ function codexOrchestratorEnsureNative(R){
   var M=CODEX_ORCH_MODES,layerEls=M.map(function(row,k){
    var base={opacity:0,width:'max-content',filter:'blur(var(--blur-xs, 4px))',willChange:'opacity, filter',gridArea:'1 / 1',justifySelf:'center'};
    if(k>0)base.color=codexOrchLight(row[3]);
-   return h('span',{key:row[0],'data-orch-layer':String(k),'aria-hidden':true,className:(k>0?(window.__codexModelTextClass||''):'')+' '+nat('Text'),style:base},k===0?codexOrchL('Orkestratör'):row[1]);
+   return h('span',{key:row[0],'data-orch-layer':String(k),'aria-hidden':true,className:(k>0?(window.__codexModelTextClass||''):'')+' '+nat('Text'),style:base},k===0?codexOrchL(codexOrchOffDetails()?'Kapalı':'Orkestratör'):row[1]);
   });
   return h('span',{ref:root,className:nat('Label'),style:{display:'inline-flex',boxSizing:'content-box',whiteSpace:'nowrap',flexShrink:0}},
    h('span',{className:'sr-only'},M[idx][1]),
@@ -534,7 +536,7 @@ function codexOrchestratorEnsureNative(R){
    btn.removeAttribute('data-composer-navigation-target');btn.setAttribute('data-codex-subagent-trigger','');
   });
   var modeText=h(window.__codexOrchModeText,{index:i});
-  if(i===0)return h('span',{ref:ref,className:'truncate whitespace-nowrap','data-codex-orchestrator-label':'off'},modeText);
+  if(i===0){if(codexOrchOffDetails()&&props.model!=null)return h('span',{ref:ref,className:'flex min-w-0 items-center gap-1.5','data-codex-orchestrator-label':'off'},modeText,props.model);return h('span',{ref:ref,className:'truncate whitespace-nowrap','data-codex-orchestrator-label':'off'},modeText)}
   if(props.model==null)return h('span',{ref:ref,className:'shrink-0 whitespace-nowrap','data-codex-orchestrator-label':m[0]},modeText);
   return h('span',{ref:ref,className:'flex min-w-0 items-center gap-1.5','data-codex-orchestrator-label':m[0]},modeText,props.model);
  };
