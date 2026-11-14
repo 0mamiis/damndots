@@ -1,7 +1,6 @@
 import { session, sameOrigin } from "@/lib/session";
-import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { localCodexPreferences } from "@/lib/local-codex-preferences";
+import { controllerOrigin, controllerToken } from "@/lib/controller";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const allowed = new Set([
@@ -50,13 +49,17 @@ async function proxy(
     if (!auth)
       return Response.json({ error: "Connect to a server first." }, { status: 401 });
     if(((path[0]==="token-speed"||path[0]==="scroll-controls")&&path.length===1||path[0]==="orchestrator"&&(path.length===1||path.length===2&&path[1]==="models"))&&process.platform==="win32"){
-      if(!["GET","PATCH"].includes(request.method))return Response.json({error:"Method not allowed"},{status:405});
-      const notReady="The Codex settings bridge is not running yet. Close Codex, restart Damndots (Start-Dots.cmd) and open Codex again.";
-      let token:string;
-      try{token=await readFile(join(homedir(),".codex","dots-local-bridge","token.txt"),"utf8");}catch{return Response.json({error:notReady},{status:503});}
-      let r:Response;
-      try{r=await fetch("http://127.0.0.1:9915/"+path.join("/"),{method:request.method,headers:{authorization:"Bearer "+token.trim(),"content-type":"application/json"},...(request.method==="PATCH"?{body:await request.text()}:{}),cache:"no-store",redirect:"error",signal:AbortSignal.timeout(8000)});}catch{return Response.json({error:notReady},{status:503});}
-      return new Response(await r.text(),{status:r.status,headers:{"content-type":"application/json","cache-control":"no-store"}});
+      const token = await controllerToken();
+      const verified = token ? await fetch(controllerOrigin() + "/api/v1/settings", {
+        headers: { authorization: `Bearer ${token}` },
+        cache: "no-store", redirect: "error", signal: AbortSignal.timeout(5000),
+      }).catch(() => null) : null;
+      await verified?.body?.cancel();
+      if (!verified?.ok) {
+        const expired = !token || verified?.status === 401 || verified?.status === 403;
+        return Response.json({ error: expired ? "Sign in again to manage Codex preferences." : "The Dots server could not verify this session." }, { status: expired ? 401 : 503 });
+      }
+      return localCodexPreferences(request, path);
     }
     const url = new URL(
       `${auth.server}/api/v1/${path.map(encodeURIComponent).join("/")}`,

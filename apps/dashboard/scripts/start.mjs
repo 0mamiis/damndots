@@ -25,6 +25,7 @@ const child = spawn(process.execPath, [entry], {
   stdio: "inherit",
   env: {
     ...process.env,
+    DOTS_STACK_DIR: resolve(process.env.DOTS_STACK_DIR || join(dashboardRoot, "../..", ".data", "local-stack")),
     HOSTNAME: argument("--hostname") || process.env.DOTS_DASHBOARD_HOST || "127.0.0.1",
     PORT: argument("--port") || process.env.DOTS_DASHBOARD_PORT || "3000",
   },

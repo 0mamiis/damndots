@@ -1,6 +1,6 @@
 {
   "name": "@dots/dashboard",
-  "version": "0.3.40",
+  "version": "0.3.41",
   "private": true,
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1 --port 3000",
