@@ -10,7 +10,7 @@ const localHelpers=new Set(['browser-check.ts','cancel-test-task.ts','download-o
 const extensions=new Set(['.ts','.tsx','.mjs','.cjs','.js','.json','.md','.html','.css','.svg','.ps1','.cs','.sh','.cmd','.vbs','.yaml','.yml','.toml']);
 export function excludedPath(path){
  const parts=path.replaceAll('\\','/').split('/'),name=parts.at(-1);
- return parts.some(p=>ignoredDirectories.has(p))||/^\.env(?:\.|$)/.test(name)&&name!=='.env.example'||/\.(?:log|tsbuildinfo|sqlite(?:-.+)?|db(?:-.+)?|key|pem|p12|pfx|crt|zip|tar|gz|wsl|iso|exe|dll)$/i.test(name)||['auth.json','client.json','computer.json'].includes(name)||name.startsWith('id_ed25519')||parts[0]==='scripts'&&(name.startsWith('live-')||localHelpers.has(name));
+ return parts.some(p=>ignoredDirectories.has(p))||/^\.env(?:\.|$)/.test(name)&&name!=='.env.example'||/\.(?:log|tsbuildinfo|sqlite(?:-.+)?|db(?:-.+)?|key|pem|p12|pfx|crt|zip|tar|gz|wsl|iso|exe|dll)$/i.test(name)||parts[0]==='docs'&&parts[1]==='images'||['auth.json','client.json','computer.json'].includes(name)||name.startsWith('id_ed25519')||parts[0]==='scripts'&&(name.startsWith('live-')||localHelpers.has(name));
 }
 export async function collectReleaseFiles(root=projectRoot){
  const files=[];
