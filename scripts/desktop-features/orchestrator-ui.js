@@ -544,6 +544,19 @@ function codexOrchestratorEnsureNative(R){
    var el=ref.current,btn=el&&el.closest('button');if(!btn)return;
    btn.removeAttribute('data-composer-navigation-target');btn.setAttribute('data-codex-subagent-trigger','');
   });
+  // The model name and thinking level join the label when a mode is switched on; fade them in with the same blur
+  // the mode text uses so they do not pop in.
+  var previousMode=R.useRef(i);
+  R.useLayoutEffect(function(){
+   var el=ref.current,was=previousMode.current;previousMode.current=i;
+   if(!el||was===i||i===0)return;
+   if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+   var opts=window.__codexNativeEffortAnim||{duration:300,easing:'ease-out',fill:'both'};
+   var blur=getComputedStyle(el).getPropertyValue('--blur-xs')||'4px';
+   Array.prototype.slice.call(el.children,1).forEach(function(node){
+    try{var a=node.animate([{opacity:'0',filter:'blur('+blur+')'},{opacity:'1',filter:'blur(0px)'}],opts);a.onfinish=function(){try{a.commitStyles();a.cancel()}catch(e){}}}catch(e){}
+   });
+  },[i]);
   var modeText=h(window.__codexOrchModeText,{index:i});
   if(i===0){if(codexOrchOffDetails()&&props.model!=null)return h('span',{ref:ref,className:'flex min-w-0 items-center gap-1.5','data-codex-orchestrator-label':'off'},modeText,props.model);return h('span',{ref:ref,className:'truncate whitespace-nowrap','data-codex-orchestrator-label':'off'},modeText)}
   if(props.model==null)return h('span',{ref:ref,className:'shrink-0 whitespace-nowrap','data-codex-orchestrator-label':m[0]},modeText);
