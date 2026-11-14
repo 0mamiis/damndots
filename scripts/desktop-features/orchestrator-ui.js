@@ -693,10 +693,10 @@ function codexOrchestratorDropdown(R, children) {
 
 function codexOrchLight(c){return 'color-mix(in srgb, '+c+' 55%, white)'}
 
-/* damndots wheel control: scroll over the model pickers changes the thinking level, Shift+scroll the model, Ctrl+scroll over the orchestrator picker its mode */
+/* damndots wheel control: scrolling over a picker changes thinking level, model, orchestrator mode or Fast. Each action has its own modifier key and the part of the picker (model name, thinking level, mode) it reacts to; see scripts/scroll-controls-settings.cjs */
 (function(){
  if(window.__codexWheelInstalled)return;window.__codexWheelInstalled=1;
- window.__codexScrollControls={enabled:true,thinking:true,model:true,mode:true};
+ window.__codexScrollControls={enabled:true,thinking:{on:true,key:'none',zone:'any'},model:{on:true,key:'shift',zone:'any'},mode:{on:true,key:'ctrl',zone:'any'},fast:{on:true,key:'alt',zone:'any'}};
  function loadControls(){try{var b=window.electronBridge&&window.electronBridge.getScrollControls;if(typeof b!=='function')return;Promise.resolve(b()).then(function(v){if(v&&typeof v==='object'){window.__codexScrollControls=v;window.dispatchEvent(new Event('codex-orchestrator-change'))}}).catch(function(){})}catch(e){}}
  loadControls();setInterval(function(){if(document.visibilityState!=='hidden')loadControls()},3000);
  function pickInst(btn,which){
@@ -729,6 +729,35 @@ function codexOrchLight(c){return 'color-mix(in srgb, '+c+' 55%, white)'}
   for(var q=0;q<bs.length;q++){if(bs[q].checkVisibility&&!bs[q].checkVisibility())continue;var rc=bs[q].getBoundingClientRect();if(rc.width&&e.clientX>=rc.left&&e.clientX<=rc.right&&e.clientY>=rc.top&&e.clientY<=rc.bottom)return bs[q]}
   return null;
  }
+ var KEYS=['none','shift','ctrl','alt','ctrl+shift'],ZONES=['any','model','thinking','mode'],ACTIONS=['thinking','model','mode','fast'];
+ var DEFAULT_BINDINGS={thinking:{on:true,key:'none',zone:'any'},model:{on:true,key:'shift',zone:'any'},mode:{on:true,key:'ctrl',zone:'any'},fast:{on:true,key:'alt',zone:'any'}};
+ // Older settings stored a boolean per action; a missing action keeps its default key and zone.
+ function bindingOf(c,name){var v=c&&c[name],d=DEFAULT_BINDINGS[name];if(typeof v==='boolean')return {on:v,key:d.key,zone:d.zone};if(v&&typeof v==='object'&&typeof v.on==='boolean'&&KEYS.indexOf(v.key)>=0&&ZONES.indexOf(v.zone)>=0)return v;return d}
+ function keyOf(e){var ctrl=e.ctrlKey||e.metaKey,sh=e.shiftKey,al=e.altKey;if(al&&(ctrl||sh))return 'other';if(al)return 'alt';if(ctrl&&sh)return 'ctrl+shift';if(ctrl)return 'ctrl';if(sh)return 'shift';return 'none'}
+ // The picker button shows the orchestrator mode, the model name and the thinking level as separate labels; the pointer belongs to the nearest one.
+ function zoneOf(t,x){
+  var regs=[],mode=t.querySelector('[data-codex-orchestrator-label] > [class*="ModelPickerTriggerEffortLabel"]'),model=t.querySelector('[data-codex-model-blur-label]');
+  if(mode)regs.push(['mode',mode]);if(model)regs.push(['model',model]);
+  var labels=t.querySelectorAll('[class*="ModelPickerTriggerEffortLabel"]');
+  for(var i=0;i<labels.length;i++){var l=labels[i];if(l.hasAttribute('data-codex-model-blur-label')||l.parentElement&&l.parentElement.hasAttribute('data-codex-orchestrator-label'))continue;regs.push(['thinking',l]);break}
+  var best=null,bd=1e9;
+  regs.forEach(function(r){var b=r[1].getBoundingClientRect();if(!b.width)return;var d=x<b.left?b.left-x:x>b.right?x-b.right:0;if(d<bd){bd=d;best=r[0]}});
+  return best;
+ }
+ function pickAction(c,key,zone,sub){
+  var best=null,score=-1;
+  ACTIONS.forEach(function(n){var b=bindingOf(c,n);if(!b.on||b.key!==key)return;if(n==='mode'&&!sub)return;if(b.zone!=='any'&&b.zone!==zone)return;var s=b.zone==='any'?0:1;if(s>score){best=n;score=s}});
+  return best;
+ }
+ // Fast (and any further service tier the model offers) steps through the picker's own service tier options.
+ function cycleFast(which,dir,btn){
+  var inst=pickInst(btn,which),T=inst&&inst.tier,st=T&&T.serviceTierSettings;
+  if(!st||!Array.isArray(st.availableOptions)||typeof T.setServiceTier!=='function')return false;
+  var opts=st.availableOptions;if(opts.length<2)return false;
+  var cur=st.selectedServiceTier==null?null:st.selectedServiceTier,i=opts.findIndex(function(o){return (o.value==null?null:o.value)===cur});if(i<0)i=0;
+  var j=Math.max(0,Math.min(opts.length-1,i+dir));if(j===i)return true;
+  try{Promise.resolve(T.setServiceTier(opts[j].value==null?null:opts[j].value)).catch(function(){})}catch(x){return false}return true;
+ }
  var last=0;
  window.addEventListener('wheel',function(e){
   var c=window.__codexScrollControls;if(!c||c.enabled===false)return;
@@ -736,15 +765,16 @@ function codexOrchLight(c){return 'color-mix(in srgb, '+c+' 55%, white)'}
   var sub=t.hasAttribute('data-codex-subagent-trigger'),main=!sub&&t.getAttribute('data-composer-navigation-target')==='reasoning';
   if(!sub&&!main)return;
   if(t.getAttribute('aria-expanded')==='true')return;
-  var dir=e.deltaY<0?1:e.deltaY>0?-1:0;if(!dir||e.altKey)return;
-  var ctrl=e.ctrlKey||e.metaKey,which=sub?'sub':'main',action=e.shiftKey&&!ctrl?'model':ctrl&&!e.shiftKey&&sub?'mode':!ctrl&&!e.shiftKey?'thinking':null;
-  if(!action||c[action]===false)return;
+  var d=e.deltaY||e.deltaX,dir=d<0?1:d>0?-1:0;if(!dir)return;
+  var which=sub?'sub':'main',action=pickAction(c,keyOf(e),zoneOf(t,e.clientX),sub);
+  if(!action)return;
   var inst=pickInst(t,which),H=inst&&inst.handlers||(window.__codexPickerHandlers&&window.__codexPickerHandlers[which]),fn=H&&H[dir>0?'composer.increaseReasoningEffort':'composer.decreaseReasoningEffort'];
   if(action==='thinking'&&typeof fn!=='function'&&!(inst&&inst.sel)&&!(window.__codexPickerSel&&window.__codexPickerSel[which]))return;
   e.preventDefault();e.stopPropagation();
   var now=Date.now();if(now-last<45)return;last=now;
   if(action==='mode'){var scope=codexOrchestratorComposerScope(),idx=codexOrchestratorGet(scope),to=Math.max(0,Math.min(CODEX_ORCH_MODES.length-1,idx+dir));if(to!==idx)codexOrchestratorSet(to,scope);return}
   if(action==='model'){var okc=false;try{okc=cycleModel(which,-dir,t)}catch(x){window.__codexWheelErr=String(x&&x.message||x)}window.__codexWheelDbg={which:which,dir:dir,ok:okc};return}
+  if(action==='fast'){try{cycleFast(which,dir,t)}catch(x){window.__codexWheelErr=String(x&&x.message||x)}return}
   var done=false;try{done=stepEffort(which,dir,t)}catch(x){}
   if(!done&&typeof fn==='function')try{fn()}catch(x){}
  },{capture:true,passive:false});

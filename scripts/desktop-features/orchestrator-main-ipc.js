@@ -36,12 +36,17 @@ try {
       const url = String((event.senderFrame && event.senderFrame.url) || "");
       if (!url.startsWith("app://-/")) return null;
       const dir = __dotsPath.join(__dotsOs.homedir(), ".codex", "dots-local-bridge");
-      const keys = ["enabled", "thinking", "model", "mode"];
-      let value = { enabled: true, thinking: true, model: true, mode: true };
-      try {
-        const saved = JSON.parse(__dotsFs.readFileSync(__dotsPath.join(dir, "scroll-controls.json"), "utf8"));
-        if (keys.every((k) => typeof saved[k] === "boolean")) value = { enabled: saved.enabled, thinking: saved.thinking, model: saved.model, mode: saved.mode };
-      } catch (e) {}
+      // Same rules as scripts/scroll-controls-settings.cjs (older files stored a boolean per action).
+      const KEYS = ["none", "shift", "ctrl", "alt", "ctrl+shift"], ZONES = ["any", "model", "thinking", "mode"];
+      const DEFAULTS = { thinking: { on: true, key: "none", zone: "any" }, model: { on: true, key: "shift", zone: "any" }, mode: { on: true, key: "ctrl", zone: "any" }, fast: { on: true, key: "alt", zone: "any" } };
+      const bind = (name, v) => {
+        if (typeof v === "boolean") return Object.assign({}, DEFAULTS[name], { on: v });
+        if (v && typeof v === "object" && typeof v.on === "boolean" && KEYS.includes(v.key) && ZONES.includes(v.zone)) return { on: v.on, key: v.key, zone: v.zone };
+        throw new Error("invalid");
+      };
+      const norm = (s) => { if (!s || typeof s.enabled !== "boolean") throw new Error("invalid"); const o = { enabled: s.enabled }; for (const n of Object.keys(DEFAULTS)) o[n] = n in s ? bind(n, s[n]) : Object.assign({}, DEFAULTS[n]); return o; };
+      let value = norm({ enabled: true });
+      try { value = norm(JSON.parse(__dotsFs.readFileSync(__dotsPath.join(dir, "scroll-controls.json"), "utf8"))); } catch (e) {}
       try {
         __dotsFs.mkdirSync(dir, { recursive: true });
         const file = __dotsPath.join(dir, "scroll-controls-status.json"), tmp = file + ".tmp-" + process.pid;

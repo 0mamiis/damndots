@@ -36,6 +36,8 @@ import {query} from './storage.js';
 import {scheduleRetention} from './retention.js';
 import {TelegramService} from './telegram.js';
 import {LocalCodex} from './local-codex.js';
+const scrollBinding=z.object({on:z.boolean(),key:z.enum(['none','shift','ctrl','alt','ctrl+shift']),zone:z.enum(['any','model','thinking','mode'])}).strict();
+const scrollControlsSchema=z.object({enabled:z.boolean(),thinking:scrollBinding,model:scrollBinding,mode:scrollBinding,fast:scrollBinding}).strict();
 /** Codex istek gövdesini zstd ile sıkıştırıp gönderir; JSON ayrıştırmadan önce açılır. */
 const decodeBody=(body:Buffer,encoding:unknown):Buffer=>{switch(String(encoding||'').toLowerCase()){case 'zstd':return zstdDecompressSync(body);case 'gzip':case 'x-gzip':return gunzipSync(body);case 'br':return brotliDecompressSync(body);case 'deflate':return inflateSync(body);default:return body;}};
 const object=z.record(z.string(),z.unknown());
@@ -132,7 +134,7 @@ export async function buildServer(options:{config?:ServerConfig;store?:RecordSto
     admin.get('/token-speed',async()=>composerPreferences.tokenSpeedPreferences());
     admin.patch('/token-speed',async req=>composerPreferences.tokenSpeedPreferences(z.object({enabled:z.boolean(),aggregation:z.enum(['latest','average']),decimals:z.number().int().min(0).max(2),animate:z.boolean()}).strict().parse(req.body)));
     admin.get('/scroll-controls',async()=>composerPreferences.scrollControlsPreferences());
-    admin.patch('/scroll-controls',async req=>composerPreferences.scrollControlsPreferences(z.object({enabled:z.boolean(),thinking:z.boolean(),model:z.boolean(),mode:z.boolean()}).strict().parse(req.body)));
+    admin.patch('/scroll-controls',async req=>composerPreferences.scrollControlsPreferences(scrollControlsSchema.parse(req.body)));
     admin.get('/chat-suggestions',async()=>composerPreferences.composerPreferences());
     admin.get('/chat-suggestions/models',async()=>composerPreferences.composerPreferences(undefined,true));
     admin.patch('/chat-suggestions',async req=>{const value=z.object({enabled:z.boolean(),model:z.string().trim().min(1).max(300).nullable().optional(),effort:z.enum(['none','minimal','low','medium','high','xhigh','max','ultra']).nullable().optional(),fast:z.boolean().optional()}).strict().parse(req.body);if(value.fast&&!isGptModel(value.model))throw Object.assign(new Error('Select a GPT prediction model to enable Fast.'),{statusCode:400});return composerPreferences.composerPreferences(value);});
