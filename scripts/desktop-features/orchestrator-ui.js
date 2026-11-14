@@ -740,8 +740,8 @@ function codexOrchLight(c){return 'color-mix(in srgb, '+c+' 55%, white)'}
   if(mode)regs.push(['mode',mode]);if(model)regs.push(['model',model]);
   var labels=t.querySelectorAll('[class*="ModelPickerTriggerEffortLabel"]');
   for(var i=0;i<labels.length;i++){var l=labels[i];if(l.hasAttribute('data-codex-model-blur-label')||l.parentElement&&l.parentElement.hasAttribute('data-codex-orchestrator-label'))continue;regs.push(['thinking',l]);break}
-  // The Fast icon sits left of the model name and is only drawn while Fast is on; the strip at the left edge of the model name counts as Fast either way.
-  if(model){var mb=model.getBoundingClientRect(),ic=t.querySelector('[class*="ModelPickerTriggerInlineModeIcon"]'),ib=ic&&ic.getBoundingClientRect();if(mb.width&&x<=(ib&&ib.width?ib.right+3:mb.left+6))return 'fast'}
+  // The Fast icon sits left of the model name and is only drawn while Fast is on; the strip at the left edge of the model name counts as Fast either way. On the orchestrator picker the icon sits between the mode label and the model name (moved there with CSS), so only the strip around it counts.
+  if(model){var mb=model.getBoundingClientRect(),ic=t.querySelector('[class*="ModelPickerTriggerInlineModeIcon"]'),ib=ic&&ic.getBoundingClientRect();var hasIcon=!!(ib&&ib.width),lo=mode?(hasIcon?ib.left-3:mb.left-3):-1e9,hi=hasIcon?ib.right+3:mb.left+6;if(mb.width&&x>=lo&&x<=hi)return 'fast'}
   var best=null,bd=1e9;
   regs.forEach(function(r){var b=r[1].getBoundingClientRect();if(!b.width)return;var d=x<b.left?b.left-x:x>b.right?x-b.right:0;if(d<bd){bd=d;best=r[0]}});
   return best;
