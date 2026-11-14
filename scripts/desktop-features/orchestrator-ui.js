@@ -518,7 +518,10 @@ function codexOrchestratorEnsureNative(R){
    var animate=st.current.key!=null&&!reduced;st.current.key=key;
    st.current.anims.forEach(fin);
    var blur=getComputedStyle(box).getPropertyValue('--blur-xs')||'4px';
-   var targets=[[el,{width:w+'px'}]].concat(layers.map(function(x){return [x,{opacity:x===sel?'1':'0',filter:x===sel?'blur(0px)':'blur('+blur+')'}]}));
+   // Native Codex resizes the label immediately and only cross-fades the text; animating the width made the trigger
+   // grow slowly when a mode was switched on.
+   try{el.style.width=w+'px'}catch(e){}
+   var targets=layers.map(function(x){return [x,{opacity:x===sel?'1':'0',filter:x===sel?'blur(0px)':'blur('+blur+')'}]});
    var opts=window.__codexNativeEffortAnim||{duration:300,easing:'ease-out',fill:'both'};
    st.current.anims=targets.map(function(p){var t=p[0],to=p[1];if(!animate){Object.assign(t.style,to);return null}
     var cs=getComputedStyle(t),from={};Object.keys(to).forEach(function(k){from[k]=cs.getPropertyValue(k)});var a=t.animate([from,to],opts);a.onfinish=function(){fin(a)};return a}).filter(Boolean);
