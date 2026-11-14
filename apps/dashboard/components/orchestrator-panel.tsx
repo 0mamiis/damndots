@@ -7,10 +7,10 @@ const DEFAULT_COLORS:Record<string,string>={fix:'#E1465A',verify:'#16A34A',explo
 const HEX=/^#[0-9a-fA-F]{6}$/;
 const DEFAULT_ORDER=['fix','verify','explore','plan','subagents','lead','swarm'];
 const modeInfo=(id:string)=>MODES.find(m=>m[0]===id)!;
-type Preferences={mode:string;model:string|null;effort:string|null;fast:boolean;disabledModes?:string[];modeOrder?:string[];modeColors?:Record<string,string>;showOffDetails?:boolean;installed:boolean;managedBy:string|null;connected:boolean;applied:boolean};
+type Preferences={mode:string;model:string|null;effort:string|null;fast:boolean;disabledModes?:string[];modeOrder?:string[];modeColors?:Record<string,string>;showOffDetails?:boolean;installed:boolean;managedBy:string|null;connected:boolean;applied:boolean;desktopState?:string;packageVersion?:string};
 export function OrchestratorPanel(){
  const {data,error}=useData<Preferences>('orchestrator',3000),{mutate}=useContext(ApiContext);
- const models=useData<{models:{id:string;label?:string;efforts?:string[];fast?:boolean}[]}>('orchestrator/models',10000);
+ const models=useData<{available?:boolean;models:{id:string;label?:string;efforts?:string[];fast?:boolean}[]}>(data?'orchestrator/models':null,10000);
  const [draft,setDraft]=useState<{mode:string;model:string;effort:string;fast:boolean;disabledModes:string[];modeOrder:string[];modeColors:Record<string,string>;showOffDetails:boolean}>({mode:'off',model:'',effort:'',fast:false,disabledModes:['fix','verify','explore'],modeOrder:DEFAULT_ORDER,modeColors:{},showOffDetails:false}),[dirty,setDirty]=useState(false),[saved,setSaved]=useState(false);
  useEffect(()=>{if(data&&!dirty)setDraft({mode:data.mode,model:data.model??'',effort:data.effort??'',fast:data.fast,disabledModes:data.disabledModes??['fix','verify','explore'],modeOrder:data.modeOrder??DEFAULT_ORDER,modeColors:data.modeColors??{},showOffDetails:data.showOffDetails===true});},[data,dirty]);
  const selected=models.data?.models.find(m=>m.id===draft.model);
@@ -21,9 +21,9 @@ export function OrchestratorPanel(){
  function setColor(id:string,value:string|null){const next={...draft.modeColors};if(value===null||value.toUpperCase()===DEFAULT_COLORS[id])delete next[id];else next[id]=value.toUpperCase();setHexDraft(h=>{const c={...h};delete c[id];return c;});change({modeColors:next});}
  function move(id:string,to:number){const order=draft.modeOrder.filter(m=>m!==id);order.splice(Math.max(0,Math.min(order.length,to)),0,id);change({modeOrder:order});}
  return <Section title="Orchestrator" description="Defaults for native Codex agents on this PC. Choices made inside a conversation take priority.">
-  <Notice error={error}/><Notice error={models.error}/>
+  <Notice error={error}/>
   {!data?!error&&<Loading/>:<>
-   <Form submit="Save settings" onSubmit={async()=>{setHexDraft({});await mutate('orchestrator','PATCH',{...draft,model:draft.model||null,effort:draft.effort||null,fast:selected?.fast===true&&draft.fast});setDirty(false);setSaved(true);}}>
+   <Form submit="Save settings" onSubmit={async()=>{setHexDraft({});await mutate('orchestrator','PATCH',{...draft,model:draft.model||null,effort:draft.effort||null});setDirty(false);setSaved(true);}}>
     <SelectField label="Default for new conversations" value={draft.mode} onChange={mode=>change({mode})} options={[{value:'off',label:'Off'},...draft.modeOrder.filter(value=>!draft.disabledModes.includes(value)).map(value=>({value,label:modeInfo(value)[1]}))]}/>
     <Check label="Show the subagent model while the orchestrator is off" isSelected={draft.showOffDetails} onChange={showOffDetails=>change({showOffDetails})} description="The picker shows Off with the subagent model and thinking level instead of the word Orchestrator."/>
     <fieldset className="flex flex-col gap-3"><legend className="mb-1 text-sm font-medium">Modes in the picker</legend>
@@ -44,13 +44,14 @@ export function OrchestratorPanel(){
      {draft.modeOrder.join()!==DEFAULT_ORDER.join()&&<button type="button" onClick={()=>change({modeOrder:DEFAULT_ORDER})} className="self-start text-sm text-muted underline">Reset to the original order</button>}
     </fieldset>
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-     <SelectField label="Default subagent model" value={draft.model} onChange={model=>change({model,effort:'',fast:false})} options={[{value:'',label:'Use Codex default'},...(models.data?.models??[]).map(m=>({value:m.id,label:m.label??m.id}))]}/>
-     <SelectField label="Thinking level" value={draft.effort} onChange={effort=>change({effort})} options={[{value:'',label:'Model default'},...(selected?.efforts??[]).map(value=>({value,label:value}))]}/>
+     <SelectField label="Default subagent model" value={draft.model} onChange={model=>change({model,effort:'',fast:false})} options={[{value:'',label:'Use Codex default'},...(draft.model&&!selected?[{value:draft.model,label:draft.model}]:[]),...(models.data?.models??[]).map(m=>({value:m.id,label:m.label??m.id}))]}/>
+     <SelectField label="Thinking level" value={draft.effort} onChange={effort=>change({effort})} options={[{value:'',label:'Model default'},...(selected?.efforts??(draft.effort?[draft.effort]:[])).map(value=>({value,label:value}))]}/>
     </div>
     {selected?.fast&&<Check label="Fast subagents" isSelected={draft.fast} onChange={fast=>change({fast})} description="Use priority processing for supported native subagents."/>}
+    {(models.data?.available===false||models.error)&&<p className="text-sm text-muted">The optional OpenCodex model catalog is unavailable. You can still save orchestrator settings.</p>}
     <p className="text-sm text-muted">Changes apply to future messages. Running agents keep their current settings. This does not send a message or start agents.</p>
    </Form>
-   {data.managedBy==='damndots'&&<p className="text-sm text-muted">Installed and managed by Damndots.</p>}<p role="status" className="text-sm text-muted">{!data.installed?'The orchestrator settings patch is waiting to be loaded in Codex.':!data.connected?'Open or reload patched Codex to apply saved preferences.':data.applied?'Preferences applied in Codex.':'Applying preferences…'}</p>
+   {data.managedBy==='damndots'&&<p className="text-sm text-muted">Installed and managed by Damndots.</p>}<p role="status" className="text-sm text-muted">{data.desktopState==='unsupported-version'?(`Codex ${data.packageVersion??''} is not supported by this Damndots version. Preferences are saved for later.`):data.desktopState==='waiting-for-codex-close'?'Close Codex to finish applying the desktop patch.':data.desktopState==='failed'?'The Codex desktop patch failed. Check the Start-Dots.cmd output. Preferences are saved for later.':!data.installed?'The desktop patch is not ready. Start Damndots with a supported Codex installation to apply saved preferences.':!data.connected?'Open or reload patched Codex to apply saved preferences.':data.applied?'Preferences applied in Codex.':'Applying preferences…'}</p>
    {saved&&<p role="status" className="text-sm">Settings saved.</p>}
   </>}
  </Section>;

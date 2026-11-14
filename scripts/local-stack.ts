@@ -38,7 +38,7 @@ if(!await open(appServerPort))console.error('WARNING: the Codex app-server did n
 const admin=process.env.DOTS_ADMIN_KEY||(await readFile(join(serverData,'admin.key'),'utf8')).trim();const login=await fetch(url+'/api/v1/session',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token:admin})});if(!login.ok)throw new Error('Existing server uses a different data directory/access key; configure DOTS_DATA_DIR');const session=await login.json();
 const controller=new ConnectionController(root,data,url,admin,appServerPort,mainGateway&&process.platform==='win32');
 await controller.start();
-if(!await open(dashboardPort)){const script=join(root,'apps/dashboard/scripts/start.mjs');start(script,['--port',String(dashboardPort)]);}
+if(!await open(dashboardPort)){const script=join(root,'apps/dashboard/scripts/start.mjs');start(script,['--port',String(dashboardPort)],{DOTS_CONTROL_URL:url});}
 await writeFile(join(data,'processes.json'),JSON.stringify(children.map(c=>({pid:c.pid,startedAt:new Date().toISOString()}))),{mode:0o600});
 
 let shuttingDown:Promise<void>|undefined;
