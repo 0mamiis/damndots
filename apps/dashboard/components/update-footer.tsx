@@ -2,6 +2,7 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {Button,toast} from '@heroui/react';
 import {Disclose} from './ui';
+import {Spinner,UpdateProgress} from './update-progress';
 import pkg from '../../../package.json';
 type Release={tag:string;version:string;url:string;notes:string;publishedAt:string};
 type Job={id:string;target:string;status:string;step:string};
@@ -60,9 +61,9 @@ export function UpdateFooter({updates}:{updates:ReturnType<typeof useReleaseUpda
     <Disclose summary={<span className="flex w-full items-center gap-2"><span className="text-muted">damndots v{current}</span>{state?.available&&<span className="ml-auto rounded-full bg-accent/15 px-2 py-0.5 text-accent">Update</span>}</span>}>
       <div className="flex flex-col gap-3 py-2">
         <p className="text-muted">This dashboard installation. Remote backends are updated separately.</p>
-        {busy?<p role="status">{state?.job?.step}{error?' — reconnecting…':''}</p>:<>
-          {state?.available&&state.latest?<><strong>{state.latest.tag} is available</strong><a href={state.latest.url} target="_blank" rel="noreferrer" className="text-accent underline">Release notes</a><p className="text-muted">Dots will check and build the release, restart its services, and restore the previous version if startup fails. Your data and settings stay in place.</p>{state.blocked&&<p>{state.blocked}</p>}<Button size="sm" isPending={pending} isDisabled={!!state.blocked||pending} onPress={()=>void install()}>Install update</Button></>:<p>{state?.latest?'You are up to date.':state?.error?'Release status unavailable.':'Checking for releases…'}</p>}
-          {state?.job&&<p role="status">{state.job.step}</p>}
+        {busy||pending?<UpdateProgress label={(state?.job?.step||(pending?'Starting the update…':'Updating Damndots…'))+(error?' — reconnecting…':'')} pending={pending&&!busy} status={state?.job?.status}/>:<>
+          {state?.available&&state.latest?<><strong>{state.latest.tag} is available</strong><a href={state.latest.url} target="_blank" rel="noreferrer" className="text-accent underline">Release notes</a><p className="text-muted">Dots will check and build the release, restart its services, and restore the previous version if startup fails. Your data and settings stay in place.</p>{state.blocked&&<p>{state.blocked}</p>}<Button size="sm" isPending={pending} isDisabled={!!state.blocked||pending} onPress={()=>void install()}>Install update</Button></>:state?.error?<p>{'Release status unavailable.'}</p>:<p className="flex items-center gap-2 text-muted"><Spinner/>Checking for releases…</p>}
+          {state?.job&&!busy&&!pending&&<p role="status">{state.job.step}</p>}
           {state?.error&&<p className="text-warning">{state.error}</p>}
           {error&&<p role="alert" className="text-danger">{error}</p>}
           {current!==pkg.version&&<Button size="sm" variant="secondary" onPress={()=>window.location.reload()}>Reload panel</Button>}
