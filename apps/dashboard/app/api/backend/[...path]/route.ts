@@ -1,6 +1,9 @@
 import { session, sameOrigin } from "@/lib/session";
 import { localCodexPreferences } from "@/lib/local-codex-preferences";
 import { controllerOrigin, controllerToken } from "@/lib/controller";
+import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const allowed = new Set([
@@ -55,11 +58,22 @@ async function proxy(
         cache: "no-store", redirect: "error", signal: AbortSignal.timeout(5000),
       }).catch(() => null) : null;
       await verified?.body?.cancel();
-      if (!verified?.ok) {
-        const expired = !token || verified?.status === 401 || verified?.status === 403;
-        return Response.json({ error: expired ? "Sign in again to manage Codex preferences." : "The Dots server could not verify this session." }, { status: expired ? 401 : 503 });
-      }
-      return localCodexPreferences(request, path);
+      if (verified?.ok) return localCodexPreferences(request, path);
+      // The panel may be signed in to a remote Dots server, so there is no local admin session to verify.
+      // In that case keep using the local settings bridge, which only accepts this PC's own token.
+      if (!["GET", "PATCH"].includes(request.method)) return Response.json({ error: "Method not allowed" }, { status: 405 });
+      const notReady = "Codex preferences are unavailable. Sign in to this PC's dashboard (127.0.0.1) or start Damndots with Codex installed.";
+      let bridgeToken: string;
+      try { bridgeToken = (await readFile(join(homedir(), ".codex", "dots-local-bridge", "token.txt"), "utf8")).trim(); }
+      catch { return Response.json({ error: notReady }, { status: 503 }); }
+      const bridged = await fetch("http://127.0.0.1:9915/" + path.join("/"), {
+        method: request.method,
+        headers: { authorization: `Bearer ${bridgeToken}`, "content-type": "application/json" },
+        ...(request.method === "PATCH" ? { body: await request.text() } : {}),
+        cache: "no-store", redirect: "error", signal: AbortSignal.timeout(8000),
+      }).catch(() => null);
+      if (!bridged) return Response.json({ error: notReady }, { status: 503 });
+      return new Response(await bridged.text(), { status: bridged.status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
     }
     const url = new URL(
       `${auth.server}/api/v1/${path.map(encodeURIComponent).join("/")}`,
