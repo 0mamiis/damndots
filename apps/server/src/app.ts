@@ -36,7 +36,7 @@ import {query} from './storage.js';
 import {scheduleRetention} from './retention.js';
 import {TelegramService} from './telegram.js';
 import {LocalCodex} from './local-codex.js';
-const scrollBinding=z.object({on:z.boolean(),key:z.enum(['none','shift','ctrl','alt','ctrl+shift']),zone:z.enum(['any','model','thinking','mode'])}).strict();
+const scrollBinding=z.object({on:z.boolean(),key:z.enum(['none','shift','ctrl','alt','ctrl+shift']),zone:z.enum(['any','model','thinking','mode','fast'])}).strict();
 const scrollControlsSchema=z.object({enabled:z.boolean(),thinking:scrollBinding,model:scrollBinding,mode:scrollBinding,fast:scrollBinding}).strict();
 /** Codex istek gövdesini zstd ile sıkıştırıp gönderir; JSON ayrıştırmadan önce açılır. */
 const decodeBody=(body:Buffer,encoding:unknown):Buffer=>{switch(String(encoding||'').toLowerCase()){case 'zstd':return zstdDecompressSync(body);case 'gzip':case 'x-gzip':return gunzipSync(body);case 'br':return brotliDecompressSync(body);case 'deflate':return inflateSync(body);default:return body;}};
