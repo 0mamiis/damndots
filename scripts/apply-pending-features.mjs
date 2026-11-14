@@ -9,7 +9,10 @@ import {ensureFeatures} from './desktop-feature-manager.mjs';
 const repo=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const nativeDir=path.join(repo,'.data/local-stack/native'),dir=path.join(nativeDir,'desktop-features');
 const exe=path.join(dir,'app','ChatGPT.exe'),staging=path.join(dir,'staging'),log=path.join(dir,'apply-pending.log');
-const say=m=>{try{fs.appendFileSync(log,new Date().toISOString()+' '+m+'\n');}catch{}console.log(m);};
+// rotate-helper: keeps one old generation (<log>.1); never throws, a locked file is simply appended to.
+const rotateLog=(f,max)=>{try{if(fs.statSync(f).size>max)fs.renameSync(f,f+'.1');}catch{}};
+let rotated=false;
+const say=m=>{if(!rotated){rotated=true;rotateLog(log,1024*1024);}try{fs.appendFileSync(log,new Date().toISOString()+' '+m+'\n');}catch{}console.log(m);};
 const closed=()=>{try{const fd=fs.openSync(exe,'r+');fs.closeSync(fd);return true;}catch{return false;}};
 if(!fs.existsSync(staging)){say('no pending staged build');process.exit(0);}
 if(process.argv.includes('--now')){

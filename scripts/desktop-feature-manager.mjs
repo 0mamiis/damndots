@@ -26,13 +26,18 @@ export function discoverPackage(){
  return JSON.parse(execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-Command','Get-AppxPackage OpenAI.Codex | Select-Object -First 1 @{n="version";e={$_.Version.ToString()}},@{n="root";e={Join-Path $_.InstallLocation "app"}} | ConvertTo-Json -Compress'],{encoding:'utf8',windowsHide:true}).replace(/^\uFEFF/,''));
 }
 // Keep only the newest previous copy for recovery; every older one is a full 2.5 GB duplicate.
-function prunePrevious(dir){try{const olds=fs.readdirSync(dir,{withFileTypes:true}).filter(e=>e.isDirectory()&&/^previous-\d+$/.test(e.name)).map(e=>e.name).sort();for(const n of olds.slice(0,-1))fs.rmSync(path.join(dir,n),{recursive:true,force:true});}catch{}}
+function removeQuietly(target){try{fs.rmSync(target,{recursive:true,force:true});return true;}catch{return false;}}
+export function prunePrevious(dir){try{const olds=fs.readdirSync(dir,{withFileTypes:true}).filter(e=>e.isDirectory()&&/^previous-\d+$/.test(e.name)).map(e=>e.name).sort();for(const n of olds.slice(0,-1))removeQuietly(path.join(dir,n));}catch{}}
+// baseline is only an adopt-migration aid and is used solely when its version matches the installed Codex.
+export function pruneBaseline(dir,packageVersion,{force=false}={}){const baselineDir=path.join(dir,'baseline');if(!fs.existsSync(baselineDir))return false;let recorded;try{recorded=JSON.parse(fs.readFileSync(path.join(baselineDir,'manifest.json'),'utf8')).packageVersion;}catch{}if(!force&&recorded===packageVersion)return false;return removeQuietly(baselineDir);}
+export function discardFailedStaging(dir){return removeQuietly(path.join(dir,'staging'));}
 function atomic(file,v){const temp=file+'.tmp';fs.writeFileSync(temp,JSON.stringify(v,null,2),{mode:0o600});fs.renameSync(temp,file);}
-export function ensureFeatures({nativeDir,adopt,includeLocalPatches=true,sourcePackage=discoverPackage()}={}){
+export function ensureFeatures({nativeDir,adopt,includeLocalPatches=true,sourcePackage=discoverPackage(),testBuild}={}){
  nativeDir=path.resolve(nativeDir||path.join(repo,'.data/local-stack/native'));
  const dir=path.join(nativeDir,'desktop-features');fs.mkdirSync(dir,{recursive:true});
  const status=path.join(dir,'status.json');
  if(!SUPPORTED.includes(sourcePackage.version)){atomic(status,{state:'unsupported-version',packageVersion:sourcePackage.version,supported:SUPPORTED});return {state:'unsupported-version',dir};}
+ prunePrevious(dir);pruneBaseline(dir,sourcePackage.version);
  const scripts=['patch-native-agent-features.cjs','patch-token-speed.cjs','patch-orchestrator-settings.cjs','patch-desktop-startup.cjs'];
  if(['26.1023.6621.0','26.1027.3384.0','26.1027.6604.0','26.1029.7803.0','26.1103.3517.0','26.1103.4239.0','26.1106.6628.0'].includes(sourcePackage.version))scripts.push('patch-permission-display.cjs');
  // 3384 reads accounts in the desktop main process, so the gateway cannot mark the local Dot as available.
@@ -61,13 +66,14 @@ export function ensureFeatures({nativeDir,adopt,includeLocalPatches=true,sourceP
   else{
   const integrity=verifyApp(staging);
   if(fs.existsSync(app)){try{const fd=fs.openSync(path.join(app,'ChatGPT.exe'),'r+');fs.closeSync(fd);}catch{atomic(status,{state:'waiting-for-codex-close',staging});return {state:'waiting-for-codex-close',dir};}fs.renameSync(app,path.join(dir,'previous-'+Date.now()));}
-  fs.renameSync(staging,app);prunePrevious(dir);
+  fs.renameSync(staging,app);prunePrevious(dir);pruneBaseline(dir,sourcePackage.version,{force:true});
   atomic(path.join(dir,'active.json'),{managedBy:'damndots',revision,packageVersion:sourcePackage.version,exe:path.join(app,'ChatGPT.exe'),...integrity});
   atomic(status,{state:'ready',managedBy:'damndots',packageVersion:sourcePackage.version,appRoot:app,checkedEntries:integrity.checked});
   return {state:'ready',dir,app};
   }
  }
  fs.mkdirSync(staging,{recursive:true});atomic(status,{state:'building',packageVersion:sourcePackage.version});
+ let swapStarted=false;
  try{
   // Adoption is an explicit migration only; fresh installs start from the official package.
   const source=adopt?fs.realpathSync(adopt):sourcePackage.root;
@@ -78,6 +84,7 @@ export function ensureFeatures({nativeDir,adopt,includeLocalPatches=true,sourceP
    for(const name of ['resources/app.asar','ChatGPT.exe','renewal.json'])fs.copyFileSync(path.join(source,name),path.join(baselineDir,name));
    atomic(path.join(baselineDir,'manifest.json'),{packageVersion:sourcePackage.version,managedBy:'damndots'});
   }
+  let integrity;if(testBuild){integrity=testBuild(staging);}else{
   fs.cpSync(source,staging,{recursive:true,filter:p=>!p.endsWith('.old')});
   if(!adopt&&fs.existsSync(path.join(baselineDir,'manifest.json'))){
    const baseline=JSON.parse(fs.readFileSync(path.join(baselineDir,'manifest.json'),'utf8'));
@@ -86,11 +93,13 @@ export function ensureFeatures({nativeDir,adopt,includeLocalPatches=true,sourceP
   if(!fs.existsSync(path.join(staging,'renewal.json')))atomic(path.join(staging,'renewal.json'),{packageVersion:sourcePackage.version});
   for(const script of scripts)execFileSync(process.execPath,[path.join(repo,'scripts',script),staging],{windowsHide:true,stdio:'pipe'});
   for(const script of localScripts)execFileSync(process.execPath,[path.join(localDir,script),staging],{windowsHide:true,stdio:'pipe'});
-  const integrity=verifyApp(staging);
+  integrity=verifyApp(staging);
+  }
   atomic(path.join(staging,'damndots-desktop-features.json'),{managedBy:'damndots',schemaVersion:1,features:['token-speed','orchestrator'],packageVersion:sourcePackage.version,revision});
   // Never replace an active private app in place. Rename a released previous copy for recovery.
+  swapStarted=true;
   if(fs.existsSync(app)){let fd;try{fd=fs.openSync(path.join(app,'ChatGPT.exe'),'r+');fs.closeSync(fd);}catch{atomic(status,{state:'waiting-for-codex-close',staging});return {state:'waiting-for-codex-close',dir};}fs.renameSync(app,path.join(dir,'previous-'+Date.now()));}
-  fs.renameSync(staging,app);prunePrevious(dir);
+  fs.renameSync(staging,app);prunePrevious(dir);pruneBaseline(dir,sourcePackage.version,{force:true});
   atomic(path.join(dir,'active.json'),{managedBy:'damndots',revision,packageVersion:sourcePackage.version,exe:path.join(app,'ChatGPT.exe'),...integrity});
   const bridgeDir=path.join(os.homedir(),'.codex','dots-local-bridge');
   if(fs.existsSync(path.join(bridgeDir,'config.json'))){const config=JSON.parse(fs.readFileSync(path.join(bridgeDir,'config.json'),'utf8').replace(/^\uFEFF/,''));config.composerAppRoot=app;atomic(path.join(bridgeDir,'config.json'),config);}
@@ -98,7 +107,10 @@ export function ensureFeatures({nativeDir,adopt,includeLocalPatches=true,sourceP
   for(const name of ['lead','plan','explore','verify','fix','subagents','swarm']){const file=path.join(agents,name+'.toml');if(!fs.existsSync(file))fs.copyFileSync(path.join(repo,'scripts/desktop-features/agents',name+'.toml'),file,fs.constants.COPYFILE_EXCL);}
   atomic(status,{state:'ready',managedBy:'damndots',packageVersion:sourcePackage.version,appRoot:app,checkedEntries:integrity.checked});
   return {state:'ready',dir,app};
- }catch(error){atomic(status,{state:'failed',error:error.message,staging});throw error;}
+ }catch(error){
+  // Only scratch from a failed build is discarded; once the swap started the finished staging must survive for a retry.
+  if(!swapStarted)discardFailedStaging(dir);
+  atomic(status,{state:'failed',error:error.message,...(swapStarted?{staging}:{})});throw error;}
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  const args=process.argv.slice(2),value=k=>args[args.indexOf(k)+1];
