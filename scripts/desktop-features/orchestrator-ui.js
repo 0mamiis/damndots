@@ -242,10 +242,6 @@ function codexOrchShortLabel(){try{var i=codexOrchestratorGet(codexOrchestratorC
 window.__codexOrchShortLabel=codexOrchShortLabel;
 function codexOrchIsOff(){try{return !codexOrchestratorMode(codexOrchestratorComposerScope())}catch(e){return false}}
 window.__codexOrchIsOff=codexOrchIsOff;
-// Fast (any speed tier, including Ultra fast) is stored per chat; the trigger draws its own bolt so it can animate.
-function codexOrchFast(){try{var sc=window.__codexSubScopeOverride;if(!sc&&window.__codexOrchScope)sc=window.__codexOrchScope();if(!sc)sc=codexOrchestratorComposerScope();var v=JSON.parse(localStorage.getItem('codex-orchestrator-subagent-model-v2:'+(sc||'draft:new'))||'null');return !!(v&&v.fast)}catch(e){return false}}
-var CODEX_ORCH_BOLT='<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style="width:14px;height:14px;flex:none"><path d="M11.9125 21.4125C11.5292 21.8625 11.0292 22.0958 10.4125 22.1125C9.79586 22.1291 9.29586 21.9208 8.91252 21.4875C8.53752 21.0541 8.45836 20.4541 8.67503 19.6875L9.68752 16H4.57502C4.00836 16 3.56669 15.8375 3.25002 15.5125C2.93336 15.1791 2.77502 14.7791 2.77502 14.3125C2.77502 13.8375 2.92919 13.4125 3.23752 13.0375L12.1375 2.47497C12.5209 2.02497 13.0209 1.79164 13.6375 1.77497C14.2542 1.75831 14.75 1.96664 15.125 2.39997C15.5084 2.83331 15.5917 3.43331 15.375 4.19997L14.3125 7.99998H19.425C19.9917 7.99998 20.4334 8.16664 20.75 8.49997C21.075 8.83331 21.2375 9.23748 21.2375 9.71247C21.2375 10.1791 21.0792 10.5958 20.7625 10.9625L11.9125 21.4125Z" fill="currentColor"></path></svg>';
-
 function codexOrchestratorOrdered(){var d=window.__damndotsOrchestratorDefaults,o=d&&Array.isArray(d.modeOrder)?d.modeOrder:null;if(!o)return CODEX_ORCH_ALL_MODES;var rows=[CODEX_ORCH_ALL_MODES[0]];o.forEach(function(k){var r=CODEX_ORCH_ALL_MODES.find(function(x){return x[0]===k});if(r&&rows.indexOf(r)<0)rows.push(r)});CODEX_ORCH_ALL_MODES.forEach(function(r){if(rows.indexOf(r)<0)rows.push(r)});return rows}
 // Colours chosen in the Damndots dashboard replace the built-in colour of a mode; the row objects are cached so the picker keeps stable identities.
 var codexOrchestratorColorCache={};
@@ -540,18 +536,7 @@ function codexOrchestratorEnsureNative(R){
    h('span',{className:'sr-only'},M[idx][1]),
    h('span',{className:nat('Viewport'),style:{display:'flex',justifyContent:'center'}},h('span',{ref:layersRef,className:nat('Layers'),style:{display:'grid',gridTemplateColumns:'max-content',width:'max-content',flexShrink:0}},layerEls)));
  };
- // The Fast bolt fades and resizes with the native timing whenever the speed tier is switched on or off.
-function codexOrchFastIcon(props){
- var fast=props.fast,ref=R.useRef(null),prev=R.useRef(null);
- R.useLayoutEffect(function(){
-  var el=ref.current;if(!el)return;var was=prev.current;prev.current=fast;
-  if(was===null||was===fast){el.style.width=(fast?14:0)+'px';el.style.opacity=fast?'1':'0';el.style.filter=fast?'blur(0px)':'blur(4px)';return}
-  var opts=window.__codexNativeEffortAnim||{duration:300,easing:'ease-out',fill:'both'};
-  try{var a=el.animate([{width:(was?14:0)+'px',opacity:was?1:0,filter:was?'blur(0px)':'blur(4px)'},{width:(fast?14:0)+'px',opacity:fast?1:0,filter:fast?'blur(0px)':'blur(4px)'}],opts);a.onfinish=function(){try{a.commitStyles();a.cancel()}catch(e){}}}catch(e){}
- },[fast]);
- return h('span',{ref:ref,'data-dots-fast-icon':'',style:{display:'inline-flex',alignItems:'center',overflow:'hidden',flexShrink:0,width:fast?14:0,height:14,opacity:fast?1:0,filter:fast?'blur(0px)':'blur(4px)'},dangerouslySetInnerHTML:{__html:CODEX_ORCH_BOLT}});
-}
-window.__codexOrchTriggerLabel=function(props){
+ window.__codexOrchTriggerLabel=function(props){
   var scopeId=codexOrchestratorComposerScope();useOrchTick();
   var i=codexOrchestratorGet(scopeId),m=CODEX_ORCH_MODES[i];
   var ref=R.useRef(null);
@@ -574,9 +559,8 @@ window.__codexOrchTriggerLabel=function(props){
   },[i]);
   var modeText=h(window.__codexOrchModeText,{index:i});
   if(i===0){if(codexOrchOffDetails()&&props.model!=null)return h('span',{ref:ref,className:'flex min-w-0 items-center gap-1.5','data-codex-orchestrator-label':'off'},modeText,props.model);return h('span',{ref:ref,className:'truncate whitespace-nowrap','data-codex-orchestrator-label':'off'},modeText)}
-  var fast=codexOrchFast();
   if(props.model==null)return h('span',{ref:ref,className:'shrink-0 whitespace-nowrap','data-codex-orchestrator-label':m[0]},modeText);
-  return h('span',{ref:ref,className:'flex min-w-0 items-center gap-1.5','data-codex-orchestrator-label':m[0]},modeText,h(codexOrchFastIcon,{fast:fast}),props.model);
+  return h('span',{ref:ref,className:'flex min-w-0 items-center gap-1.5','data-codex-orchestrator-label':m[0]},modeText,props.model);
  };
 }
 var CODEX_ORCH_TPS_KEY = "codex-thread-tps-v3";
