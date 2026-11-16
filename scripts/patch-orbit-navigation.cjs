@@ -10,9 +10,9 @@ const BT=String.fromCharCode(96);
 const {locate}=require('./asar-locate.cjs');
 if(root.toLowerCase().includes('windowsapps'))throw Error('Only patch a private staged copy');
 const file=path.join(root,'resources/app.asar'),archive=fs.readFileSync(file),oldHeader=archive.subarray(16,16+archive.readUInt32LE(12)),meta=JSON.parse(oldHeader),base=8+archive.readUInt32LE(4),body=archive.subarray(base),changed=[];
-function patch(entryPath,fn){let entry=meta;for(const part of entryPath.split('/'))entry=entry.files[part];const source=body.subarray(+entry.offset,+entry.offset+entry.size).toString();const result=fn(source);cp.execFileSync(process.execPath,['--input-type=module','--check'],{input:result});const bytes=Buffer.from(result);entry.offset=String(body.length+changed.reduce((n,x)=>n+x.bytes.length,0));entry.size=bytes.length;entry.integrity.hash=hash(bytes);entry.integrity.blocks=[];for(let i=0;i<bytes.length;i+=entry.integrity.blockSize)entry.integrity.blocks.push(hash(bytes.subarray(i,i+entry.integrity.blockSize)));changed.push({entryPath,bytes});}
+function patch(entryPath,fn){let entry=meta;for(const part of entryPath.split('/'))entry=entry.files[part];const prev=changed.findIndex(x=>x.entryPath===entryPath),source=prev>=0?changed[prev].bytes.toString():body.subarray(+entry.offset,+entry.offset+entry.size).toString();const result=fn(source);if(prev>=0)changed.splice(prev,1);cp.execFileSync(process.execPath,['--input-type=module','--check'],{input:result});const bytes=Buffer.from(result);entry.offset=String(body.length+changed.reduce((n,x)=>n+x.bytes.length,0));entry.size=bytes.length;entry.integrity.hash=hash(bytes);entry.integrity.blocks=[];for(let i=0;i<bytes.length;i+=entry.integrity.blockSize)entry.integrity.blocks.push(hash(bytes.subarray(i,i+entry.integrity.blockSize)));changed.push({entryPath,bytes});}
 function once(s,a,b,label){if(s.split(a).length!==2)throw Error('Unsupported Codex '+label);return s.replace(a,()=>b);}
-const initial=locate(meta,body,{prefix:'app-initial-',needles:['tbo_available','orbit-navigation'],label:'orbit renderer'}),primary=locate(meta,body,{prefix:'app-primary-',needles:['.cme?e.visibleByDefault:'],label:'orbit rail'});
+const initial=locate(meta,body,{prefix:'app-initial-',needles:['tbo_available','orbit-navigation'],label:'orbit renderer'}),primary=locate(meta,body,{prefix:'app-primary-',needles:['destinationId:"builtin:orbit"','railIcons:'],label:'orbit rail'});
 const rspack=src=>src.includes('export const __webpack_modules__');
 patch('webview/assets/'+initial,s=>{
  if(rspack(s)){
@@ -52,7 +52,7 @@ patch('webview/assets/'+initial,s=>{
   s=s.slice(0,start)+'pb=U(Q,()=>({isLoading:!1,isError:!1,isCapable:!0}))/* damndots-orbit-profile-v6 */'+s.slice(end+3);
  }
  if(!s.includes('/* damndots-orbit-eligibility-v7 */')){
-  const eligibility=new RegExp('function ([\\w$]+)\\(e\\)\\{return e\\.id!=='+BT+'builtin:orbit'+BT+'&&e\\.id!=='+BT+'builtin:automations'+BT);
+  const eligibility=new RegExp('function ([\\w$]+)\\(e\\)\\{return e\\.id!=='+BT+'builtin:orbit'+BT+'&&e\\.id!=='+BT+'builtin:automations'+BT)||new RegExp('function ([\\w$]+)\\(e\\)\\{return"builtin:orbit"!==e\\.id&&"builtin:automations"!==e\\.id');
   if(!eligibility.test(s))throw Error('Unsupported orbit destination eligibility');
   s=s.replace(eligibility,(m,name)=>'function '+name+'(e){return /* damndots-orbit-eligibility-v7 */ e.id!=='+BT+'builtin:automations'+BT);
  }
@@ -63,6 +63,8 @@ patch('webview/assets/'+primary,s=>{
  if(s.includes('/* damndots-orbit-rail-v4 */'))return s;
  // The navigation rail only lists destinations that are pinned in the sidebar customization or marked
  // visible by default, and the Dot is neither. Mark the Dot visible by default so it is always offered.
+ const modern='destinationId:"builtin:orbit",rail:null';
+ if(s.split(modern).length===2)return s.replace(modern,()=>'destinationId:"builtin:orbit",rail:"primary"/* damndots-orbit-rail-v5 */')+'\n/* damndots-orbit-rail-v4 */';
  const re=/t=e\.id===([\w$]+(?:\.[\w$]+)*\.cme)\?e\.visibleByDefault:/g;
  if([...s.matchAll(re)].length!==1)throw Error('Unsupported orbit destination visibility');
  s=s.replace(re,(m,cme)=>'t=e.id==='+String.fromCharCode(34)+'builtin:orbit'+String.fromCharCode(34)+'?!0:e.id==='+cme+'?e.visibleByDefault:');
