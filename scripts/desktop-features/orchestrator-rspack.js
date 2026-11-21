@@ -16,11 +16,23 @@ function codexRspackParts(){
  return window.__dotsParts={R:R,RD:RD};
 }
 // Rendered by the native model picker (inside the app's own React tree): tok/s badge, primary picker and the orchestrator/subagent picker.
+function codexTpsScopeFromProps(p){
+ if(p&&Object.prototype.hasOwnProperty.call(p,'conversationId')){
+  var cid=p.conversationId;
+  if(cid==null||cid==='')return null;
+  var raw=String(cid);
+  if(/^(?:draft|client-new-thread):/.test(raw))return null;
+  raw=raw.replace(/^[a-z]+:/,'');
+  return raw&&!/^(?:draft|client-new-thread):/.test(raw)?raw:null;
+ }
+ return codexOrchestratorComposerScope();
+}
 window.__codexOrchNativeWrap=function(R,main,Picker,props){
  var h=R.createElement;codexOrchestratorEnsureNative(R);
  if(!document.getElementById('codex-orch-layout-style')){var st=document.createElement('style');st.id='codex-orch-layout-style';st.textContent='span:has(> [data-codex-orchestrator-host]),[data-codex-orchestrator-host]{display:contents}[data-codex-orchestrator-host] > [data-codex-tps]{order:-1}[data-codex-orchestrator-host] > button:last-child{margin-inline-start:-6px}[data-codex-subagent-trigger] [class*="ModelPickerTriggerModelGroup"] > span:has(> [data-codex-orchestrator-label]),[data-codex-subagent-trigger] [data-codex-orchestrator-label]{display:contents}[data-codex-subagent-trigger] [class*="ModelPickerTriggerInlineModeIcon"]{order:1;margin-inline-start:2px}[data-codex-subagent-trigger] [data-codex-orchestrator-label] > span:not([class*="ModelPickerTriggerEffortLabel"]){order:2}[data-codex-subagent-trigger] [class*="ModelPickerTriggerModelGroup"]:has([data-codex-orchestrator-label="off"]) > [class*="ModelPickerTriggerInlineModeIcon"]{display:none}[data-codex-subagent-trigger][data-dots-off="1"][aria-expanded="true"] > span[class*="ComposerDropdownLabel"]{display:none}[data-codex-subagent-trigger][data-dots-off="1"][aria-expanded="true"]::before{content:attr(data-dots-label);white-space:nowrap;color:inherit}';document.head.appendChild(st)}
- if(!codexOrchestratorTpsComponent)codexOrchestratorTpsComponent=function(){return codexThreadTpsBadge(codexOrchestratorComposerScope(),R)};
- return h('span',{className:'flex min-w-0 items-center','data-codex-orchestrator-host':''},h(codexOrchestratorTpsComponent),main,h(Picker,Object.assign({},props,{codexSubagent:true})));
+ if(!codexOrchestratorTpsComponent)codexOrchestratorTpsComponent=function(p){return codexThreadTpsBadge(codexTpsScopeFromProps(p),R)};
+ var tpsProps=props&&Object.prototype.hasOwnProperty.call(props,'conversationId')?{conversationId:props.conversationId}:null;
+ return h('span',{className:'flex min-w-0 items-center','data-codex-orchestrator-host':''},h(codexOrchestratorTpsComponent,tpsProps),main,h(Picker,Object.assign({},props,{codexSubagent:true})));
 };
 function codexRspackBoot(){
  if(window.__codexRspackBooted)return;window.__codexRspackBooted=true;
