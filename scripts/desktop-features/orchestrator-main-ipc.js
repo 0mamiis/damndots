@@ -3,9 +3,21 @@ try {
   const __dotsOrchElectron = require("electron");
   if (__dotsOrchElectron.ipcMain) {
     const S = globalThis.__dotsOrchState || (globalThis.__dotsOrchState = { modes: {}, pending: null, note: '', defaultMode: null, claims: {}, consumedAt: 0 });
+    const __dotsOrchFs = require("node:fs"), __dotsOrchPath = require("node:path"), __dotsOrchOs = require("node:os");
+    const __dotsOrchDir = __dotsOrchPath.join(__dotsOrchOs.homedir(), ".codex", "dots-local-bridge");
+    const __dotsOrchStateFile = __dotsOrchPath.join(__dotsOrchDir, "orchestrator-state.json");
+    const __dotsOrchClaimsFile = __dotsOrchPath.join(__dotsOrchDir, "orchestrator-claims.json");
     __dotsOrchElectron.ipcMain.handle("damndots:orchestrator-sync", (event, st) => {
       const url = String((event.senderFrame && event.senderFrame.url) || (event.sender && event.sender.getURL && event.sender.getURL()) || "");
       if (!url.startsWith("app://-/")) return null;
+      try {
+        const ext = JSON.parse(__dotsOrchFs.readFileSync(__dotsOrchClaimsFile, "utf8"));
+        if (ext && typeof ext === "object") {
+          if (Number.isFinite(ext.consumedAt) && ext.consumedAt > S.consumedAt) S.consumedAt = ext.consumedAt;
+          if (ext.claims && typeof ext.claims === "object") for (const k of Object.keys(ext.claims)) if (typeof ext.claims[k] === "string") S.claims[k] = ext.claims[k];
+          try { __dotsOrchFs.unlinkSync(__dotsOrchClaimsFile); } catch {}
+        }
+      } catch {}
       if (st && typeof st === "object") {
         const modes = st.modes && typeof st.modes === "object" ? st.modes : {};
         for (const k of Object.keys(S.claims)) if (Object.prototype.hasOwnProperty.call(modes, k)) delete S.claims[k];
@@ -22,6 +34,12 @@ try {
         const nt = st.notes, notes = {};
         if (nt && typeof nt === "object") for (const k of Object.keys(nt).slice(0, 400)) if (typeof nt[k] === "string") notes[k.slice(0, 120)] = nt[k].slice(0, 4000);
         S.notes = notes;
+        try {
+          __dotsOrchFs.mkdirSync(__dotsOrchDir, { recursive: true });
+          const tmp = __dotsOrchStateFile + ".tmp-" + process.pid;
+          __dotsOrchFs.writeFileSync(tmp, JSON.stringify({ modes: S.modes, pending: S.pending, note: S.note, notes: S.notes, disabled: S.disabled, defaultMode: S.defaultMode, scope: S.scope, scopeMode: S.scopeMode, consumedAt: S.consumedAt }), { mode: 0o600 });
+          __dotsOrchFs.renameSync(tmp, __dotsOrchStateFile);
+        } catch {}
       }
       return { claims: S.claims, pendingConsumed: S.consumedAt };
     });

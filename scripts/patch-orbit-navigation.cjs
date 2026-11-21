@@ -10,7 +10,7 @@ const BT=String.fromCharCode(96);
 const {locate}=require('./asar-locate.cjs');
 if(root.toLowerCase().includes('windowsapps'))throw Error('Only patch a private staged copy');
 const file=path.join(root,'resources/app.asar'),archive=fs.readFileSync(file),oldHeader=archive.subarray(16,16+archive.readUInt32LE(12)),meta=JSON.parse(oldHeader),base=8+archive.readUInt32LE(4),body=archive.subarray(base),changed=[];
-function patch(entryPath,fn){let entry=meta;for(const part of entryPath.split('/'))entry=entry.files[part];const prev=changed.findIndex(x=>x.entryPath===entryPath),source=prev>=0?changed[prev].bytes.toString():body.subarray(+entry.offset,+entry.offset+entry.size).toString();const result=fn(source);if(prev>=0)changed.splice(prev,1);cp.execFileSync(process.execPath,['--input-type=module','--check'],{input:result});const bytes=Buffer.from(result);entry.offset=String(body.length+changed.reduce((n,x)=>n+x.bytes.length,0));entry.size=bytes.length;entry.integrity.hash=hash(bytes);entry.integrity.blocks=[];for(let i=0;i<bytes.length;i+=entry.integrity.blockSize)entry.integrity.blocks.push(hash(bytes.subarray(i,i+entry.integrity.blockSize)));changed.push({entryPath,bytes});}
+function patch(entryPath,fn){let entry=meta;for(const part of entryPath.split('/'))entry=entry.files[part];const prev=changed.findIndex(x=>x.entryPath===entryPath),source=prev>=0?changed[prev].bytes.toString():body.subarray(+entry.offset,+entry.offset+entry.size).toString();const result=fn(source);cp.execFileSync(process.execPath,['--input-type=module','--check'],{input:result});const bytes=Buffer.from(result);entry.size=bytes.length;entry.integrity.hash=hash(bytes);entry.integrity.blocks=[];for(let i=0;i<bytes.length;i+=entry.integrity.blockSize)entry.integrity.blocks.push(hash(bytes.subarray(i,i+entry.integrity.blockSize)));if(prev>=0)changed[prev].bytes=bytes;else changed.push({entryPath,entry,bytes});let off=body.length;for(const x of changed){x.entry.offset=String(off);off+=x.bytes.length;}}
 function once(s,a,b,label){if(s.split(a).length!==2)throw Error('Unsupported Codex '+label);return s.replace(a,()=>b);}
 const initial=locate(meta,body,{prefix:'app-initial-',needles:['tbo_available','orbit-navigation'],label:'orbit renderer'}),primary=locate(meta,body,{prefix:'app-primary-',needles:['destinationId:"builtin:orbit"','railIcons:'],label:'orbit rail'});
 const rspack=src=>src.includes('export const __webpack_modules__');
@@ -19,8 +19,10 @@ patch('webview/assets/'+initial,s=>{
   // Codex 26.1029 (Rspack bundles): same capability chain, different expression layout.
   if(!s.includes('/* damndots-orbit-profile-v6 */')){
    const cap=/isCapable:"success"===[\w$]+&&[\w$]+\?\.accounts\[[\w$]+\]\?\.account\.tbo_config\?\.tbo_available===!0/g;
-   if([...s.matchAll(cap)].length!==1)throw Error('Unsupported Orbit profile capability');
-   s=s.replace(cap,()=>'isCapable:!0/* damndots-orbit-profile-v6 */');
+   const capNew=/(tbo_config\?\.tbo_available[\s\S]{1,400}?return\{isLoading:[\w$]+\.isPending,isError:[\w$]+\.isError,)isCapable:[\w$]+\.isSuccess&&!0===[\w$]+,retainNavigation:\([\w$]+\|\|[\w$]+\)&&!0===[\w$]+/g;
+   if([...s.matchAll(cap)].length===1)s=s.replace(cap,()=>'isCapable:!0/* damndots-orbit-profile-v6 */');
+   else if([...s.matchAll(capNew)].length===1)s=s.replace(capNew,(_m,pre)=>pre+'isCapable:!0/* damndots-orbit-profile-v6 */,retainNavigation:!0/* damndots-orbit-navigation-v4 */');
+   else throw Error('Unsupported Orbit profile capability');
   }
   if(!s.includes('/* damndots-orbit-navigation-v4 */')){
    const pol=/"error"===[\w$]+&&[\w$]+\?\.accounts\[[\w$]+\]\?\.account\.tbo_config\?\.tbo_available===!0&&\(0,[\w$]+\.[\w$]+\)\([\w$]+\)\?\{isLoading:!1,isError:!1,isCapable:!0\}:/g;
