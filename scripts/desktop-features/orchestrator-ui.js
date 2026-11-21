@@ -629,7 +629,9 @@ function codexTpsOnTurnCompleted(params) {
   }).catch(nativeResult);
 }
 function codexTpsMetric(scopeId) {
-  var all=codexTpsRead(),list=scopeId&&Array.isArray(all[String(scopeId)])?all[String(scopeId)]:[];
+  var key=scopeId==null?"":String(scopeId);
+  if(!key||/^(?:draft|client-new-thread):/.test(key))return {text:"— tok/s",title:codexOrchL("Bu sohbette henüz ölçülmüş model yanıtı yok"),count:0,tps:0};
+  var all=codexTpsRead(),list=Array.isArray(all[key])?all[key]:[];
   var tokens=0,ms=0,count=0;
   for(var i=0;i<list.length;i++){var s=list[i],t=codexTpsInt(s&&s.tokens),m=codexTpsInt(s&&s.ms);if(t>0&&m>0){tokens+=t;ms+=m;count++;}}
   if(!count||ms<=0)return {text:"— tok/s",title:codexOrchL("Bu sohbette henüz ölçülmüş model yanıtı yok"),count:0,tps:0};
@@ -643,7 +645,7 @@ function codexThreadTpsBadge(scopeId,R) {
   var m=codexTpsMetric(scopeId),s=R.useState(0),bump=s[1],shownState=R.useState(m.tps||0),shown=shownState[0],setShown=shownState[1];
   var badgeRef=R.useRef(null),scopeRef=R.useRef(scopeId);
   var hovState=R.useState(false),hovered=hovState[0],setHovered=hovState[1];
-  R.useEffect(function(){function update(){bump(function(x){return x+1})}window.addEventListener("codex-tps-change",update);window.addEventListener("storage",update);return function(){window.removeEventListener("codex-tps-change",update);window.removeEventListener("storage",update)}},[scopeId]);
+  R.useEffect(function(){function update(){bump(function(x){return x+1})}window.addEventListener("codex-tps-change",update);window.addEventListener("codex-orchestrator-change",update);window.addEventListener("storage",update);return function(){window.removeEventListener("codex-tps-change",update);window.removeEventListener("codex-orchestrator-change",update);window.removeEventListener("storage",update)}},[scopeId]);
   R.useEffect(function(){
     if(scopeRef.current!==scopeId){scopeRef.current=scopeId;setShown(m.tps||0);return;}
     if(!m.count){setShown(0);return;}
@@ -657,7 +659,7 @@ function codexThreadTpsBadge(scopeId,R) {
     return function(){cancelAnimationFrame(frame)};
   },[m.tps,m.count,scopeId]);
   if(!m.count)return null;
-  var visible=shown,number=visible>=100?Math.round(visible):visible>=10?visible.toFixed(0):visible.toFixed(1);
+  var visible=scopeRef.current!==scopeId?m.tps:shown,number=visible>=100?Math.round(visible):visible>=10?visible.toFixed(0):visible.toFixed(1);
   var tipText=m.title;
   var tipStyle={position:"absolute",bottom:"calc(100% + 8px)",left:"50%",transform:"translateX(-50%)",padding:"var(--tooltip-padding-block,5px) var(--tooltip-padding-inline,12px)",borderRadius:"var(--tooltip-border-radius,20px)",background:"var(--tooltip-background-color,#2d2d2b)",color:"var(--tooltip-text-color,#fbfaf6)",fontSize:"var(--tooltip-font-size,13px)",lineHeight:"var(--tooltip-line-height,18px)",fontWeight:"var(--tooltip-font-weight,430)",letterSpacing:"var(--tooltip-letter-spacing,-0.15px)",textAlign:"center",whiteSpace:"nowrap",boxShadow:"var(--tooltip-box-shadow,0 8px 18px #0f172a33)",border:"1px solid var(--tooltip-border-color,rgba(251,250,246,.05))",pointerEvents:"none",zIndex:60,opacity:hovered?1:0,transition:"opacity 120ms ease",visibility:hovered?"visible":"hidden"};
   return R.createElement("span",{ref:badgeRef,className:"no-drag select-none whitespace-nowrap tabular-nums text-text",style:{position:"relative",display:"inline-flex",alignItems:"center",fontSize:"12px",lineHeight:"18px",marginInlineEnd:"9px",fontWeight:400},onMouseEnter:function(){setHovered(true)},onMouseLeave:function(){setHovered(false)},onFocus:function(){setHovered(true)},onBlur:function(){setHovered(false)},"aria-label":tipText,"data-codex-tps":"","data-codex-tps-scope":scopeId||""},number+" tok/s",R.createElement("div",{role:"tooltip",style:tipStyle,"data-codex-tps-tip":""},tipText));

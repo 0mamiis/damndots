@@ -36,3 +36,30 @@ test('matched provider duration takes priority without inventing or duplicating 
  c.codexTpsOnTurnCompleted({threadId:'thread-current',turn:{id:'turn-2',status:'completed',durationMs:3784}});
  await new Promise(r=>setImmediate(r));assert.equal(request.model,'gpt-test');assert.equal(request.tokenCounts.length,1);assert.equal(c.codexTpsRead()['thread-current'][0].source,'opencodex');assert.equal(c.codexTpsRead()['thread-current'][0].ms,2493);
 });
+test('new or draft chats never inherit token speed from another active thread',()=>{
+ const rspack=fs.readFileSync(new URL('../desktop-features/orchestrator-rspack.js',import.meta.url),'utf8');
+ const c=fixture();
+ c.codexTpsOnTurnStarted({threadId:'thread-prev',turn:{id:'turn-1',model:'gpt-test'}});
+ c.codexTpsOnUsage({threadId:'thread-prev',turnId:'turn-1',tokenUsage:{last:{outputTokens:460}}});
+ c.codexTpsOnTurnCompleted({threadId:'thread-prev',turn:{id:'turn-1',status:'completed',durationMs:10000}});
+ c.codexOrchestratorComposerScope=()=>'thread-prev';
+ c.codexOrchestratorEnsureNative=()=>{};
+ c.codexOrchestratorTpsComponent=null;
+ c.document={getElementById:()=>({})};
+ const wrapStart=rspack.indexOf('function codexTpsScopeFromProps'),wrapEnd=rspack.indexOf('function codexRspackBoot');
+ vm.runInContext(rspack.slice(wrapStart,wrapEnd),c);
+ const react={createElement:(tag,props,...children)=>({tag,props,children}),useState:v=>[v,()=>{}],useRef:v=>({current:v}),useEffect:()=>{}};
+ const renderBadge=(pickerProps)=>{
+  const wrapped=c.window.__codexOrchNativeWrap(react,null,()=>null,pickerProps);
+  const badgeEl=wrapped.children[0];
+  return badgeEl.tag(badgeEl.props);
+ };
+ assert.equal(renderBadge({conversationId:null}),null);
+ assert.equal(renderBadge({conversationId:undefined}),null);
+ assert.equal(renderBadge({conversationId:'draft:new'}),null);
+ assert.equal(renderBadge({conversationId:'local:client-new-thread:abc'}),null);
+ assert.equal(c.codexTpsMetric('draft:new').count,0);
+ const existing=renderBadge({conversationId:'thread-prev'});
+ assert.equal(existing.props['data-codex-tps-scope'],'thread-prev');
+ assert.match(existing.children[0],/46 tok\/s/);
+});
