@@ -5,8 +5,10 @@ function mainBuildName(entries,readText){
  const legacy=names.find(n=>/^main-.*\.js$/.test(n));
  if(legacy)return legacy;
  const candidates=names.filter(n=>/^early-bootstrap-\d+-.*\.js$/.test(n)&&readText(n).includes('requestSingleInstanceLock')&&readText(n).includes('ipcMain'));
- if(candidates.length!==1)throw Error('Electron main process chunk not found or ambiguous');
- return candidates[0];
+ if(candidates.length===1)return candidates[0];
+ const fallback=names.filter(n=>/^early-bootstrap-\d+-.*\.js$/.test(n)&&readText(n).includes('ipcMain')&&readText(n).includes('appServerManager'));
+ if(fallback.length===1)return fallback[0];
+ throw Error('Electron main process chunk not found or ambiguous');
 }
 // Add one bridge property to the preload. The Electron owner is read from the current bundle, never assumed.
 function addPreloadBridge(s,name,template){

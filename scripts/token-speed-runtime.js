@@ -1,7 +1,7 @@
 // Codex 26.1027+ reduces app-server notifications in the main process. Measure turns here and hand results to windows.
 const damndotsTpsFile=()=>require('node:path').join(require('node:os').homedir(),'.codex','dots-local-bridge','token-speed-measurements.json');
-let damndotsTpsStore=null;
-function damndotsTpsMeasurements(){if(damndotsTpsStore)return damndotsTpsStore;try{const v=JSON.parse(require('node:fs').readFileSync(damndotsTpsFile(),'utf8'));damndotsTpsStore=v&&typeof v==='object'&&!Array.isArray(v)?v:{};}catch{damndotsTpsStore={};}return damndotsTpsStore;}
+let damndotsTpsStore=null,damndotsTpsMtime=-1;
+function damndotsTpsMeasurements(){try{const fs=require('node:fs'),f=damndotsTpsFile(),mt=fs.statSync(f).mtimeMs;if(damndotsTpsStore&&mt===damndotsTpsMtime)return damndotsTpsStore;const v=JSON.parse(fs.readFileSync(f,'utf8'));damndotsTpsStore=v&&typeof v==='object'&&!Array.isArray(v)?v:{};damndotsTpsMtime=mt;return damndotsTpsStore;}catch{if(damndotsTpsStore)return damndotsTpsStore;damndotsTpsStore={};return damndotsTpsStore;}}
 function damndotsTpsCommit(id,tokens,ms,source){if(!(tokens>0)||!(ms>=16))return;const all=damndotsTpsMeasurements();const list=Array.isArray(all[id])?all[id]:[];list.push({tokens:Math.round(tokens),ms:Math.round(ms),source,at:Date.now()});all[id]=list.slice(-50);const ids=Object.keys(all);if(ids.length>200){ids.sort((a,b)=>(all[a].at(-1)?.at||0)-(all[b].at(-1)?.at||0));for(const k of ids.slice(0,ids.length-200))delete all[k];}try{const fs=require('node:fs'),f=damndotsTpsFile(),t=f+'.tmp-'+process.pid;fs.mkdirSync(require('node:path').dirname(f),{recursive:true});fs.writeFileSync(t,JSON.stringify(all),{mode:0o600});fs.renameSync(t,f);}catch{}}
 const damndotsTpsActive=new Map();
 function damndotsTpsNum(v){const n=Number(v);return Number.isFinite(n)&&n>0?n:0;}

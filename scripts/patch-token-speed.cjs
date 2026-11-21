@@ -3,7 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypt
 const root=fs.realpathSync(process.argv[2]||''),hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 if(root.toLowerCase().includes('windowsapps'))throw Error('Only patch a private staged copy');
 const file=path.join(root,'resources/app.asar'),archive=fs.readFileSync(file),oldHeader=archive.subarray(16,16+archive.readUInt32LE(12)),meta=JSON.parse(oldHeader),base=8+archive.readUInt32LE(4),body=archive.subarray(base),changed=[];
-function patch(entryPath,fn){let entry=meta;for(const part of entryPath.split('/'))entry=entry.files[part];const source=body.subarray(+entry.offset,+entry.offset+entry.size).toString();const result=fn(source);cp.execFileSync(process.execPath,['--input-type=module','--check'],{input:result});const bytes=Buffer.from(result);entry.offset=String(body.length+changed.reduce((n,x)=>n+x.bytes.length,0));entry.size=bytes.length;entry.integrity.hash=hash(bytes);entry.integrity.blocks=[];for(let i=0;i<bytes.length;i+=entry.integrity.blockSize)entry.integrity.blocks.push(hash(bytes.subarray(i,i+entry.integrity.blockSize)));changed.push({entryPath,bytes});}
+function patch(entryPath,fn){let entry=meta;for(const part of entryPath.split('/'))entry=entry.files[part];const prev=changed.findIndex(x=>x.entryPath===entryPath),source=prev>=0?changed[prev].bytes.toString():body.subarray(+entry.offset,+entry.offset+entry.size).toString();const result=fn(source);cp.execFileSync(process.execPath,['--input-type=module','--check'],{input:result});const bytes=Buffer.from(result);entry.size=bytes.length;entry.integrity.hash=hash(bytes);entry.integrity.blocks=[];for(let i=0;i<bytes.length;i+=entry.integrity.blockSize)entry.integrity.blocks.push(hash(bytes.subarray(i,i+entry.integrity.blockSize)));if(prev>=0)changed[prev].bytes=bytes;else changed.push({entryPath,entry,bytes});let off=body.length;for(const x of changed){x.entry.offset=String(off);off+=x.bytes.length;}}
 function rep(s,a,b){if(s.split(a).length!==2)throw Error('Token speed anchor changed: '+a);return s.replace(a,b);}
 const {locate}=require('./asar-locate.cjs');const assets=meta.files.webview.files.assets.files,initial=locate(meta,body,{prefix:'app-initial-',needles:['function codexThreadTpsBadge('],label:'token speed'});
 patch('webview/assets/'+initial,s=>{
@@ -18,11 +18,13 @@ patch('webview/assets/'+initial,s=>{
  return s+'\n'+fs.readFileSync(path.join(__dirname,'token-speed-renderer.js'),'utf8');
 });
 const builds=meta.files['.vite'].files.build.files,main=require('./desktop-build-targets.cjs').mainBuildName(builds,n=>body.subarray(+builds[n].offset,+builds[n].offset+builds[n].size).toString());
-patch('.vite/build/'+main,s=>s+'\n'+fs.readFileSync(path.join(__dirname,'token-speed-runtime.js'),'utf8'));
+const tpsRuntime=fs.readFileSync(path.join(__dirname,'token-speed-runtime.js'),'utf8');
+const ocRuntime=fs.readFileSync(path.join(__dirname,'desktop-features/opencodex-tps-main.js'),'utf8');
 const notifyRe=/onNotification\(([\w$]+),([\w$]+),([\w$]+)=null,([\w$]+),([\w$]+)=Date\.now\(\)\)\{/;
 const notifyBuild=Object.keys(builds).filter(n=>/\.js$/.test(n)&&notifyRe.test(body.subarray(+builds[n].offset,+builds[n].offset+builds[n].size).toString()));
-if(notifyBuild.length===1)patch('.vite/build/'+notifyBuild[0],s=>{if((s.match(new RegExp(notifyRe.source,'g'))||[]).length!==1)throw Error('Notification entry ambiguous');return s.replace(notifyRe,(m,a,b)=>m+'try{globalThis.__damndotsTpsMain?.('+a+','+b+')}catch{}');});
-else if(notifyBuild.length>1)throw Error('Notification entry ambiguous');
+patch('.vite/build/'+main,s=>s+'\n'+tpsRuntime);
+if(notifyBuild.length>2)throw Error('Notification entry ambiguous');
+for(const nb of notifyBuild)patch('.vite/build/'+nb,s=>{if((s.match(new RegExp(notifyRe.source,'g'))||[]).length!==1)throw Error('Notification entry ambiguous');s=s.replace(notifyRe,(m,a,b)=>m+'try{globalThis.__damndotsTpsMain?.('+a+','+b+')}catch{}');if(nb!==main){if(!s.includes('/* codex-tps-opencodex-bridge-v2 */'))s+='\n'+ocRuntime;if(!s.includes('damndotsTpsMeasurements'))s+='\n'+tpsRuntime;}return s;});
 patch('.vite/build/preload.js',s=>{const b=require('./desktop-build-targets.cjs');if(!s.includes('getTokenSpeedPreferences'))s=b.addPreloadBridge(s,'getTokenSpeedPreferences','()=>{OWNER}.ipcRenderer.invoke("damndots:token-speed")');return s;});
 const json=Buffer.from(JSON.stringify(meta)),payload=(4+json.length+3)&~3,pickle=Buffer.alloc(4+payload),head=Buffer.alloc(8);pickle.writeUInt32LE(payload);pickle.writeUInt32LE(json.length,4);json.copy(pickle,8);head.writeUInt32LE(4);head.writeUInt32LE(pickle.length,4);
 const result=Buffer.concat([head,pickle,body,...changed.map(x=>x.bytes)]),exe=fs.readFileSync(path.join(root,'ChatGPT.exe')),needle=Buffer.from(hash(oldHeader)),at=exe.indexOf(needle);if(at<0||exe.indexOf(needle,at+1)>=0)throw Error('EXE integrity anchor changed');Buffer.from(hash(json)).copy(exe,at);

@@ -4,7 +4,7 @@ const {resolveComposerBindings,bindComposerHelper}=require('./desktop-renderer-b
 const root=fs.realpathSync(process.argv[2]||''),hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 if(root.toLowerCase().includes('windowsapps'))throw Error('Only patch a private staged copy');
 const file=path.join(root,'resources/app.asar'),archive=fs.readFileSync(file),oldHeader=archive.subarray(16,16+archive.readUInt32LE(12)),meta=JSON.parse(oldHeader),base=8+archive.readUInt32LE(4),body=archive.subarray(base),changed=[];
-function patch(entryPath,fn){let entry=meta;for(const part of entryPath.split('/'))entry=entry.files[part];const source=body.subarray(+entry.offset,+entry.offset+entry.size).toString();const result=fn(source);cp.execFileSync(process.execPath,['--input-type=module','--check'],{input:result});const bytes=Buffer.from(result);entry.offset=String(body.length+changed.reduce((n,x)=>n+x.bytes.length,0));entry.size=bytes.length;entry.integrity.hash=hash(bytes);entry.integrity.blocks=[];for(let i=0;i<bytes.length;i+=entry.integrity.blockSize)entry.integrity.blocks.push(hash(bytes.subarray(i,i+entry.integrity.blockSize)));changed.push({entryPath,bytes});}
+function patch(entryPath,fn){let entry=meta;for(const part of entryPath.split('/'))entry=entry.files[part];const prev=changed.findIndex(x=>x.entryPath===entryPath),source=prev>=0?changed[prev].bytes.toString():body.subarray(+entry.offset,+entry.offset+entry.size).toString();const result=fn(source);cp.execFileSync(process.execPath,['--input-type=module','--check'],{input:result});const bytes=Buffer.from(result);entry.size=bytes.length;entry.integrity.hash=hash(bytes);entry.integrity.blocks=[];for(let i=0;i<bytes.length;i+=entry.integrity.blockSize)entry.integrity.blocks.push(hash(bytes.subarray(i,i+entry.integrity.blockSize)));if(prev>=0)changed[prev].bytes=bytes;else changed.push({entryPath,entry,bytes});let off=body.length;for(const x of changed){x.entry.offset=String(off);off+=x.bytes.length;}}
 function rep(s,a,b){if(s.split(a).length!==2)throw Error('Token speed anchor changed: '+a);return s.replace(a,b);}
 const assets=meta.files.webview.files.assets.files,initial=locate(meta,body,{prefix:'app-initial-',needles:['requestClient.getAppServerVersion()','orbit.navigation'],label:'renderer'});
 const BT=String.fromCharCode(96);
@@ -29,12 +29,12 @@ function patchRspackRenderer(s){
  // Codex 26.1029 ships Rspack chunks: one module function per feature, no shared top-level scope.
  // The helper lives at chunk level; the module that sends turns also exposes the bundle's require.
  const at=s.indexOf('codexOrchestratorTurn(');
- const starts=[...s.slice(0,at).matchAll(/[,{]([\w$]{3,6})\(e,t,n\)\{/g)];
+ const starts=[...s.slice(0,at).matchAll(/[,{]([\w$]{3,6})(?::\(function)?\(e,t,n\)\{/g)];
  if(!starts.length)throw Error('Native module boundary missing');
  const last=starts[starts.length-1],ins=last.index+last[0].length;
  s=s.slice(0,ins)+'window.__dotsRequire=n;'+s.slice(ins);
  // Codex 26.1103 runs the app-server manager in a worker and the page subscribes over RPC: add a page-side subscription for the token speed events.
- const rpcSub=/(let ([\w$]+)=\(\)=>([\w$]+)\.connection===([\w$]+);)("all"===([\w$]+)&&([\w$]+)\.push\(([\w$]+)\.subscribe\(\{type:"notification",key:\{hostId:([\w$]+)\})/g,rpcHits=[...s.matchAll(rpcSub)];
+ const rpcSub=/(let ([\w$]+)=\(\)=>([\w$]+)\.connection===([\w$]+);)("all"===([\w$]+)&&([\w$]+)\.push\((?:[\w$]+\.subscribe\(\{type:"event",key:\{hostId:[\w$]+\},event:"stream-delta-burst",listener:\(\)=>\{[^}]+\}\}\),)?([\w$]+)\.subscribe\(\{type:"notification",key:\{hostId:([\w$]+)\})/g,rpcHits=[...s.matchAll(rpcSub)];
  if(rpcHits.length===1){
   const m=rpcHits[0],guard=m[2],pushList=m[7],client=m[8],host=m[9];
   const body="try{var P=e.params;if(e.method==='turn/started'){try{var sr=document.querySelector('[data-app-action-sidebar-thread-selected]:not([data-app-action-sidebar-thread-selected=false])'),sid=sr&&sr.getAttribute('data-app-action-sidebar-thread-id');if(sid&&/client-new-thread:/.test(sid)&&P&&P.threadId){(window.__dotsThreadMap=window.__dotsThreadMap||{})[String(sid).replace(/^[a-z]+:/,'')]=String(P.threadId);window.dispatchEvent(new Event('codex-orchestrator-change'))}}catch(z){}}if(e.method==='turn/started')window.__codexTpsOnTurnStarted?.(P);else if(e.method==='turn/completed')window.__codexTpsOnTurnCompleted?.(P);else if(e.method==='item/started')window.__codexTpsOnItemStart?.(P);else if(e.method==='item/agentMessage/delta'||e.method==='item/plan/delta'||e.method==='item/reasoning/summaryTextDelta'||e.method==='item/reasoning/textDelta')window.__codexTpsOnDelta?.(P);else if(e.method==='thread/tokenUsage/updated')window.__codexTpsOnUsage?.(P)}catch(x){}";
@@ -84,11 +84,11 @@ const builds=meta.files['.vite'].files.build.files,main=require('./desktop-build
 const readBuild=n=>body.subarray(+builds[n].offset,+builds[n].offset+builds[n].size).toString();
 // Codex 26.1029+ builds user turns in the Electron main process; the orchestrator context has to be added there.
 const turnFiles=Object.keys(builds).filter(n=>/\.js$/.test(n)).filter(n=>{const x=readBuild(n);return x.includes('e.requestClient.getAppServerVersion()')&&/"durable"===[\w$]+\.mode\?/.test(x)});
-if(turnFiles.length>1)throw Error('Unsupported Codex turn builder is ambiguous');
-if(turnFiles.length===1){
+if(turnFiles.length>2)throw Error('Unsupported Codex turn builder is ambiguous');
+if(turnFiles.length>=1){
  const ui=fs.readFileSync(path.join(__dirname,'desktop-features/orchestrator-ui.js'),'utf8'),pick=re=>{const m=ui.match(re);if(!m)throw Error('Orchestrator text boundary missing');return m[0]};
  const mainTurn=[pick(/^var CODEX_ORCH_TEXT=.*$/m),pick(/^var CODEX_ORCH_SENT=.*$/m),pick(/^var CODEX_ORCH_OFF_ULTRA=.*$/m),fs.readFileSync(path.join(__dirname,'desktop-features/orchestrator-main.js'),'utf8')].join('\n');
- patch('.vite/build/'+turnFiles[0],s=>s.includes('function codexOrchestratorTurn(')?s:wrapTurnRequest(s)+'\n'+mainTurn);
+ for(const tf of turnFiles)patch('.vite/build/'+tf,s=>s.includes('function codexOrchestratorTurn(')?s:wrapTurnRequest(s)+'\n'+mainTurn);
 }
 patch('.vite/build/'+main,s=>{if(!s.includes('/* codex-tps-opencodex-bridge-v2 */'))s+='\n'+fs.readFileSync(path.join(__dirname,'desktop-features/opencodex-tps-main.js'),'utf8');if(!s.includes('damndots-orchestrator-main-ipc-v1'))s+='\n'+fs.readFileSync(path.join(__dirname,'desktop-features/orchestrator-main-ipc.js'),'utf8');return s;});
 patch('.vite/build/preload.js',s=>{const b=require('./desktop-build-targets.cjs');if(!s.includes('getOpenCodexTps:'))s=b.addPreloadBridge(s,'getOpenCodexTps','t=>{OWNER}.ipcRenderer.invoke("codex-tps:opencodex-v2",t)');if(!s.includes('getScrollControls:'))s=b.addPreloadBridge(s,'getScrollControls','t=>{OWNER}.ipcRenderer.invoke("damndots:scroll-controls",t)');if(!s.includes('syncOrchestrator:'))s=b.addPreloadBridge(s,'syncOrchestrator','t=>{OWNER}.ipcRenderer.invoke("damndots:orchestrator-sync",t)');return s;});

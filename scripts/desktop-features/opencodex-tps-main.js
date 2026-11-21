@@ -3,7 +3,6 @@ try {
   const __codexTpsElectron = require("electron");
   const __codexTpsBridgeFs = require("node:fs");
   const __codexTpsBridgePath = require("node:path");
-  if (__codexTpsElectron.ipcMain) {
     const __codexTpsOpenCodexHandler = async (event, request) => {
       const senderUrl = String((event.senderFrame && event.senderFrame.url) || (event.sender && event.sender.getURL && event.sender.getURL()) || "");
       if (!senderUrl.startsWith("app://-/")) return null;
@@ -57,7 +56,8 @@ try {
       const result = unique.reduce((sum, row) => ({ tokens: sum.tokens + row.outputTokens, durationMs: sum.durationMs + row.durationMs }), { tokens: 0, durationMs: 0 });
       return { ...result, tps: result.durationMs > 0 ? result.tokens / (result.durationMs / 1000) : 0, requestCount: unique.length, matchedTokenEvents: selected.length };
     };
-    __codexTpsElectron.ipcMain.handle("codex-tps:opencodex-v2", __codexTpsOpenCodexHandler);
+    if (__codexTpsElectron && __codexTpsElectron.ipcMain) {
+      __codexTpsElectron.ipcMain.handle("codex-tps:opencodex-v2", __codexTpsOpenCodexHandler);
+    }
     globalThis.__codexTpsOpenCodex = request => __codexTpsOpenCodexHandler({ senderFrame: { url: "app://-/main" } }, request);
-  }
 } catch {}
