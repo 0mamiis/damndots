@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import vm from 'node:vm';
 
 const source = fs.readFileSync(new URL('../desktop-features/orchestrator-ui.js', import.meta.url), 'utf8');
@@ -94,5 +96,60 @@ test('a saved chat mode is used and a dashboard-disabled mode counts as Off', ()
   assert.match(run('saved-chat'), /^\[ORKESTRATÖR MODU: LEAD/);
   S.disabled = ['lead'];
   assert.match(run('saved-chat'), /^\[ORCHESTRATOR OFF/);
+});
+
+test('edit_user_message turns receive the active orchestrator mode', () => {
+  const {run} = mainFixture({modes: {'edit-chat': 'swarm'}, scope: 'edit-chat', scopeMode: 'swarm'});
+  assert.match(run('edit-chat', 'edit_user_message'), /^\[ORKESTRATÖR MODU: SWARM/);
+});
+
+test('utility-process cached claims do not overwrite a later UI switch to Swarm', () => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'damndots-orch-test-'));
+  const bridgeDir = path.join(tmpHome, '.codex', 'dots-local-bridge');
+  fs.mkdirSync(bridgeDir, {recursive: true});
+  const stateFile = path.join(bridgeDir, 'orchestrator-state.json');
+  const claimsFile = path.join(bridgeDir, 'orchestrator-claims.json');
+  try {
+    const fakeRequire = id => {
+      if (id === 'node:fs') return fs;
+      if (id === 'node:os') return {homedir: () => tmpHome};
+      if (id === 'node:path') return path;
+      throw new Error('unexpected require ' + id);
+    };
+    const context = vm.createContext({globalThis: {}, require: fakeRequire, process: {pid: 12345}, CODEX_ORCH_TEXT: {lead: '[ORKESTRATÖR MODU: LEAD', swarm: '[ORKESTRATÖR MODU: SWARM'}, CODEX_ORCH_OFF: '[ORCHESTRATOR OFF', CODEX_ORCH_OFF_ULTRA: '[ORCHESTRATOR OFF + ULTRA', Date, Object, Array, Number, String, Math, JSON});
+    vm.runInContext(mainSource, context);
+    // Turn 1: new chat starts as Off and gets cached in __dotsOrchUtilityState.claims.
+    fs.writeFileSync(stateFile, JSON.stringify({modes: {'draft:new': 'off'}, scope: 'draft:new', scopeMode: 'off', defaultMode: 'off', consumedAt: 0}));
+    const t1 = context.codexOrchestratorTurn(turn('chat-1'), null, 'medium');
+    assert.match(t1.additionalContext.codex_orchestrator.value, /^\[ORCHESTRATOR OFF/);
+    assert.equal(fs.existsSync(claimsFile), true);
+    // Main process consumes claims and user switches chat-1 to Swarm in the UI.
+    fs.unlinkSync(claimsFile);
+    fs.writeFileSync(stateFile, JSON.stringify({modes: {'chat-1': 'swarm'}, scope: 'chat-1', scopeMode: 'swarm', defaultMode: 'off', consumedAt: 0}));
+    const t2 = context.codexOrchestratorTurn(turn('chat-1'), null, 'medium');
+    assert.match(t2.additionalContext.codex_orchestrator.value, /^\[ORKESTRATÖR MODU: SWARM/);
+    assert.equal(fs.existsSync(claimsFile), false, 'must not rewrite stale claims when no claim occurred');
+  } finally {
+    fs.rmSync(tmpHome, {recursive: true, force: true});
+  }
+});
+
+test('codexOrchestratorInject injects developer item for goals/queues and skips durable threads', async () => {
+  const S = {modes: {'goal-chat': 'swarm'}, pending: null, note: '', defaultMode: 'off', claims: {}, consumedAt: 0, scope: 'goal-chat', scopeMode: 'swarm'};
+  const context = vm.createContext({globalThis: {__dotsOrchState: S}, CODEX_ORCH_TEXT: {swarm: '[ORKESTRATÖR MODU: SWARM'}, CODEX_ORCH_OFF: '[ORCHESTRATOR OFF', CODEX_ORCH_OFF_ULTRA: '[ORCHESTRATOR OFF + ULTRA', Date, Object, Array, Number, String, Math});
+  vm.runInContext(mainSource, context);
+  const sent = [];
+  const client = {
+    getConversation: id => ({mode: id === 'durable-chat' ? 'durable' : 'local', latestReasoningEffort: 'high'}),
+    sendRequest: async (method, params) => { sent.push({method, params}); return {}; }
+  };
+  await context.codexOrchestratorInject(client, 'goal-chat', 'goal');
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].method, 'thread/inject_items');
+  assert.equal(sent[0].params.threadId, 'goal-chat');
+  assert.equal(sent[0].params.items[0].role, 'developer');
+  assert.match(sent[0].params.items[0].content[0].text, /^<codex_orchestrator>\[ORKESTRATÖR MODU: SWARM[\s\S]*<\/codex_orchestrator>$/);
+  await context.codexOrchestratorInject(client, 'durable-chat', 'goal');
+  assert.equal(sent.length, 1, 'durable conversations must not be injected');
 });
 

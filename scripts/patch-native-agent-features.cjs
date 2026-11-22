@@ -25,6 +25,20 @@ function wrapTurnRequest(s){
  const full=modern[0][1],conv=modern[0][2];
  return s.replace(full,()=>'codexOrchestratorTurn('+full+',('+conv+'.mode==='+BT+'durable'+BT+'?true:null),'+conv+'?.latestReasoningEffort)');
 }
+function wrapMainTurnPaths(s){
+ const steer=/(:([\w$]+)\.sendRequest\("turn\/steer",([\w$]+),([\w$]+)\))/g,sh=[...s.matchAll(steer)];
+ if(sh.length>1)throw Error('Unsupported Codex turn/steer boundary');
+ if(sh.length===1)s=s.replace(steer,(_,__,cl,req,opts)=>':'+cl+'.sendRequest("turn/steer",codexOrchestratorTurn('+req+',('+cl+'.getConversation?.('+req+'.threadId)?.mode==="durable"?true:null),'+cl+'.getConversation?.('+req+'.threadId)?.latestReasoningEffort),'+opts+')');
+ const goalSet=/(null==([\w$]+)\?await ([\w$]+)\.waitForPendingThreadSettingsUpdate\(([\w$]+)\):await \3\.updateThreadSettingsForNextTurn\(\4,\2\);[^{]{0,200}\{goal:[\w$]+\}=)(await \3\.sendRequest\("thread\/goal\/set",\{threadId:\4,origin:[^}]+,objective:[\w$]+,status:"active"\}\))/g,gh=[...s.matchAll(goalSet)];
+ if(gh.length>1)throw Error('Unsupported Codex thread/goal/set boundary');
+ if(gh.length===1)s=s.replace(goalSet,(_,pre,st,cl,tid,call)=>pre+'(await codexOrchestratorInject('+cl+','+tid+',"goal",'+st+'?.effort),'+call+')');
+ const goalStatus=/("active"===([\w$]+)&&\(null==([\w$]+)\?await ([\w$]+)\.waitForPendingThreadSettingsUpdate\(([\w$]+)\):await \4\.updateThreadSettingsForNextTurn\(\5,\3\))(\);let\{goal:[\w$]+\}=await \4\.sendRequest\("thread\/goal\/set",\{threadId:\5,origin:[^}]+,status:\2\}\))/g,gsh=[...s.matchAll(goalStatus)];
+ if(gsh.length>1)throw Error('Unsupported Codex thread/goal/set status boundary');
+ if(gsh.length===1)s=s.replace(goalStatus,(_,pre,__,st,cl,tid,tail)=>pre+',await codexOrchestratorInject('+cl+','+tid+',"goal",'+st+'?.effort)'+tail);
+ const qStart=/await ([\w$]+)\.sendRequest\("thread\/queue\/start",\{threadId:([\w$]+),queuedSubmissionId:([\w$.]+)\}\)/g;
+ if(qStart.test(s))s=s.replace(qStart,(m,cl,tid)=>'(await codexOrchestratorInject('+cl+','+tid+',"composer"),'+m+')');
+ return s;
+}
 function patchRspackRenderer(s){
  // Codex 26.1029 ships Rspack chunks: one module function per feature, no shared top-level scope.
  // The helper lives at chunk level; the module that sends turns also exposes the bundle's require.
@@ -88,7 +102,7 @@ if(turnFiles.length>2)throw Error('Unsupported Codex turn builder is ambiguous')
 if(turnFiles.length>=1){
  const ui=fs.readFileSync(path.join(__dirname,'desktop-features/orchestrator-ui.js'),'utf8'),pick=re=>{const m=ui.match(re);if(!m)throw Error('Orchestrator text boundary missing');return m[0]};
  const mainTurn=[pick(/^var CODEX_ORCH_TEXT=.*$/m),pick(/^var CODEX_ORCH_SENT=.*$/m),pick(/^var CODEX_ORCH_OFF_ULTRA=.*$/m),fs.readFileSync(path.join(__dirname,'desktop-features/orchestrator-main.js'),'utf8')].join('\n');
- for(const tf of turnFiles)patch('.vite/build/'+tf,s=>s.includes('function codexOrchestratorTurn(')?s:wrapTurnRequest(s)+'\n'+mainTurn);
+ for(const tf of turnFiles)patch('.vite/build/'+tf,s=>s.includes('function codexOrchestratorTurn(')?s:wrapMainTurnPaths(wrapTurnRequest(s))+'\n'+mainTurn);
 }
 patch('.vite/build/'+main,s=>{if(!s.includes('/* codex-tps-opencodex-bridge-v2 */'))s+='\n'+fs.readFileSync(path.join(__dirname,'desktop-features/opencodex-tps-main.js'),'utf8');if(!s.includes('damndots-orchestrator-main-ipc-v1'))s+='\n'+fs.readFileSync(path.join(__dirname,'desktop-features/orchestrator-main-ipc.js'),'utf8');return s;});
 patch('.vite/build/preload.js',s=>{const b=require('./desktop-build-targets.cjs');if(!s.includes('getOpenCodexTps:'))s=b.addPreloadBridge(s,'getOpenCodexTps','t=>{OWNER}.ipcRenderer.invoke("codex-tps:opencodex-v2",t)');if(!s.includes('getScrollControls:'))s=b.addPreloadBridge(s,'getScrollControls','t=>{OWNER}.ipcRenderer.invoke("damndots:scroll-controls",t)');if(!s.includes('syncOrchestrator:'))s=b.addPreloadBridge(s,'syncOrchestrator','t=>{OWNER}.ipcRenderer.invoke("damndots:orchestrator-sync",t)');return s;});
