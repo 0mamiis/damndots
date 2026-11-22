@@ -387,7 +387,7 @@ function codexOrchestratorTrace(reason,p,aeon){try{var k='codex-orchestrator-tra
 function codexOrchestratorTurn(p, aeon, fallbackEffort) {
   codexOrchestratorTrace('enter', p, aeon);
   if (!p || aeon != null || p.toolOutput != null || !p.input || !p.input.length) { codexOrchestratorTrace('skip-basic', p, aeon); return p; }
-  if (p.turnTrigger != null && p.turnTrigger !== 'composer' && p.turnTrigger !== 'goal') { codexOrchestratorTrace('skip-trigger', p, aeon); return p; }
+  if (p.turnTrigger != null && p.turnTrigger !== 'composer' && p.turnTrigger !== 'goal' && p.turnTrigger !== 'edit_user_message') { codexOrchestratorTrace('skip-trigger', p, aeon); return p; }
   var scopeId = p.threadId != null ? String(p.threadId) : p.clientThreadId != null ? 'draft:' + String(p.clientThreadId) : null;
   if (!scopeId) return p;
   var mode = codexOrchestratorMode(scopeId);

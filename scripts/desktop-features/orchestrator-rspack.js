@@ -37,7 +37,7 @@ window.__codexOrchNativeWrap=function(R,main,Picker,props){
 function codexRspackBoot(){
  if(window.__codexRspackBooted)return;window.__codexRspackBooted=true;
  var last=null,timer=0,syncedAt=0;
- window.addEventListener('codex-orchestrator-change',function(){syncedAt=0;schedule()});
+ window.addEventListener('codex-orchestrator-change',function(){syncedAt=Date.now();try{codexOrchestratorSync()}catch(e){}schedule()});
  function tick(){
   timer=0;
   try{if(Date.now()-syncedAt>1000){syncedAt=Date.now();codexOrchestratorSync()}}catch(e){}
