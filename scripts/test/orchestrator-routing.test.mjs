@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import vm from 'node:vm';
 
 const source = fs.readFileSync(new URL('../desktop-features/orchestrator-ui.js', import.meta.url), 'utf8');
@@ -102,16 +104,16 @@ test('edit_user_message turns receive the active orchestrator mode', () => {
 });
 
 test('utility-process cached claims do not overwrite a later UI switch to Swarm', () => {
-  const tmpHome = fs.mkdtempSync(new URL('../../.data/orch-test-', import.meta.url));
-  const bridgeDir = new URL('file://' + tmpHome.replace(/\\/g, '/') + '/.codex/dots-local-bridge/');
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'damndots-orch-test-'));
+  const bridgeDir = path.join(tmpHome, '.codex', 'dots-local-bridge');
   fs.mkdirSync(bridgeDir, {recursive: true});
-  const stateFile = new URL('orchestrator-state.json', bridgeDir);
-  const claimsFile = new URL('orchestrator-claims.json', bridgeDir);
+  const stateFile = path.join(bridgeDir, 'orchestrator-state.json');
+  const claimsFile = path.join(bridgeDir, 'orchestrator-claims.json');
   try {
     const fakeRequire = id => {
       if (id === 'node:fs') return fs;
       if (id === 'node:os') return {homedir: () => tmpHome};
-      if (id === 'node:path') return {join: (...parts) => parts.join('/')};
+      if (id === 'node:path') return path;
       throw new Error('unexpected require ' + id);
     };
     const context = vm.createContext({globalThis: {}, require: fakeRequire, process: {pid: 12345}, CODEX_ORCH_TEXT: {lead: '[ORKESTRATÖR MODU: LEAD', swarm: '[ORKESTRATÖR MODU: SWARM'}, CODEX_ORCH_OFF: '[ORCHESTRATOR OFF', CODEX_ORCH_OFF_ULTRA: '[ORCHESTRATOR OFF + ULTRA', Date, Object, Array, Number, String, Math, JSON});
