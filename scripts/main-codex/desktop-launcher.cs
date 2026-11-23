@@ -112,17 +112,29 @@ public static class DotsDesktopLauncher {
       if(args.Length>0&&args[0]=="--managed")return 4;
       if(!WaitForDots()){Original();return 0;}
      }
-     for(int attempt=0;attempt<2;attempt++){
+     bool sawManaged=ManagedProcess();
+     for(int attempt=0;attempt<3;attempt++){
+      bool hadManagedBefore=ManagedProcess();
       using(var child=Process.Start(StartInfo(Path.Combine(App,"ChatGPT.exe")))){
        if(child==null)throw new Exception("Desktop process not created");
        Log("launch pid="+child.Id+" attempt="+attempt);
        if(!child.WaitForExit(1800))return 0;
        if(child.ExitCode!=0){Log("Desktop exit="+child.ExitCode);return child.ExitCode;}
       }
-      // A closing instance can still own Electron's singleton lock. Retry only if no live window accepted the launch.
-      for(int i=0;i<8;i++){if(LiveWindow()){Log("Existing window accepted launch");return 0;}Thread.Sleep(125);}
+      // A closing instance can still own Electron's singleton lock while draining.
+      // Wait for either a live window to accept the launch or the closing managed process to finish exiting.
+      bool sawAfter=false;
+      int waitSteps=(hadManagedBefore||sawManaged)?120:8;
+      for(int i=0;i<waitSteps;i++){
+       if(LiveWindow()){Log("Existing window accepted launch");return 0;}
+       bool running=ManagedProcess();
+       if(running){sawAfter=true;if(waitSteps<120)waitSteps=120;}
+       else if(sawAfter||hadManagedBefore){Log("Closing managed process exited; retrying launch");break;}
+       Thread.Sleep(100);
+      }
+      if(!sawAfter&&!hadManagedBefore&&attempt>=1)break;
      }
-     Log("No live window after two launches");return 5;
+     Log("No live window after retries");return 5;
     }finally{gate.ReleaseMutex();}
    }
   }catch(Exception ex){Log("error="+ex.Message);return 1;}

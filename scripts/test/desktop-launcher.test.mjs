@@ -35,3 +35,30 @@ test('windowless launcher applies a verified update, forwards the environment an
   assert(path.resolve(root).startsWith(path.resolve(os.tmpdir())+path.sep));fs.rmSync(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});
  }
 });
+test('windowless launcher waits for a slow-closing managed process before launching a fresh instance',{skip:!version},async()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'dots-launch-slowquit-')),dir=path.join(root,'desktop-features'),app=path.join(dir,'app');
+ let holder=null;
+ try{
+  fs.mkdirSync(path.join(app,'resources'),{recursive:true});
+  const code=`using System;using System.IO;using System.Threading;public static class Fixture{public static void Main(string[] args){string b=AppDomain.CurrentDomain.BaseDirectory;string lockFile=Path.Combine(b,"dying.lock");if(args.Length>0&&args[0]=="--hold"){File.WriteAllText(lockFile,"1");Thread.Sleep(3200);try{File.Delete(lockFile);}catch{}return;}string f=Path.Combine(b,"count.txt");int n=File.Exists(f)?int.Parse(File.ReadAllText(f)):0;File.WriteAllText(f,(n+1).ToString());if(File.Exists(lockFile))return;Thread.Sleep(2500);}}`;
+  const stub=path.join(root,'fixture.cs');fs.writeFileSync(stub,code);
+  const launcherSource=path.resolve('scripts/main-codex/desktop-launcher.cs'),compile=path.join(root,'compile.ps1');
+  fs.writeFileSync(compile,`$ErrorActionPreference='Stop'\nAdd-Type -TypeDefinition ([IO.File]::ReadAllText(${quote(stub)})) -OutputAssembly ${quote(path.join(app,'ChatGPT.exe'))} -OutputType WindowsApplication\nAdd-Type -TypeDefinition ([IO.File]::ReadAllText(${quote(launcherSource)})) -OutputAssembly ${quote(path.join(root,'desktop-launcher.exe'))} -OutputType WindowsApplication -ReferencedAssemblies @('System.dll','System.Web.Extensions.dll')\n`);
+  execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-STA','-File',compile],{windowsHide:true,timeout:20000});
+  const active={exe:path.join(app,'ChatGPT.exe'),packageVersion:version,exeHash:sha(fs.readFileSync(path.join(app,'ChatGPT.exe')))};
+  fs.writeFileSync(path.join(dir,'active.json'),JSON.stringify(active));fs.writeFileSync(path.join(dir,'heartbeat'),'test');
+  const {spawn}=await import('node:child_process');
+  holder=spawn(path.join(app,'ChatGPT.exe'),['--hold'],{windowsHide:true,stdio:'ignore'});
+  for(let i=0;i<30&&!fs.existsSync(path.join(app,'dying.lock'));i++)await new Promise(r=>setTimeout(r,100));
+  assert(fs.existsSync(path.join(app,'dying.lock')));
+  execFileSync(path.join(root,'desktop-launcher.exe'),['--managed'],{windowsHide:true,timeout:20000});
+  assert.equal(fs.readFileSync(path.join(app,'count.txt'),'utf8'),'2');
+  const log=fs.readFileSync(path.join(root,'desktop-launcher.log'),'utf8');
+  assert.match(log,/Closing managed process exited; retrying launch/);
+  assert.match(log,/attempt=1/);
+ }finally{
+  try{holder?.kill();}catch{}
+  await new Promise(resolve=>setTimeout(resolve,1500));
+  assert(path.resolve(root).startsWith(path.resolve(os.tmpdir())+path.sep));fs.rmSync(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});
+ }
+});
