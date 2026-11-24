@@ -6,7 +6,7 @@
 function codexOrchestratorTurn(p, aeon, fallbackEffort) {
   try {
     if (!p || aeon != null || p.toolOutput != null || !p.input || !p.input.length) return p;
-    if (p.turnTrigger != null && p.turnTrigger !== 'composer' && p.turnTrigger !== 'goal' && p.turnTrigger !== 'edit_user_message') return p;
+    if (p.turnTrigger != null && p.turnTrigger !== 'composer' && p.turnTrigger !== 'goal' && p.turnTrigger !== 'edit_user_message' && p.turnTrigger !== 'queue') return p;
     var S = globalThis.__dotsOrchState;
     var externalState = false;
     var claimsFile = null;
@@ -17,14 +17,15 @@ function codexOrchestratorTurn(p, aeon, fallbackEffort) {
         claimsFile = __path.join(__dir, 'orchestrator-claims.json');
         var __raw = JSON.parse(__fs.readFileSync(__path.join(__dir, 'orchestrator-state.json'), 'utf8'));
         if (__raw && typeof __raw === 'object') {
-          var __cache = globalThis.__dotsOrchUtilityState || (globalThis.__dotsOrchUtilityState = { fresh: {}, claims: {}, consumedAt: 0 });
+          var __cache = globalThis.__dotsOrchUtilityState || (globalThis.__dotsOrchUtilityState = { fresh: {}, claims: {}, draftClaims: {}, consumedAt: 0 });
           var rawModes = __raw.modes && typeof __raw.modes === 'object' ? __raw.modes : {};
           for (var ck in __cache.claims) {
             if (Object.prototype.hasOwnProperty.call(__cache.claims, ck) && Object.prototype.hasOwnProperty.call(rawModes, ck)) {
               delete __cache.claims[ck];
+              if (__cache.draftClaims) delete __cache.draftClaims[ck];
             }
           }
-          S = { modes: Object.assign({}, rawModes, __cache.claims), pending: __raw.pending || null, note: __raw.note || '', notes: __raw.notes || null, disabled: __raw.disabled || null, defaultMode: __raw.defaultMode || null, scope: __raw.scope || null, scopeMode: __raw.scopeMode || null, fresh: __cache.fresh, claims: __cache.claims, consumedAt: Math.max(__cache.consumedAt || 0, __raw.consumedAt || 0) };
+          S = { modes: Object.assign({}, rawModes, __cache.claims), pending: __raw.pending || null, note: __raw.note || '', defaultNote: __raw.defaultNote || '', notes: __raw.notes || null, disabled: __raw.disabled || null, defaultMode: __raw.defaultMode || null, scope: __raw.scope || null, scopeMode: __raw.scopeMode || null, viewScopes: __raw.viewScopes || null, fresh: __cache.fresh, claims: __cache.claims, draftClaims: __cache.draftClaims || (__cache.draftClaims = {}), consumedAt: Math.max(__cache.consumedAt || 0, __raw.consumedAt || 0) };
           if (S.pending && Number.isFinite(S.pending.at) && S.pending.at <= S.consumedAt) S.pending = null;
           externalState = true;
         }
@@ -35,35 +36,44 @@ function codexOrchestratorTurn(p, aeon, fallbackEffort) {
     var valid = function (m) { return typeof m === 'string' && (m === 'off' || has(CODEX_ORCH_TEXT, m)); };
     var scopeId = String(p.threadId), mode = null;
     var fresh = S.fresh || (S.fresh = {});
+    var claims = S.claims || (S.claims = {});
+    var draftClaims = S.draftClaims || (S.draftClaims = {});
     var view = typeof S.scope === 'string' ? S.scope : null;
-    var draftView = p.turnTrigger !== 'goal' && p.turnTrigger !== 'edit_user_message' && !!view && view.indexOf('draft:') === 0;
+    var viewScopes = S.viewScopes && typeof S.viewScopes === 'object' ? S.viewScopes : null;
     var known = has(S.modes, scopeId);
+    var openInComposer = !!(viewScopes && has(viewScopes, scopeId) && valid(viewScopes[scopeId]));
+    var draftView = p.turnTrigger !== 'goal' && p.turnTrigger !== 'edit_user_message' && p.turnTrigger !== 'queue' && p.expectedTurnId == null && !openInComposer && !!view && view.indexOf('draft:') === 0;
     var claimed = false;
+    var claimedFromDraft = false;
     if (draftView && (!known || fresh[scopeId])) {
       // Sent from the new-chat composer: the chat starts with the mode shown there (a later change in that same view wins).
       var pe = S.pending;
       mode = valid(S.scopeMode) ? S.scopeMode : pe && valid(pe.mode) ? pe.mode : valid(S.modes['draft:new']) ? S.modes['draft:new'] : S.defaultMode;
       fresh[scopeId] = true;
+      claimedFromDraft = true;
       if (pe && Number.isFinite(pe.at)) { S.consumedAt = Math.max(S.consumedAt || 0, pe.at); S.pending = null; claimed = true; }
     } else {
       if (!draftView && fresh[scopeId]) delete fresh[scopeId];
       if (known) mode = S.modes[scopeId];
+      else if (openInComposer) mode = viewScopes[scopeId];
       else mode = view === scopeId && valid(S.scopeMode) ? S.scopeMode : S.defaultMode;
     }
     if (!valid(mode)) mode = 'off';
-    if (!known || (draftView && fresh[scopeId])) { S.modes[scopeId] = mode; S.claims[scopeId] = mode; claimed = true; } // the picker adopts exactly what was used
+    if (!known || (draftView && fresh[scopeId])) { S.modes[scopeId] = mode; claims[scopeId] = mode; if (claimedFromDraft) draftClaims[scopeId] = true; claimed = true; } // the picker adopts exactly what was used
     if (externalState && claimed && claimsFile) {
       try {
         var __fs2 = require('node:fs'), __tmp = claimsFile + '.tmp-' + process.pid;
         if (globalThis.__dotsOrchUtilityState) globalThis.__dotsOrchUtilityState.consumedAt = S.consumedAt || 0;
-        __fs2.writeFileSync(__tmp, JSON.stringify({ claims: S.claims, consumedAt: S.consumedAt || 0 }), { mode: 0o600 });
+        __fs2.writeFileSync(__tmp, JSON.stringify({ claims: claims, draftClaims: draftClaims, consumedAt: S.consumedAt || 0 }), { mode: 0o600 });
         __fs2.renameSync(__tmp, claimsFile);
       } catch (e) {}
     }
     if (mode === 'off' || (Array.isArray(S.disabled) && S.disabled.indexOf(mode) >= 0)) mode = null; // switched off in the Damndots dashboard
     // The subagent model note is stored per chat; a fresh chat sent from the new-chat composer uses the draft selection, like the mode.
     var notes = S.notes || null;
-    var note = notes ? (has(notes, scopeId) ? notes[scopeId] : (draftView ? (notes['draft:new'] || '') : '')) : (S.note || '');
+    var defaultNote = typeof S.defaultNote === 'string' ? S.defaultNote : '';
+    var fromDraft = !!(draftView || draftClaims[scopeId]);
+    var note = notes ? (has(notes, scopeId) ? notes[scopeId] : (fromDraft ? (has(notes, 'draft:new') ? notes['draft:new'] : defaultNote) : defaultNote)) : (S.note || defaultNote);
     var context = Object.assign({}, p.additionalContext);
     var cmEffort = p.collaborationMode && p.collaborationMode.settings ? p.collaborationMode.settings.reasoning_effort : null;
     var effort = cmEffort != null ? cmEffort : p.effort != null ? p.effort : fallbackEffort;

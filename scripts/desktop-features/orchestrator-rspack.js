@@ -38,12 +38,27 @@ function codexRspackBoot(){
  if(window.__codexRspackBooted)return;window.__codexRspackBooted=true;
  var last=null,timer=0,syncedAt=0;
  window.addEventListener('codex-orchestrator-change',function(){syncedAt=Date.now();try{codexOrchestratorSync()}catch(e){}schedule()});
+ window.addEventListener('focus',function(){syncedAt=Date.now();try{codexOrchestratorSync()}catch(e){}});
+ document.addEventListener('focusin',function(e){
+  try{
+   var n=e.target;
+   for(var d=0;d<14&&n&&n!==document.body;d++,n=n.parentElement){
+    var bs=n.querySelectorAll&&n.querySelectorAll('button[data-codex-subagent-trigger]');
+    if(bs&&bs.length===1){
+     var sc=(bs[0].__codexInst&&bs[0].__codexInst.scope)||bs[0].getAttribute('data-codex-scope');
+     if(sc&&sc!==window.__codexFocusedScope){window.__codexFocusedScope=sc;syncedAt=Date.now();codexOrchestratorSync();}
+     break;
+    }
+    if(bs&&bs.length>1)break;
+   }
+  }catch(err){}
+ },true);
  function tick(){
   timer=0;
   try{if(Date.now()-syncedAt>1000){syncedAt=Date.now();codexOrchestratorSync()}}catch(e){}
   try{
    var scope=codexOrchestratorComposerScope();if(scope!==last){last=scope;window.dispatchEvent(new Event('codex-orchestrator-change'));}
-   try{var sb=document.querySelector('button[data-codex-subagent-trigger]');if(sb){var lbl=window.__codexOrchShortLabel?window.__codexOrchShortLabel():'';if(lbl&&sb.getAttribute('data-dots-label')!==lbl)sb.setAttribute('data-dots-label',lbl);var offFlag=window.__codexOrchIsOff&&window.__codexOrchIsOff()?'1':'';if(sb.getAttribute('data-dots-off')!==offFlag)sb.setAttribute('data-dots-off',offFlag)}}catch(e){}
+   try{var sbs=document.querySelectorAll('button[data-codex-subagent-trigger]');for(var q=0;q<sbs.length;q++){var sb=sbs[q],sc=(sb.__codexInst&&sb.__codexInst.scope)||sb.getAttribute('data-codex-scope')||scope,lbl=window.__codexOrchShortLabel?window.__codexOrchShortLabel(sc):'';if(lbl&&sb.getAttribute('data-dots-label')!==lbl)sb.setAttribute('data-dots-label',lbl);var offFlag=window.__codexOrchIsOff&&window.__codexOrchIsOff(sc)?'1':'';if(sb.getAttribute('data-dots-off')!==offFlag)sb.setAttribute('data-dots-off',offFlag)}}catch(e){}
    if(typeof window.__codexComposerModelPicker==='function')return; // native picker integration renders the orchestrator itself
    var btn=document.querySelector('[data-composer-navigation-target="reasoning"]');if(!btn)return;
    var bar=btn.parentElement&&btn.parentElement.parentElement;if(!bar)return;

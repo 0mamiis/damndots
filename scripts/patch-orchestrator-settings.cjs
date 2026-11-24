@@ -11,10 +11,12 @@ patch('webview/assets/'+initial,s=>{
  const begin=s.indexOf('function codexOrchestratorSubmodelGet()'),end=s.indexOf('function codexOrchestratorModelList()',begin);
  if(begin<0||end<0)throw Error('Subagent preference functions missing');
  let part=s.slice(begin,end);
- part=rep(part,'if (v && ((typeof v.model','if(v&&v.explicit===true)return null; if (v && ((typeof v.model');
- part=rep(part,'  return null;','  return damndotsOrchestratorPreferences.model||damndotsOrchestratorPreferences.fast?{model:damndotsOrchestratorPreferences.model,effort:damndotsOrchestratorPreferences.effort,fast:damndotsOrchestratorPreferences.fast}:null;');
- part=rep(part,'localStorage.removeItem(CODEX_ORCH_SUBMODEL_KEY);','localStorage.setItem(CODEX_ORCH_SUBMODEL_KEY,JSON.stringify({explicit:true}));');
- part=rep(part,'effort: v.effort || null }','effort: v.effort || null, fast:v.fast===true }');
+ if(!part.includes('__damndotsOrchestratorDefaults')){
+  part=rep(part,'if (v && ((typeof v.model','if(v&&v.explicit===true)return null; if (v && ((typeof v.model');
+  part=rep(part,'  return null;','  return damndotsOrchestratorPreferences.model||damndotsOrchestratorPreferences.fast?{model:damndotsOrchestratorPreferences.model,effort:damndotsOrchestratorPreferences.effort,fast:damndotsOrchestratorPreferences.fast}:null;');
+  part=rep(part,'localStorage.removeItem(CODEX_ORCH_SUBMODEL_KEY);','localStorage.setItem(CODEX_ORCH_SUBMODEL_KEY,JSON.stringify({explicit:true}));');
+  part=rep(part,'effort: v.effort || null }','effort: v.effort || null, fast:v.fast===true }');
+ }
  s=s.slice(0,begin)+part+s.slice(end);
  s=rep(s,'R.useEffect(damndotsWatchTpsPreferences,[]);','R.useEffect(damndotsWatchOrchestratorPreferences,[]);R.useEffect(damndotsWatchTpsPreferences,[]);');
  return s+'\n'+fs.readFileSync(path.join(__dirname,'orchestrator-renderer.js'),'utf8');
