@@ -21,8 +21,19 @@ public static class DotsNativeResume {
  [DllImport("kernel32.dll",SetLastError=true)]static extern bool TerminateProcess(IntPtr process,uint code);
  [DllImport("kernel32.dll",CharSet=CharSet.Unicode)]static extern int GetPackageFullName(IntPtr process,ref uint length,StringBuilder name);
  [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern bool QueryFullProcessImageName(IntPtr process,uint flags,StringBuilder name,ref uint size);
+ [DllImport("kernel32.dll",SetLastError=true)]static extern bool ReadProcessMemory(IntPtr process,IntPtr address,byte[] buffer,int size,out IntPtr read);
+ [DllImport("ntdll.dll")]static extern int NtQueryInformationProcess(IntPtr process,int infoClass,ref ProcessBasicInformation info,int length,out int returnLength);
  [DllImport("kernel32.dll")]static extern bool CloseHandle(IntPtr handle);
+ [StructLayout(LayoutKind.Sequential)]struct ProcessBasicInformation {
+  public IntPtr Reserved1;
+  public IntPtr PebBaseAddress;
+  public IntPtr Reserved2_0;
+  public IntPtr Reserved2_1;
+  public IntPtr UniqueProcessId;
+  public IntPtr Reserved3;
+ }
  static string Mode="original";
+ static string ArgSummary="";
  public static string PackageName(uint pid){
   IntPtr process=OpenProcess(0x1000,false,pid);if(process==IntPtr.Zero)return null;
   try{uint size=0;int status=GetPackageFullName(process,ref size,null);if(status!=122)return null;
@@ -32,6 +43,44 @@ public static class DotsNativeResume {
  public static string ImageName(uint pid){
   IntPtr process=OpenProcess(0x1000,false,pid);if(process==IntPtr.Zero)return null;
   try{uint size=32768;var name=new StringBuilder((int)size);return QueryFullProcessImageName(process,0,name,ref size)?name.ToString():null;}finally{CloseHandle(process);}
+ }
+ // Read the suspended package process command line from its PEB so protocol callbacks (e.g. --single-argument codex://...)
+ // survive redirection to the managed desktop copy instead of being dropped when the suspended process is terminated.
+ public static string ReadCommandLine(uint pid){
+  IntPtr process=OpenProcess(0x0410,false,pid);if(process==IntPtr.Zero)return null;
+  try{
+   var pbi=new ProcessBasicInformation();int retLen;
+   if(NtQueryInformationProcess(process,0,ref pbi,Marshal.SizeOf(typeof(ProcessBasicInformation)),out retLen)!=0||pbi.PebBaseAddress==IntPtr.Zero)return null;
+   bool is64=IntPtr.Size==8;
+   int paramsOffset=is64?0x20:0x10,cmdOffset=is64?0x70:0x40,ptrSize=IntPtr.Size,bufOffset=is64?8:4;
+   var ptrBuf=new byte[ptrSize];IntPtr read;
+   if(!ReadProcessMemory(process,IntPtr.Add(pbi.PebBaseAddress,paramsOffset),ptrBuf,ptrSize,out read)||read.ToInt64()!=ptrSize)return null;
+   IntPtr procParams=is64?new IntPtr(BitConverter.ToInt64(ptrBuf,0)):new IntPtr(BitConverter.ToInt32(ptrBuf,0));
+   if(procParams==IntPtr.Zero)return null;
+   var usBuf=new byte[bufOffset+ptrSize];
+   if(!ReadProcessMemory(process,IntPtr.Add(procParams,cmdOffset),usBuf,usBuf.Length,out read)||read.ToInt64()!=usBuf.Length)return null;
+   ushort byteLen=BitConverter.ToUInt16(usBuf,0);
+   IntPtr cmdPtr=is64?new IntPtr(BitConverter.ToInt64(usBuf,bufOffset)):new IntPtr(BitConverter.ToInt32(usBuf,bufOffset));
+   if(byteLen==0||cmdPtr==IntPtr.Zero)return null;
+   var cmdBuf=new byte[byteLen];
+   if(!ReadProcessMemory(process,cmdPtr,cmdBuf,byteLen,out read)||read.ToInt64()<=0)return null;
+   return Encoding.Unicode.GetString(cmdBuf,0,(int)read).TrimEnd('\0');
+  }catch{return null;}finally{CloseHandle(process);}
+ }
+ public static string ExtractArgs(string commandLine){
+  if(string.IsNullOrEmpty(commandLine))return "";
+  int i=0,n=commandLine.Length;
+  while(i<n&&(commandLine[i]==' '||commandLine[i]=='\t'))i++;
+  if(i>=n)return "";
+  if(commandLine[i]=='"'){i++;while(i<n&&commandLine[i]!='"')i++;if(i<n)i++;}
+  else{while(i<n&&commandLine[i]!=' '&&commandLine[i]!='\t')i++;}
+  while(i<n&&(commandLine[i]==' '||commandLine[i]=='\t'))i++;
+  return i<n?commandLine.Substring(i).TrimEnd('\0'):"";
+ }
+ static string SafeArgSummary(string rawArgs){
+  if(string.IsNullOrEmpty(rawArgs))return "";
+  if(rawArgs.IndexOf("codex://",StringComparison.OrdinalIgnoreCase)>=0)return " args=codex-uri";
+  return " args=present";
  }
  static string Unescape(string value){
   return Regex.Replace(value,@"\\(u[0-9a-fA-F]{4}|.)",delegate(Match m){
@@ -60,6 +109,8 @@ public static class DotsNativeResume {
  }
  static bool TryManagedRedirect(uint pid,string package,string directory){
   try{
+   string img=ImageName(pid);
+   if(img!=null&&!String.Equals(Path.GetFileName(img),"ChatGPT.exe",StringComparison.OrdinalIgnoreCase))return false;
    string heartbeat=Path.Combine(directory,"heartbeat");
    if(!File.Exists(heartbeat)||(DateTime.UtcNow-File.GetLastWriteTimeUtc(heartbeat)).TotalSeconds>20)return false;
    string active=Path.Combine(directory,"active.json");
@@ -72,20 +123,24 @@ public static class DotsNativeResume {
    using(var sha=System.Security.Cryptography.SHA256.Create())using(var stream=File.OpenRead(exe)){
     string actual=BitConverter.ToString(sha.ComputeHash(stream)).Replace("-","").ToLowerInvariant();if(actual!=expectedHash)return false;
    }
+   string rawArgs=ExtractArgs(ReadCommandLine(pid));
    string launcher=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"desktop-launcher.exe");
    var start=new System.Diagnostics.ProcessStartInfo(File.Exists(launcher)?launcher:exe){UseShellExecute=false,WorkingDirectory=Path.GetDirectoryName(exe)};
-   if(File.Exists(launcher))start.Arguments="--managed";
+   if(File.Exists(launcher))start.Arguments=string.IsNullOrEmpty(rawArgs)?"--managed":"--managed -- "+rawArgs;
+   else if(!string.IsNullOrEmpty(rawArgs))start.Arguments=rawArgs;
    string file=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"environment.json");
    if(File.Exists(file)){string json=File.ReadAllText(file);int at=json.IndexOf("\"environment\"",StringComparison.Ordinal);if(at>=0)foreach(var pair in ReadPairs(json.Substring(at+13)))start.EnvironmentVariables[pair.Key]=pair.Value;}
    if(System.Diagnostics.Process.Start(start)==null)return false;
    IntPtr original=OpenProcess(1,false,pid);if(original!=IntPtr.Zero){try{TerminateProcess(original,0);}finally{CloseHandle(original);}}
-   Mode="damndots-managed";return true;
+   Mode="damndots-managed";ArgSummary=SafeArgSummary(rawArgs);return true;
   }catch{return false;}
  }
  static bool TryRedirect(uint pid,string package){
   try{
    string managed=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"desktop-features");
    if(Directory.Exists(managed))return TryManagedRedirect(pid,package,managed);
+   string img=ImageName(pid);
+   if(img!=null&&!String.Equals(Path.GetFileName(img),"ChatGPT.exe",StringComparison.OrdinalIgnoreCase))return false;
    string home=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),"CodexPatched");
    string config=Path.Combine(home,"patched-codex.json");
    if(!File.Exists(config)||File.Exists(Path.Combine(home,"devre-disi")))return false;
@@ -97,9 +152,11 @@ public static class DotsNativeResume {
    string[] parts=package.Split('_');
    if(parts.Length<2||parts[1]!=version)return false;
    if(!ApplyPermissionUpdate(home))return false;
+   string rawArgs=ExtractArgs(ReadCommandLine(pid));
    var start=new System.Diagnostics.ProcessStartInfo(exe);
    start.UseShellExecute=false;
    start.WorkingDirectory=Path.GetDirectoryName(exe);
+   if(!string.IsNullOrEmpty(rawArgs))start.Arguments=rawArgs;
    string environmentFile=Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"environment.json");
    if(File.Exists(environmentFile)){
     string json=File.ReadAllText(environmentFile);
@@ -110,6 +167,7 @@ public static class DotsNativeResume {
    IntPtr original=OpenProcess(1,false,pid);
    if(original!=IntPtr.Zero){try{TerminateProcess(original,0);}finally{CloseHandle(original);}}
    Mode="patched";
+   ArgSummary=SafeArgSummary(rawArgs);
    return true;
   }catch{return false;}
  }
@@ -126,7 +184,7 @@ public static class DotsNativeResume {
   uint pid=0,tid=0;
   for(int i=0;i+1<args.Length;i++){if(args[i]=="-p")uint.TryParse(args[++i],out pid);else if(args[i]=="-tid")uint.TryParse(args[++i],out tid);}
   int result=pid==0||tid==0?2:Resume(pid,tid);
-  try{File.AppendAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"native-resume.log"),DateTime.UtcNow.ToString("o")+" pid="+pid+" tid="+tid+" result="+result+" mode="+Mode+Environment.NewLine);}catch{}
+  try{File.AppendAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"native-resume.log"),DateTime.UtcNow.ToString("o")+" pid="+pid+" tid="+tid+" result="+result+" mode="+Mode+ArgSummary+Environment.NewLine);}catch{}
   return result;
  }
 }
