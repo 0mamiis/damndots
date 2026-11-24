@@ -153,3 +153,129 @@ test('codexOrchestratorInject injects developer item for goals/queues and skips 
   assert.equal(sent.length, 1, 'durable conversations must not be injected');
 });
 
+test('queue turnTrigger receives active orchestrator mode and does not steal draft selection', () => {
+  const {S, run} = mainFixture({modes: {'draft:new': 'swarm', 'queued-chat': 'lead'}, pending: {mode: 'swarm', at: Date.now()}, scope: 'draft:new', scopeMode: 'swarm'});
+  assert.match(run('queued-chat', 'queue'), /^\[ORKESTRATÖR MODU: LEAD/);
+  assert.match(run('other-queued', 'queue'), /^\[ORCHESTRATOR OFF/);
+  assert.ok(S.pending, 'queue turns must not consume the draft pending selection');
+});
+
+test('viewScopes isolates a secondary open composer from draftView and applies its own mode', () => {
+  const {S, run} = mainFixture({
+    modes: {'draft:new': 'swarm'},
+    pending: {mode: 'swarm', at: Date.now()},
+    scope: 'draft:new',
+    scopeMode: 'swarm',
+    viewScopes: {'draft:new': 'swarm', 'side-chat': 'lead'}
+  });
+  assert.match(run('side-chat'), /^\[ORKESTRATÖR MODU: LEAD/);
+  assert.equal(S.claims['side-chat'], 'lead');
+  assert.ok(!S.draftClaims || !S.draftClaims['side-chat'], 'secondary open composer must not be marked as a draft claim');
+  assert.ok(S.pending, 'secondary open composer must not consume draft pending');
+});
+
+test('draftClaims preserves draft subagent note on turn 2 until renderer sync copies it', () => {
+  const {S, run} = mainFixture({
+    modes: {'draft:new': 'swarm'},
+    scope: 'draft:new',
+    scopeMode: 'swarm',
+    notes: {'draft:new': '\n\n[ALT AJAN MODELİ — DRAFT]'},
+    defaultNote: ''
+  });
+  const t1 = run('new-chat-1');
+  assert.match(t1, /^\[ORKESTRATÖR MODU: SWARM/);
+  assert.match(t1, /\[ALT AJAN MODELİ — DRAFT\]/);
+  assert.equal(S.draftClaims['new-chat-1'], true);
+  // Turn 2 arrives (e.g. steer/follow-up) after scope moved, before renderer copied submodel into notes['new-chat-1'].
+  S.scope = 'new-chat-1';
+  S.scopeMode = 'swarm';
+  const t2 = run('new-chat-1', 'composer', {expectedTurnId: 'turn-1'});
+  assert.match(t2, /\[ALT AJAN MODELİ — DRAFT\]/);
+});
+
+test('codexScopeFromConvId normalizes prefixes and draft ids; model list uses __codexPickerModels and dashboard defaults', () => {
+  const subEnd = source.indexOf('function codexOrchestratorCls(');
+  assert.ok(subEnd > 0, 'submodel helper boundary missing');
+  const subSrc = source.slice(0, subEnd);
+  const store = new Map();
+  const localStorage = {
+    getItem: k => (store.has(String(k)) ? store.get(String(k)) : null),
+    setItem: (k, v) => { store.set(String(k), String(v)); },
+    removeItem: k => { store.delete(String(k)); }
+  };
+  const win = {
+    __damndotsOrchestratorDefaults: {model: 'gpt-5.4-mini', effort: 'high', fast: true},
+    __codexPickerModels: {
+      sub: {
+        models: [
+          {model: 'gpt-5.4-mini', supportedReasoningEfforts: [{reasoningEffort: 'low'}, {reasoningEffort: 'high'}], serviceTiers: [{id: 'priority', name: 'Fast'}]},
+          {model: 'gpt-no-fast', supportedReasoningEfforts: [{reasoningEffort: 'medium'}], serviceTiers: []}
+        ]
+      }
+    },
+    dispatchEvent() {}
+  };
+  const ctx = vm.createContext({window: win, localStorage, navigator: {language: 'en-US'}, Event: class Event { constructor(t) { this.type = t; } }, codexOrchestratorComposerScope: () => 'chat-a', Object, Array, JSON, String, Number, Math});
+  vm.runInContext(subSrc, ctx);
+  assert.equal(ctx.codexScopeFromConvId('codex:thread:abc-123'), 'abc-123');
+  assert.equal(ctx.codexScopeFromConvId('local:abc-123'), 'abc-123');
+  assert.equal(ctx.codexScopeFromConvId('client-new-thread:99'), 'draft:new');
+  assert.equal(ctx.codexScopeFromConvId('home'), 'draft:new');
+  assert.equal(ctx.codexScopeFromConvId(null), 'draft:new');
+
+  // Dashboard default applies with Fast when supported by model list from __codexPickerModels.
+  const defNote = ctx.codexOrchestratorModelNote('chat-a');
+  assert.match(defNote, /model="gpt-5\.4-mini"/);
+  assert.match(defNote, /reasoning_effort="high"/);
+  assert.match(defNote, /ALT AJAN FAST/);
+
+  // Unsupported fast and effort are stripped using __codexPickerModels metadata.
+  store.set('codex-orchestrator-subagent-model-v2:chat-b', JSON.stringify({model: 'gpt-no-fast', effort: 'ultra', fast: true}));
+  const noFastNote = ctx.codexOrchestratorModelNote('chat-b');
+  assert.match(noFastNote, /model="gpt-no-fast"/);
+  assert.match(noFastNote, /omit reasoning_effort/);
+  assert.doesNotMatch(noFastNote, /ALT AJAN FAST/);
+
+  // Explicit clear overrides dashboard default.
+  win.__codexSubScopeOverride = 'chat-c';
+  ctx.codexOrchestratorSubmodelSet(null);
+  win.__codexSubScopeOverride = null;
+  assert.equal(ctx.codexOrchestratorModelNote('chat-c'), '');
+});
+
+test('orchestrator-main-ipc merges multi-window viewScopes and prefers focused window for scope', () => {
+  const ipcSource = fs.readFileSync(new URL('../desktop-features/orchestrator-main-ipc.js', import.meta.url), 'utf8');
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'damndots-orch-ipc-'));
+  try {
+    const handlers = new Map();
+    const fakeRequire = id => {
+      if (id === 'electron') return {
+        ipcMain: {handle: (ch, fn) => handlers.set(ch, fn)},
+        BrowserWindow: {fromWebContents: sender => ({isFocused: () => !!sender._focused})}
+      };
+      if (id === 'node:fs') return fs;
+      if (id === 'node:os') return {homedir: () => tmpHome};
+      if (id === 'node:path') return path;
+      throw new Error('unexpected require ' + id);
+    };
+    const g = {};
+    const ctx = vm.createContext({globalThis: g, require: fakeRequire, process: {pid: 4321}, Date, Object, Array, Number, String, JSON});
+    vm.runInContext(ipcSource, ctx);
+    const sync = handlers.get('damndots:orchestrator-sync');
+    assert.equal(typeof sync, 'function');
+
+    const ev1 = {senderFrame: {url: 'app://-/index.html'}, sender: {id: 1, _focused: true, once() {}}};
+    const ev2 = {senderFrame: {url: 'app://-/index.html'}, sender: {id: 2, _focused: false, once() {}}};
+    sync(ev1, {modes: {'chat-1': 'swarm'}, scope: 'chat-1', scopeMode: 'swarm', scopes: {'chat-1': 'swarm'}, focused: true, notes: {'chat-1': 'N1'}});
+    sync(ev2, {modes: {'chat-1': 'swarm', 'chat-2': 'lead'}, scope: 'draft:new', scopeMode: 'off', scopes: {'draft:new': 'off', 'chat-2': 'lead'}, focused: false, notes: {'chat-2': 'N2'}});
+
+    assert.equal(g.__dotsOrchState.scope, 'chat-1', 'focused window must remain the primary scope');
+    assert.equal(g.__dotsOrchState.scopeMode, 'swarm');
+    assert.equal(g.__dotsOrchState.viewScopes['chat-1'], 'swarm');
+    assert.equal(g.__dotsOrchState.viewScopes['chat-2'], 'lead');
+    assert.equal(g.__dotsOrchState.viewScopes['draft:new'], 'off');
+  } finally {
+    fs.rmSync(tmpHome, {recursive: true, force: true});
+  }
+});
+
