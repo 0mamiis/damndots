@@ -16,10 +16,10 @@ function picker(s,lit,sub,textClass){
  b=b.slice(0,b.length-(retVar.length+2))+',codexSubagentWrap('+R+',codexSub,'+retVar+',e)}';
  b=sub(b,/permissionsHostId:([\w$]+)\}=e,/g,(m,x)=>'permissionsHostId:'+x+',codexSubagent:codexSub}=e,',1,'picker props');
  b=sub(b,/let ([\w$]+)=(\(0,[\w$]+\.[\w$]+\)\([\w$]+\)),\{modelSettings:([\w$]+),selectComposerModelAndReasoningEffort:/g,(m,v,call,ms)=>'let '+v+'=codexSubagentSelection('+R+',codexSub,'+call+'),{modelSettings:'+ms+',selectComposerModelAndReasoningEffort:',1,'picker model selection');
- b=sub(b,/(\(0,[\w$]+\.[\w$]+\))\("(composer\.(?:openModelPicker|toggleFastMode|increaseReasoningEffort|decreaseReasoningEffort|cycleReasoningEffort))",([\w$]+),([\w$]+)\)/g,(m,f,k,h,o)=>f+'("'+k+'",codexSubagentHotkey(codexSub,"'+k+'",'+h+'),codexSub?{enabled:!1}:'+o+')',5,'picker hotkeys');
+ b=wrapHotkeys(b);
  b=sub(b,/([\w$]+)=(\(0,[\w$]+\.[\w$]+\)\([\w$]+\.[\w$]+,"composer\.openModelPicker"\))/g,(m,v,call)=>v+'=codexSubagentShortcut(codexSub,'+call+')',1,'picker shortcut');
  {const lm=b.match(/serviceTierAccess:[\w$]+\}=\(0,[\w$]+\.[\w$]+\)\([\w$]+\),[\w$]+=\(0,[\w$]+\.[\w$]+\)\([\w$]+\.[\w$]+,[\w$]+\),[\w$]+=\(0,[\w$]+\.[\w$]+\)\(([\w$]+),([\w$]+)\)/);if(!lm)throw Error('Unsupported Codex picker model list');
-  b=sub(b,/\{serviceTierSettings:([\w$]+),setServiceTier:([\w$]+)\}=(\(0,[\w$]+\.[\w$]+\)\([\w$]+,[\w$]+(?:\?\?[\w$]+)?\))/g,(m,a,c,call)=>'{serviceTierSettings:'+a+',setServiceTier:'+c+'}=codexSubagentTier(codexSub,'+call+','+lm[1]+','+lm[2]+')',1,'picker service tier');}
+  b=sub(b,/\{serviceTierSettings:([\w$]+),setServiceTier:([\w$]+)\}=(\(0,[\w$]+\.[\w$]+\)\([\w$.,?\s]+\))/g,(m,a,c,call)=>'{serviceTierSettings:'+a+',setServiceTier:'+c+'}=codexSubagentTier(codexSub,'+call+','+lm[1]+','+lm[2]+')',1,'picker service tier');}
  {const dn=b.match(/displayName:([\w$]+\?[\w$]+\?\.displayName:[\w$]+\?\.displayName\?\?[\w$]+),serviceTierIconKind/)||b.match(/\{model:[\w$]+,displayName:([\w$]+),serviceTierIconKind:[\w$]+,stripGptPrefix:!0\}/);if(!dn)throw Error('Unsupported Codex picker model label');
   // The picker's own trigger (modelPickerTriggerConfig) renders selectedLabel; for the subagent instance it becomes the orchestrator label + model.
   b=sub(b,/selectedLabel:([\w$]+)\?(\(0,([\w$]+)\.jsxs\)\("span",\{className:"flex min-w-0 items-center gap-1",children:\[[\w$]+\?null:\(0,[\w$]+\.jsx\)\("span",\{"aria-hidden":"true",children:(?:"🌙"|"\\u\{1F319\}")\}\),(\(0,[\w$]+\.jsx\)\(([\w$]+\.P),\{model:([\w$]+),displayName:[\w$]+\?\.displayName,stripGptPrefix:!0\}\)),(\(0,[\w$]+\.jsx\)\([\w$]+\.O,\{collapse:"none",children:\(0,[\w$]+\.jsx\)\([\w$]+\.A,\{\.\.\.[\w$]+\.h\[([\w$]+)\]\}\)\}\))\]\}\)):void 0,/g,(m,flag,whole,jsx,modelEl,comp,model,eff,effVar)=>'selectedLabel:codexSub?codexSubagentTriggerChild('+R+',(0,'+jsx+'.jsxs)("span",{className:"flex min-w-0 items-center gap-1",children:[(0,'+jsx+'.jsx)("span",{style:{color:"var(--color-text-primary)"},children:codexSubagentModel('+R+','+comp+',{model:'+model+',displayName:'+dn[1]+',stripGptPrefix:!0,labelClassName:"'+textClass+'"})}),'+'codexSubagentEffort('+R+','+eff+','+effVar+')]})):'+flag+'?'+whole+':void 0,',1,'picker trigger label');}
@@ -30,6 +30,28 @@ function picker(s,lit,sub,textClass){
  s=sub(s,/(\(0,[\w$]+\.jsx\)\([\w$]+\.[\w$]+,\{)(active:[^,]+,(?:openTiming:[^,]+,selectionTiming:[^,]+,triggerRef:[\w$]+,)?(?:compactAutoModel:"auto",selectedModel:[\w$]+,)?fallbackModelLabel:[\w$]+,isExplicitModelSelection:(?:[\w$]+|"model"===[\w$]+),menuFooter:)/g,(m,a,x)=>a+'menuHeader:codexMH,'+x,1,'dropdown menu header');
  s=sub(s,/(\(0,[\w$]+\.jsx\)\([\w$]+\.Y,\{)((?:openTiming:[\w$]+,selectionTiming:[\w$]+,)?(?:compactAutoModel:"auto",)?contentRef:[\w$]+,disabled:[\w$]+,isExplicitModelSelection:(?:[\w$]+|"model"===[\w$]+),keepSimpleView:(?:[\w$]+|null!=[\w$]+),menuFooter:)/g,(m,a,x)=>a+'menuHeader:codexMH,'+x,1,'dropdown unified menu header');
  return s+'\n'+helpers(BT)+'try{window.__codexModelTextClass="'+textClass+'"}catch(e){}\n';
+}
+function wrapHotkeys(src){
+ const startRe=/(\(0,[\w$]+\.[\w$]+\))\("(composer\.(?:openModelPicker|toggleFastMode|increaseReasoningEffort|decreaseReasoningEffort|cycleReasoningEffort))",/g;
+ const matches=[...src.matchAll(startRe)];
+ if(matches.length!==5)throw Error('Unsupported Codex picker hotkeys');
+ let out='',pos=0;
+ for(const m of matches){
+  const argStart=m.index+m[0].length;
+  let i=argStart,depth=0,q=null,esc=false,comma1=-1,end=-1;
+  for(;i<src.length;i++){
+   const c=src[i];
+   if(q){if(esc)esc=false;else if(c==='\\')esc=true;else if(c===q)q=null;continue;}
+   if(c==='"'||c==='\''||c==='`'){q=c;continue;}
+   if(c==='('||c==='{'||c==='[')depth++;
+   else if(c===')'||c==='}'||c===']'){if(depth===0&&c===')'){end=i;break;}depth--;}
+   else if(c===','&&depth===0&&comma1<0)comma1=i;
+  }
+  if(comma1<0||end<0)throw Error('Unsupported Codex picker hotkeys');
+  out+=src.slice(pos,m.index)+m[1]+'("'+m[2]+'",codexSubagentHotkey(codexSub,"'+m[2]+'",'+src.slice(argStart,comma1)+'),codexSub?{enabled:!1}:'+src.slice(comma1+1,end)+')';
+  pos=end+1;
+ }
+ return out+src.slice(pos);
 }
 function slider(s){
  if(s.includes('window.__codexNativeOrchPowerSlider'))return s;
