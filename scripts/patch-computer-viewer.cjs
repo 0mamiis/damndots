@@ -15,12 +15,12 @@ const assetText=n=>body.subarray(+assets[n].offset,+assets[n].offset+assets[n].s
 const pick=needle=>{const hits=Object.keys(assets).filter(n=>/.js$/.test(n)&&assetText(n).includes(needle));if(hits.length!==1)throw Error("Codex computer viewer bundle not unique: "+hits.length);return hits[0];};
 let view=null,panel=null,unified=null;
 try{view=pick("function g(e="+BT+"https://chatgpt.com/backend-api"+BT+"){");panel=pick("function K({apiBaseUrl:e="+BT+"https://chatgpt.com/backend-api"+BT);}
-catch(error){unified=require('./asar-locate.cjs').locate(meta,body,{needles:['Unsupported computer backend','useChatGptRouting'],label:'computer viewer'});}
+catch(error){unified=require('./asar-locate.cjs').locate(meta,body,{needles:['Unsupported computer backend','application/sdp'],label:'computer viewer'});}
 if(!unified&&(!view||!panel))throw Error('Codex computer viewer bundles missing');
 if(unified)patch('webview/assets/'+unified,s=>{
  if(s.includes('/* damndots-cua-computer-v2 */'))return s;
  // Codex 26.1029 inlines the endpoint builder and the host allow-list in one connect function.
- const re=/let ([\w$]+)=new URL\(([\w$]+)\);if\([^;]*?Unsupported computer backend"\);let ([\w$]+)=new URL\(\(0,[\w$]+\.[\w$]+\)\(\2,[\w$]+\)\);/;
+ const re=/let ([\w$]+)=new URL\(([\w$]+)\);if\([^;]*?Unsupported computer backend"\);let ([\w$]+)=new URL\(\(0,[\w$]+\.[\w$]+\)\(\2(?:,[\w$]+)?\)\);/;
  const m=s.match(re);if(!m)throw Error('Unsupported computer endpoint builder');
  return s.replace(re,()=>'let '+m[3]+'=new URL("https://localhost:'+port+'/backend-api/tbo/computer/sessions");/* damndots-cua-computer-v2 */');
 });
