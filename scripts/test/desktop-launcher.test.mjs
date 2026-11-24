@@ -35,6 +35,61 @@ test('windowless launcher applies a verified update, forwards the environment an
   assert(path.resolve(root).startsWith(path.resolve(os.tmpdir())+path.sep));fs.rmSync(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});
  }
 });
+test('windowless launcher forwards codex protocol arguments verbatim without logging sensitive query strings',{skip:!version},async()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'dots-launch-proto-')),dir=path.join(root,'desktop-features'),app=path.join(dir,'app');
+ try{
+  fs.mkdirSync(path.join(app,'resources'),{recursive:true});
+  const code=`using System;using System.IO;using System.Threading;public static class Fixture{public static void Main(string[] args){File.WriteAllLines(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,"args.txt"),args);Thread.Sleep(2500);}}`;
+  const stub=path.join(root,'fixture.cs');fs.writeFileSync(stub,code);
+  const launcherSource=path.resolve('scripts/main-codex/desktop-launcher.cs'),compile=path.join(root,'compile.ps1');
+  fs.writeFileSync(compile,["$ErrorActionPreference='Stop'",`Add-Type -TypeDefinition ([IO.File]::ReadAllText(${quote(stub)})) -OutputAssembly ${quote(path.join(app,'ChatGPT.exe'))} -OutputType WindowsApplication`,`Add-Type -TypeDefinition ([IO.File]::ReadAllText(${quote(launcherSource)})) -OutputAssembly ${quote(path.join(root,'desktop-launcher.exe'))} -OutputType WindowsApplication -ReferencedAssemblies @('System.dll','System.Web.Extensions.dll')`].join('\n'));
+  execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-STA','-File',compile],{windowsHide:true,timeout:20000});
+  const active={exe:path.join(app,'ChatGPT.exe'),packageVersion:version,exeHash:sha(fs.readFileSync(path.join(app,'ChatGPT.exe')))};
+  fs.writeFileSync(path.join(dir,'active.json'),JSON.stringify(active));fs.writeFileSync(path.join(dir,'heartbeat'),'test');
+  const url='codex://settings/connections?code=secret_oauth_code_123&state=codex_scheme__oauth_s_abc';
+  execFileSync(path.join(root,'desktop-launcher.exe'),['--managed','--','--single-argument',url],{windowsHide:true,timeout:20000});
+  const received=fs.readFileSync(path.join(app,'args.txt'),'utf8').trim().split(/\r?\n/);
+  assert.deepEqual(received,['--single-argument',url]);
+  const log=fs.readFileSync(path.join(root,'desktop-launcher.log'),'utf8');
+  assert.match(log,/args=forwarded/);
+  assert.doesNotMatch(log,/secret_oauth_code_123|oauth_s_abc/);
+ }finally{
+  await new Promise(resolve=>setTimeout(resolve,1200));
+  assert(path.resolve(root).startsWith(path.resolve(os.tmpdir())+path.sep));fs.rmSync(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});
+ }
+});
+test('native resume helper reads protocol arguments from a suspended process PEB',{skip:process.platform!=='win32'},()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'dots-resume-peb-'));
+ try{
+  const resumeSource=path.resolve('scripts/main-codex/native-resume.cs');
+  const probe=path.join(root,'probe.ps1');
+  const url='codex://settings/connections?code=test999&state=codex_scheme__oauth_s_xyz';
+  fs.writeFileSync(probe,[
+   "$ErrorActionPreference='Stop'",
+   `$helperSrc = @'`,
+   'public static class SuspSpawn {',
+   ' [StructLayout(LayoutKind.Sequential,CharSet=CharSet.Unicode)]struct STARTUPINFO{public int cb;public string a,b,c;public int d,e,f,g,h,i,j,k;public short l,m;public IntPtr n,o,p,q;}',
+   ' [StructLayout(LayoutKind.Sequential)]struct PROCESS_INFORMATION{public IntPtr hProcess,hThread;public uint dwProcessId,dwThreadId;}',
+   ' [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)]static extern bool CreateProcess(string app,string cmd,IntPtr pa,IntPtr ta,bool inherit,uint flags,IntPtr env,string cwd,ref STARTUPINFO si,out PROCESS_INFORMATION pi);',
+   ' [DllImport("kernel32.dll",SetLastError=true)]static extern bool TerminateProcess(IntPtr p,uint code);',
+   ' [DllImport("kernel32.dll")]static extern bool CloseHandle(IntPtr h);',
+   ' public static string Probe(string exe,string args){',
+   '  var si=new STARTUPINFO{cb=Marshal.SizeOf(typeof(STARTUPINFO))};PROCESS_INFORMATION pi;',
+   '  if(!CreateProcess(exe,"\\""+exe+"\\" "+args,IntPtr.Zero,IntPtr.Zero,false,4,IntPtr.Zero,null,ref si,out pi))throw new Exception("CreateProcess failed: "+Marshal.GetLastWin32Error());',
+   '  try{return DotsNativeResume.ExtractArgs(DotsNativeResume.ReadCommandLine(pi.dwProcessId));}',
+   '  finally{TerminateProcess(pi.hProcess,0);CloseHandle(pi.hThread);CloseHandle(pi.hProcess);}',
+   ' }',
+   '}',
+   "'@",
+   `Add-Type -TypeDefinition (([IO.File]::ReadAllText(${quote(resumeSource)})) + "\n" + $helperSrc)`,
+   `[SuspSpawn]::Probe((Join-Path $env:WINDIR 'System32\\cmd.exe'), '--single-argument ${url}')`
+  ].join('\n'));
+  const out=execFileSync('powershell.exe',['-NoProfile','-NonInteractive','-File',probe],{encoding:'utf8',windowsHide:true,timeout:20000}).trim();
+  assert.equal(out,'--single-argument '+url);
+ }finally{
+  assert(path.resolve(root).startsWith(path.resolve(os.tmpdir())+path.sep));fs.rmSync(root,{recursive:true,force:true,maxRetries:10,retryDelay:100});
+ }
+});
 test('windowless launcher waits for a slow-closing managed process before launching a fresh instance',{skip:!version},async()=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'dots-launch-slowquit-')),dir=path.join(root,'desktop-features'),app=path.join(dir,'app');
  let holder=null;

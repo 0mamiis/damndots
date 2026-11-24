@@ -13,10 +13,12 @@ public static class DotsDesktopLauncher {
  static readonly string Dir=Path.Combine(Root,"desktop-features");
  static readonly string App=Path.Combine(Dir,"app");
  const string AppId="OpenAI.Codex_2p2nqsd0c76g0!App";
+ const string PackageFamily="OpenAI.Codex_2p2nqsd0c76g0";
  [ComImport,Guid("2e941141-7f97-4756-ba1d-9decde894a3d"),InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]interface Activation {
   [PreserveSig]int ActivateApplication([MarshalAs(UnmanagedType.LPWStr)]string id,[MarshalAs(UnmanagedType.LPWStr)]string args,uint options,out uint pid);
  }
- static void Original(){var activation=(Activation)Activator.CreateInstance(Type.GetTypeFromCLSID(new Guid("45BA127D-10A8-46EA-8AB7-56EA9078943C")));try{uint pid;Marshal.ThrowExceptionForHR(activation.ActivateApplication(AppId,null,0,out pid));}finally{Marshal.ReleaseComObject(activation);}}
+ static void Original(string forwardArgs){var activation=(Activation)Activator.CreateInstance(Type.GetTypeFromCLSID(new Guid("45BA127D-10A8-46EA-8AB7-56EA9078943C")));try{uint pid;Marshal.ThrowExceptionForHR(activation.ActivateApplication(AppId,string.IsNullOrEmpty(forwardArgs)?null:forwardArgs,0,out pid));}finally{Marshal.ReleaseComObject(activation);}}
+ [DllImport("kernel32.dll",CharSet=CharSet.Unicode)]static extern int GetPackagesByPackageFamily(string family,ref uint count,IntPtr[] names,ref uint bufLen,char[] buffer);
  [DllImport("shell32.dll",CharSet=CharSet.Unicode)]static extern int SetCurrentProcessExplicitAppUserModelID(string id);
  [DllImport("user32.dll")]static extern bool IsWindowVisible(IntPtr hwnd);
  static Dictionary<string,object> Json(string file){return new JavaScriptSerializer().Deserialize<Dictionary<string,object>>(File.ReadAllText(file));}
@@ -54,18 +56,61 @@ public static class DotsDesktopLauncher {
    }
   }catch(Exception ex){Log("Staged build apply skipped: "+ex.Message);}
  }
- static ProcessStartInfo StartInfo(string exe){
+ static string StripExe(string commandLine){
+  if(string.IsNullOrEmpty(commandLine))return "";
+  int i=0,n=commandLine.Length;
+  while(i<n&&(commandLine[i]==' '||commandLine[i]=='\t'))i++;
+  if(i>=n)return "";
+  if(commandLine[i]=='"'){i++;while(i<n&&commandLine[i]!='"')i++;if(i<n)i++;}
+  else{while(i<n&&commandLine[i]!=' '&&commandLine[i]!='\t')i++;}
+  while(i<n&&(commandLine[i]==' '||commandLine[i]=='\t'))i++;
+  return i<n?commandLine.Substring(i):"";
+ }
+ static bool ConsumeFlag(ref string rest,string flag){
+  if(!rest.StartsWith(flag,StringComparison.Ordinal))return false;
+  if(rest.Length>flag.Length&&rest[flag.Length]!=' '&&rest[flag.Length]!='\t')return false;
+  int i=flag.Length;while(i<rest.Length&&(rest[i]==' '||rest[i]=='\t'))i++;
+  rest=rest.Substring(i);return true;
+ }
+ static string ParseLaunchArgs(string commandLine,out bool checkOnly,out bool managedOnly){
+  checkOnly=false;managedOnly=false;
+  string rest=StripExe(commandLine);
+  while(rest.Length>0){
+   if(ConsumeFlag(ref rest,"--check-only")){checkOnly=true;continue;}
+   if(ConsumeFlag(ref rest,"--managed")){managedOnly=true;continue;}
+   if(ConsumeFlag(ref rest,"--"))break;
+   break;
+  }
+  return rest;
+ }
+ static ProcessStartInfo StartInfo(string exe,string forwardArgs){
   var info=new ProcessStartInfo(exe){UseShellExecute=false,WorkingDirectory=App};
+  if(!string.IsNullOrEmpty(forwardArgs))info.Arguments=forwardArgs;
   var file=Path.Combine(Root,"environment.json");
   if(File.Exists(file)){var env=Json(file);foreach(var pair in (Dictionary<string,object>)env["environment"])info.EnvironmentVariables[pair.Key]=Convert.ToString(pair.Value);}
   return info;
+ }
+ static string InstalledPackageVersion(){
+  try{
+   uint count=0,bufLen=0;
+   int rc=GetPackagesByPackageFamily(PackageFamily,ref count,null,ref bufLen,null);
+   if(rc==0&&count==0)return "";
+   if(rc==122&&count>0){
+    var names=new IntPtr[count];var buf=new char[bufLen];
+    if(GetPackagesByPackageFamily(PackageFamily,ref count,names,ref bufLen,buf)==0&&count>0){
+     string full=Marshal.PtrToStringUni(names[0]);
+     if(!string.IsNullOrEmpty(full)){string[] parts=full.Split('_');if(parts.Length>=2)return parts[1];}
+    }
+   }
+  }catch{}
+  var query=new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"WindowsPowerShell","v1.0","powershell.exe"),"-NoProfile -NonInteractive -Command \"(Get-AppxPackage -Name OpenAI.Codex | Select-Object -First 1).Version.ToString()\""){UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true};
+  using(var process=Process.Start(query)){string version=process.StandardOutput.ReadToEnd().Trim();if(!process.WaitForExit(5000)||process.ExitCode!=0)return "";return version;}
  }
  static bool Ready(){
   string alive=Path.Combine(Dir,"heartbeat"),active=Path.Combine(Dir,"active.json");
   if(!File.Exists(alive)||(DateTime.UtcNow-File.GetLastWriteTimeUtc(alive)).TotalSeconds>20||!File.Exists(active))return false;
   var data=Json(active);string exe=Path.Combine(App,"ChatGPT.exe");
-  var query=new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),"WindowsPowerShell","v1.0","powershell.exe"),"-NoProfile -NonInteractive -Command \"(Get-AppxPackage -Name OpenAI.Codex | Select-Object -First 1).Version.ToString()\""){UseShellExecute=false,CreateNoWindow=true,RedirectStandardOutput=true};
-  using(var process=Process.Start(query)){string version=process.StandardOutput.ReadToEnd().Trim();if(!process.WaitForExit(5000)||process.ExitCode!=0||version!=(string)data["packageVersion"])return false;}
+  if(InstalledPackageVersion()!=(string)data["packageVersion"])return false;
   return String.Equals(Path.GetFullPath((string)data["exe"]),exe,StringComparison.OrdinalIgnoreCase)&&File.Exists(exe)&&Hash(exe)==(string)data["exeHash"];
  }
  // Dots services create services.lock while they start. A shortcut clicked during that window waits briefly instead of opening the unmanaged Codex.
@@ -100,7 +145,9 @@ public static class DotsDesktopLauncher {
  [STAThread] public static int Main(string[] args){
   try{
    SetCurrentProcessExplicitAppUserModelID(AppId);
-   if(args.Length>0&&args[0]=="--check-only"){bool ready=Ready();Log("check managed-ready="+ready+" pending="+File.Exists(Path.Combine(Dir,"startup-update","active.json")));return ready?0:2;}
+   bool checkOnly,managedOnly;
+   string forwardArgs=ParseLaunchArgs(Environment.CommandLine,out checkOnly,out managedOnly);
+   if(checkOnly){bool ready=Ready();Log("check managed-ready="+ready+" pending="+File.Exists(Path.Combine(Dir,"startup-update","active.json")));return ready?0:2;}
    using(var gate=new Mutex(false,"Local\\DamndotsDesktopLaunch")){
     if(!gate.WaitOne(15000))return 3;
     try{
@@ -109,15 +156,15 @@ public static class DotsDesktopLauncher {
      ApplyStaged();
      LinkPackageProfile();
      if(!Ready()){
-      if(args.Length>0&&args[0]=="--managed")return 4;
-      if(!WaitForDots()){Original();return 0;}
+      if(managedOnly)return 4;
+      if(!WaitForDots()){Original(forwardArgs);return 0;}
      }
      bool sawManaged=ManagedProcess();
      for(int attempt=0;attempt<3;attempt++){
       bool hadManagedBefore=ManagedProcess();
-      using(var child=Process.Start(StartInfo(Path.Combine(App,"ChatGPT.exe")))){
+      using(var child=Process.Start(StartInfo(Path.Combine(App,"ChatGPT.exe"),forwardArgs))){
        if(child==null)throw new Exception("Desktop process not created");
-       Log("launch pid="+child.Id+" attempt="+attempt);
+       Log("launch pid="+child.Id+" attempt="+attempt+(string.IsNullOrEmpty(forwardArgs)?"":" args=forwarded"));
        if(!child.WaitForExit(1800))return 0;
        if(child.ExitCode!=0){Log("Desktop exit="+child.ExitCode);return child.ExitCode;}
       }
