@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,mkdir,writeFile,rm,utimes,stat} from 'node:fs/promises';
-import {execFile} from 'node:child_process';
+import {execFile,spawn} from 'node:child_process';
 import {promisify} from 'node:util';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
@@ -40,4 +40,18 @@ test('concurrent manual launches cannot acquire the same lock; a crashed owner i
     await mkdir(lock);await writeFile(join(lock,'owner.json'),JSON.stringify({pid:2147483647}));
     const recovered=await acquireLaunchLock(lock);assert.ok(recovered);await recovered();
   }finally{await rm(dir,{recursive:true,force:true});}
+});
+
+test('a lock whose recorded PID now belongs to a newer unrelated process is recovered',async()=>{
+  const dir=await mkdtemp(join(tmpdir(),'dots-reused-pid-')),lock=join(dir,'lock');
+  const stranger=spawn(process.execPath,['-e','setTimeout(()=>{},60000)'],{stdio:'ignore',windowsHide:true});
+  try{
+    await new Promise(r=>setTimeout(r,500));
+    await mkdir(lock);const owner=join(lock,'owner.json');await writeFile(owner,JSON.stringify({pid:stranger.pid,token:'old'}));
+    const old=new Date(Date.now()-3600000);await utimes(owner,old,old);await utimes(lock,old,old);
+    const recovered=await acquireLaunchLock(lock);assert.ok(recovered,'stale lock held by a reused PID must be recovered');await recovered();
+    // A genuinely older owner that is still running keeps the lock.
+    await mkdir(lock);await writeFile(owner,JSON.stringify({pid:stranger.pid,token:'live'}));
+    assert.equal(await acquireLaunchLock(lock),undefined);
+  }finally{stranger.kill();await rm(dir,{recursive:true,force:true});}
 });
